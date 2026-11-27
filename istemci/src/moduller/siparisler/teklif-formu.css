@@ -125,3 +125,29 @@
   .tc-tf-pencere-duzen[data-gorunum="duzen"] > .tc-tf-onizleme { display: none; }
   .tc-tf-pencere-duzen[data-gorunum="kagit"] > .tc-tf-pencere-alanlar { display: none; }
 }
+/* 3794: alan paneli; bölüm bölüm açılır, satırda göz, etiket (ve değer), çöp. Dokunma hedefleri 44 px. */
+.tc-tf-alanlar { display: grid; gap: var(--b-3); min-inline-size: 0; }
+.tc-tf-kaldirilanlar { display: grid; gap: var(--b-1); }
+.tc-tf-geri { display: inline-flex; align-items: center; gap: var(--b-1); min-block-size: var(--dokunma); font-family: var(--font-ana); }
+.tc-tf-alan-bolum { border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); }
+.tc-tf-alan-bolum > summary {
+  display: flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma); padding-inline: var(--b-3); cursor: pointer; list-style: none; font-weight: 600;
+}
+.tc-tf-alan-bolum > summary::-webkit-details-marker { display: none; }
+.tc-tf-alan-bolum > summary small { color: var(--muted); font-weight: 400; }
+.tc-tf-alan-bolum > summary .tc-simge { margin-inline-start: auto; }
+.tc-tf-alan-bolum[open] > summary .tc-simge { transform: rotate(180deg); }
+.tc-tf-alan-liste { display: grid; gap: var(--b-2); padding: 0 var(--b-3) var(--b-3); }
+.tc-tf-alan-satiri { display: grid; grid-template-columns: var(--dokunma) minmax(0, 1fr) var(--dokunma); gap: var(--b-2); align-items: start; }
+.tc-tf-alan-govde { display: grid; gap: var(--b-1); min-inline-size: 0; justify-items: start; }
+.tc-tf-alan-govde > .tc-alan { inline-size: 100%; }
+.tc-tf-alan-dugme { inline-size: var(--dokunma); min-block-size: var(--dokunma); padding: 0; justify-content: center; margin-block-start: var(--b-5); }
+.tc-tf-alan-satiri[data-gizli] .tc-tf-alan-dugme[aria-pressed] { color: var(--muted); }
+.tc-tf-alan-satiri[data-gizli] .tc-tf-alan-govde input { color: var(--muted); text-decoration: line-through; }
+.tc-tf-kilit { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); }
+.tc-tf-sessiz-not { color: var(--muted); font-size: var(--yazi-xs); margin: 0; }
+/* 3794: dar ekranda kâğıt "Büyüt" ile gerçek boyutta açılır, kutu içinde yana kayar; geniş ekranda düğme yoktur. */
+.tc-tf-buyut { display: none; }
+@media (max-width: 1099px) { .tc-tf-buyut { display: flex; justify-content: flex-end; margin-block-end: var(--b-2); } }
+.tc-tf-kutu-olcek[data-buyuk] { overflow-x: auto; block-size: auto; }
+.tc-tf-kutu-olcek[data-buyuk] > .tc-tf-kagit { transform: none; }

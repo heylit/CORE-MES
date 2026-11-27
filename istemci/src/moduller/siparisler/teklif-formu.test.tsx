@@ -302,12 +302,13 @@ describe('Teklif formu penceresi', () => {
     expect(istekler.filter((i) => i.yontem === 'POST').map((i) => (i.govde as { surum: number }).surum)).toEqual([4, 5]);
   });
 
-  it('3328 kayıtlı metin yokken "Şablona dön" sunucuya gitmez, taslağı atar; kabul edilmiş teklifte metin düzenlenmez', async () => {
+  it('3328 kayıtlı metin yokken "Şablona sıfırla" onaydan sonra sunucuya gitmez, taslağı atar; kabul edilmiş teklifte metin düzenlenmez', async () => {
     const istekler = sunucuKur({ ...YONETICI, islemler: [...YONETICI.islemler, 'siparisler.yaz'] });
     sar(<TeklifFormuPenceresi acik kapat={() => undefined} teklif={TEKLIF} surum={SURUM} />);
     const pencere = await screen.findByRole('dialog', { name: /Teklif formu/ });
     fireEvent.change(await within(pencere).findByLabelText(/^Form başlığı/), { target: { value: 'GEÇİCİ' } });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Şablona dön' }));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Şablona sıfırla' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Şablona sıfırlansın mı?' })).getByRole('button', { name: 'Şablona sıfırla' }));
     expect((within(pencere).getByLabelText(/^Form başlığı/) as HTMLInputElement).value).toBe('TEKLİF FORMU');
     expect(within(pencere).queryByText('Kaydedilmedi')).toBeNull();
     await new Promise((r) => { setTimeout(r, 20); });
@@ -321,7 +322,7 @@ describe('Teklif formu penceresi', () => {
     expect(within(kabul).queryByRole('button', { name: 'Bu teklif için kaydet' })).toBeNull();
   });
 
-  it('3328 kayıtlı metinle açılır; "Şablona dön" kaydı kaldırır; başlık boşken kaydedilmez', async () => {
+  it('3328 kayıtlı metinle açılır; "Şablona sıfırla" onayla kaydı kaldırır; başlık boşken kaydedilmez', async () => {
     const ozel = { dil: 'tr' as const, icerik: { ...ICERIK, baslik: 'KAYITLI BAŞLIK' } };
     const istekler = sunucuKur({ ...YONETICI, islemler: [...YONETICI.islemler, 'siparisler.yaz'] }, (yontem, yol) => {
       if (yol.startsWith('/siparisler/teklifler/21/form?')) return json(200, { ...FORM_VERISI, metin: ozel });
@@ -333,7 +334,9 @@ describe('Teklif formu penceresi', () => {
     expect(within(within(pencere).getByRole('article', { name: 'Teklif TK-2026-0021' })).getByText('KAYITLI BAŞLIK')).toBeTruthy();
     fireEvent.change(within(pencere).getByLabelText(/^Form başlığı/), { target: { value: ' ' } });
     expect((within(pencere).getByRole('button', { name: 'Bu teklif için kaydet' }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Şablona dön' }));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Şablona sıfırla' }));
+    expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([]);
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Şablona sıfırlansın mı?' })).getByRole('button', { name: 'Şablona sıfırla' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')).toMatchObject({ yol: '/siparisler/teklifler/21/form-metni-kaydet', govde: { surum: 4, metin: null } }));
   });
 });

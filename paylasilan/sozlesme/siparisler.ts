@@ -723,6 +723,31 @@ export const TEKLIF_FORMU_DILLERI = ['tr', 'en'] as const;
 export const TEKLIF_FORMU_ALANLARI = ['{MUSTERI}', '{YETKILI}', '{TEKLIF_NO}', '{GECERLILIK}', '{TESLIM_GUN}'] as const;
 export const TEKLIF_FORMU_SART_EN_COK = 20;
 const formMetni = (enCok: number, ad: string) => z.string().trim().max(enCok, `${ad} en çok ${String(enCok)} karakter olabilir.`);
+// 3794: formun basılı alanları; her birinin etiketi değişir, alan gizlenir ya da formdan kaldırılır (yalnız görünüm, veri silinmez).
+// Değeri bu forma yazılabilenler yalnız metin alanlarıdır; teklif no, tarih, miktar, fiyat, toplam, teslim ve ödeme sürümden gelir.
+export const TEKLIF_FORMU_ALAN_ANAHTARLARI = [
+  'musteriUnvan', 'musteriAdres', 'musteriVergiDairesi', 'musteriVergiNo', 'musteriIlgili',
+  'teklifNo', 'teklifTur', 'teklifSurum', 'teklifTarih', 'teklifGecerlilik', 'teklifKonu', 'teklifPara',
+  'sutunKod', 'sutunAciklama', 'sutunMiktar', 'sutunBirim', 'sutunYerlilik', 'sutunBirimFiyat', 'sutunIskontolu', 'sutunTutar',
+  'toplamAra', 'toplamIskonto', 'toplamKdvHaric', 'toplamKdv', 'toplamGenel',
+  'kosulTeslim', 'kosulTermin', 'kosulOdeme', 'kosulGecerlilik',
+  'imzaFirma', 'imzaMusteri',
+] as const;
+export const TEKLIF_FORMU_DEGERLI_ALANLAR = ['musteriUnvan', 'musteriAdres', 'musteriVergiDairesi', 'musteriVergiNo', 'teklifTur', 'teklifKonu'] as const;
+export const TEKLIF_FORMU_ALAN_DURUMLARI = ['gizli', 'kaldirildi'] as const;
+// durum yoksa alan basılır; etiket yoksa dilin etiketi, değer yoksa kayıttaki değer basılır.
+export const teklifFormuAlanAyariSemasi = z.object({
+  durum: z.enum(TEKLIF_FORMU_ALAN_DURUMLARI).optional(),
+  etiket: formMetni(60, 'Alan etiketi').min(1, 'Alan etiketi boş olamaz.').optional(),
+  deger: formMetni(400, 'Alan değeri').min(1, 'Alan değeri boş olamaz.').optional(),
+}).strict();
+const DEGERLI = new Set<string>(TEKLIF_FORMU_DEGERLI_ALANLAR);
+export const teklifFormuAlanlarSemasi = z.partialRecord(z.enum(TEKLIF_FORMU_ALAN_ANAHTARLARI), teklifFormuAlanAyariSemasi)
+  .superRefine((alanlar, c) => {
+    for (const [anahtar, ayar] of Object.entries(alanlar)) {
+      if (ayar?.deger !== undefined && !DEGERLI.has(anahtar)) c.addIssue({ code: 'custom', path: [anahtar, 'deger'], message: 'Bu alanın değeri tekliften gelir; formda değişmez.' });
+    }
+  });
 export const teklifFormuIcerikSemasi = z.object({
   baslik: z.string().trim().min(1, 'Form başlığı boş olamaz.').max(80, 'Form başlığı en çok 80 karakter olabilir.'),
   giris: formMetni(1000, 'Giriş metni'),
@@ -735,7 +760,11 @@ export const teklifFormuIcerikSemasi = z.object({
   belge: z.object({
     no: formMetni(40, 'Doküman no'), yayin: formMetni(40, 'Yayın tarihi'), revTarihi: formMetni(40, 'Revizyon tarihi'), revNo: formMetni(20, 'Revizyon no'),
   }).optional(),
+  alanlar: teklifFormuAlanlarSemasi.optional(),
 });
+const degersizIcerik = (i: { alanlar?: Partial<Record<string, { deger?: string | undefined } | undefined>> | undefined }) =>
+  Object.values(i.alanlar ?? {}).every((a) => a?.deger === undefined);
+const SABLONDA_DEGER_YOK = 'Şablonda alan değeri yazılmaz; değer teklifin kendi formunda yazılır.';
 export const teklifFormuKurumSemasi = z.object({
   unvan: formMetni(200, 'Ünvan'),
   adres: formMetni(400, 'Adres'),
@@ -761,7 +790,7 @@ export const teklifFormuSablonKaydetGovdesi = z.object({
   ...beklenenSurum,
   ad: sablonAdiSemasi,
   dil: z.enum(TEKLIF_FORMU_DILLERI),
-  icerik: teklifFormuIcerikSemasi,
+  icerik: teklifFormuIcerikSemasi.refine(degersizIcerik, SABLONDA_DEGER_YOK),
 });
 export const teklifFormuKurumKaydetGovdesi = z.object({ ...beklenenSurum, kurum: teklifFormuKurumSemasi });
 export const teklifFormuSablonKopyalaGovdesi = z.object({ ad: sablonAdiSemasi });
@@ -795,6 +824,10 @@ export type TeklifFormuVerisiCevabi = z.output<typeof teklifFormuVerisiCevabi>;
 export type TeklifFormuSorgusu = z.output<typeof teklifFormuSorgusu>;
 export type TeklifFormuDili = (typeof TEKLIF_FORMU_DILLERI)[number];
 export type TeklifFormuAlani = (typeof TEKLIF_FORMU_ALANLARI)[number];
+export type TeklifFormuAlanAnahtari = (typeof TEKLIF_FORMU_ALAN_ANAHTARLARI)[number];
+export type TeklifFormuDegerliAlan = (typeof TEKLIF_FORMU_DEGERLI_ALANLAR)[number];
+export type TeklifFormuAlanAyari = z.output<typeof teklifFormuAlanAyariSemasi>;
+export type TeklifFormuAlanlari = z.output<typeof teklifFormuAlanlarSemasi>;
 
 // 3455-3: Excel'den toplu satış siparişi. Her satır bir kalemdir; aynı firma ve müşteri sipariş no'lu satırlar tek siparişte birleşir.
 // Hücreler ham metin gelir; sunucu satır satır denetler ve hatayı satıra yazar (gövde şeması yalnız boyutu sınar). Sipariş taslak

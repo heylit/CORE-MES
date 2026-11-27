@@ -4,13 +4,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   TeklifAyrintiCevabi, TeklifFormuCevabi, TeklifFormuIcerigi, TeklifFormuMetni, TeklifFormuVerisiCevabi, TeklifSurumuCevabi,
 } from '#paylasilan/sozlesme/siparisler.ts';
-import { DurumKutusu, Dugme, Girdi, Kart, Pencere, Rozet, Secim, Sekmeler, useBildirim } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Secim, Sekmeler, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useKurumLogosu } from '../../ortak/veri/kurum-logosu.ts';
+import { AlanPaneli } from './AlanPaneli.tsx';
 import { anahtarlar } from './anahtarlar.ts';
 import { FormMetniAlanlari, SartAlanlari } from './FormMetniAlanlari.tsx';
 import { TeklifFormuKagidi, type FormVerisi } from './TeklifFormuKagidi.tsx';
-import { kdvOraniOku, useKagitOlcegi } from './teklif-formu.ts';
+import { FORM_SOZLERI, alanBasilir, alanEtiketi, kdvOraniOku, useKagitOlcegi } from './teklif-formu.ts';
 import { eskiyseYenile, useKorumaliGonderim, useYazabilir, yazmaIletisi } from './yazma.ts';
 import './teklif-formu.css';
 
@@ -19,6 +20,8 @@ interface Ozellikler { acik: boolean; kapat: () => void; teklif: TeklifAyrintiCe
 const KDV_VARSAYILAN = '20';
 const ayni = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const kopya = (m: TeklifFormuMetni): TeklifFormuMetni => ({ dil: m.dil, icerik: { ...m.icerik, sartlar: [...m.icerik.sartlar] } });
+// 3794: gizlenince müşteriye giden formda eksik kalan ana sayılar; ön izlemenin altında sessizce yazılır.
+const ANA_ALANLAR = ['sutunMiktar', 'sutunTutar', 'toplamGenel'] as const;
 const SEKMELER = [{ anahtar: 'duzen', baslik: 'Düzenle', simge: 'edit' }, { anahtar: 'kagit', baslik: 'Ön izleme', simge: 'file' }] as const;
 
 // Teklif formu penceresi (3245 d): şablon seçilir (varsayılan önce gelir), ilgili kişi ve KDV oranı yazılır; ikisi saklanmaz.
@@ -54,7 +57,10 @@ export function TeklifFormuPenceresi({ acik, kapat, teklif, surum }: Ozellikler)
   const yazabilir = useYazabilir() && teklif.durum !== 'kabul' && teklif.durum !== 'red' && teklif.durum !== 'siparis';
   const [taslak, taslakYaz] = useState<TeklifFormuMetni | null>(null);
   const [gorunum, gorunumYaz] = useState<'duzen' | 'kagit'>('kagit');
+  // 3794: dar ekranda küçülen kâğıt okunmazsa gerçek boyutta açılır, yana kaydırılır.
+  const [buyuk, buyukYaz] = useState(false);
   const [kaydediliyor, kaydediliyorYaz] = useState(false);
+  const [onay, onayYaz] = useState<'kapat' | 'sifirla' | null>(null);
   // Kayıtlı metin varsa o, yoksa seçilen şablon; şablon seçimi kayıtlı metnin yerine o şablonu taslak yapar.
   const kayitli = veri.data?.metin ?? null;
   const sablonMetni: TeklifFormuMetni | null = sablon === null ? null : { dil: sablon.dil, icerik: sablon.icerik };
@@ -83,6 +89,12 @@ export function TeklifFormuPenceresi({ acik, kapat, teklif, surum }: Ozellikler)
     }
   };
   const baslikBos = metin !== null && metin.icerik.baslik.trim() === '';
+  const kapatIste = () => { if (kaydedilmedi) onayYaz('kapat'); else kapat(); };
+  const gizliAna = metin === null ? [] : ANA_ALANLAR.filter((k) => !alanBasilir(metin.icerik, k)).map((k) => alanEtiketi(metin.icerik, k, metin.dil));
+  const kayit = veri.data === undefined || metin === null ? undefined : {
+    musteriUnvan: veri.data.musteri.ad, musteriAdres: veri.data.musteri.adres, musteriVergiDairesi: veri.data.musteri.vergiDairesi,
+    musteriVergiNo: veri.data.musteri.vergiNo, teklifTur: FORM_SOZLERI[metin.dil].satisTeklifi, teklifKonu: teklif.baslik,
+  };
 
   const formVerisi = useMemo<FormVerisi | null>(() => {
     if (!veri.data) return null;
@@ -123,20 +135,20 @@ export function TeklifFormuPenceresi({ acik, kapat, teklif, surum }: Ozellikler)
   return (
     <Pencere
       acik={acik}
-      kapat={kapat}
+      kapat={kapatIste}
       baslik={`Teklif formu · ${teklif.no} · Sürüm ${String(surum.surumNo)}`}
       tur={yazabilir ? 'tam' : 'yan'}
       genis
       alt={(
         <>
-          <Dugme onClick={kapat}>Kapat</Dugme>
+          <Dugme onClick={kapatIste}>Kapat</Dugme>
           {yazabilir && (
-            <Dugme simge="check" disabled={!kaydedilmedi || baslikBos || metin === null} yukleniyor={kaydediliyor}
+            <Dugme tur={kaydedilmedi ? 'birincil' : 'ikincil'} simge="check" disabled={!kaydedilmedi || baslikBos || metin === null} yukleniyor={kaydediliyor}
               onClick={() => { if (metin !== null) void metniYaz(metin, 'Form metni bu teklif için kaydedildi.'); }}>
               Bu teklif için kaydet
             </Dugme>
           )}
-          <Dugme tur="birincil" simge="printer" onClick={yazdir} disabled={!hazir || veri.isFetching || kdvOrani === null}>Yazdır / PDF</Dugme>
+          <Dugme tur={yazabilir && kaydedilmedi ? 'ikincil' : 'birincil'} simge="printer" onClick={yazdir} disabled={!hazir || veri.isFetching || kdvOrani === null}>Yazdır / PDF</Dugme>
         </>
       )}
     >
@@ -175,17 +187,19 @@ export function TeklifFormuPenceresi({ acik, kapat, teklif, surum }: Ozellikler)
                   <Kart baslik="Metin" simge="edit">
                     {kayitli !== null && !kaydedilmedi && <p><Rozet ton="bilgi">Bu teklife özel metin kayıtlı</Rozet></p>}
                     {kaydedilmedi && <p><Rozet ton="uyari">Kaydedilmedi</Rozet></p>}
-                    <p className="tc-tf-ipucu">Değişiklik yalnız bu teklifin formuna yazılır; şablon ve öteki teklifler değişmez. Kalem, fiyat ve koşullar tekliften gelir.</p>
+                    <p className="tc-tf-ipucu">Kaydedince yalnız bu teklifin formu değişir. Bütün yeni teklifler için: Sistem Ayarları › Formlar › Teklif formu. Kalem, fiyat ve koşullar tekliften gelir.</p>
                     <FormMetniAlanlari icerik={metin.icerik} degistir={icerikYaz} />
+                  </Kart>
+                  <Kart baslik="Alanlar" simge="layers">
+                    <AlanPaneli icerik={metin.icerik} dil={metin.dil} degistir={icerikYaz} {...(kayit === undefined ? {} : { kayit })} />
                   </Kart>
                   <Kart baslik={`Şartlar (${String(metin.icerik.sartlar.length)})`} simge="list">
                     <SartAlanlari icerik={metin.icerik} degistir={icerikYaz} />
                   </Kart>
                   {(kayitli !== null || kaydedilmedi) && (
                     <div className="tc-tf-arac">
-                      <Dugme simge="rotate" yukleniyor={kaydediliyor && kayitli !== null}
-                        onClick={() => { if (kayitli === null) taslakYaz(null); else void metniYaz(null, 'Form şablona döndü.'); }}>
-                        Şablona dön
+                      <Dugme simge="rotate" yukleniyor={kaydediliyor && kayitli !== null} onClick={() => onayYaz('sifirla')}>
+                        Şablona sıfırla
                       </Dugme>
                     </div>
                   )}
@@ -193,14 +207,37 @@ export function TeklifFormuPenceresi({ acik, kapat, teklif, surum }: Ozellikler)
               </>
             )}
             <div className="tc-tf-onizleme tc-tf-sutun">
-              <div ref={kutu} className="tc-tf-kutu-olcek">
+              <div className="tc-tf-buyut"><Dugme simge={buyuk ? 'fit' : 'zin'} aria-pressed={buyuk} onClick={() => buyukYaz((b) => !b)}>{buyuk ? 'Sığdır' : 'Büyüt'}</Dugme></div>
+              <div ref={kutu} className="tc-tf-kutu-olcek" data-buyuk={buyuk || undefined}>
                 <TeklifFormuKagidi ref={kagit} {...kagitOzellikleri} />
               </div>
+              {gizliAna.length > 0 && <p className="tc-tf-sessiz-not" role="status">{`Gizli: ${gizliAna.join(', ')}. Form müşteriye bu hâliyle gider.`}</p>}
               <p className="tc-tf-ipucu">PDF için basım penceresinde hedef olarak “PDF olarak kaydet” seçilir.</p>
             </div>
           </div>
         )}
       </div>
+      <OnayPenceresi
+        acik={onay === 'kapat'}
+        baslik="Kaydedilmemiş değişiklik var"
+        onayMetni="Kaydetmeden kapat"
+        tehlikeli
+        onayla={() => { onayYaz(null); taslakYaz(null); kapat(); }}
+        vazgec={() => onayYaz(null)}
+      >
+        <p>Bu teklifin formunda yaptığınız değişiklikler kaybolur.</p>
+      </OnayPenceresi>
+      <OnayPenceresi
+        acik={onay === 'sifirla'}
+        baslik="Şablona sıfırlansın mı?"
+        onayMetni="Şablona sıfırla"
+        tehlikeli
+        yukleniyor={kaydediliyor}
+        onayla={() => { onayYaz(null); if (kayitli === null) taslakYaz(null); else void metniYaz(null, 'Form şablona döndü.'); }}
+        vazgec={() => onayYaz(null)}
+      >
+        <p>Bu teklife özel metin, alan etiketleri, gizlenen ve kaldırılan alanlar silinir; form seçili şablonla basılır.</p>
+      </OnayPenceresi>
       {acik && kagitOzellikleri !== null && createPortal(<div className="tc-tf-baski"><TeklifFormuKagidi {...kagitOzellikleri} /></div>, document.body)}
     </Pencere>
   );

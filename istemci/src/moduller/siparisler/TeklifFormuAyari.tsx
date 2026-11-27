@@ -6,6 +6,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useKurumLogosu } from '../../ortak/veri/kurum-logosu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { TeklifFormuKagidi, type FormVerisi } from './TeklifFormuKagidi.tsx';
+import { AlanPaneli } from './AlanPaneli.tsx';
 import { FormMetniAlanlari, SartAlanlari } from './FormMetniAlanlari.tsx';
 import { useKagitOlcegi } from './teklif-formu.ts';
 import { surumCakismasiMi, yazmaIletisi } from './yazma.ts';
@@ -162,6 +163,11 @@ export function TeklifFormuAyari() {
             <Secim etiket="Dil" secenekler={DILLER} value={taslak.dil} onChange={(o) => taslakYaz((t) => ({ ...t, dil: o.target.value === 'en' ? 'en' : 'tr' }))} />
           </div>
           <FormMetniAlanlari icerik={taslak.icerik} degistir={icerikYaz} />
+        </Kart>
+
+        <Kart baslik="Alanlar" simge="layers">
+          <p className="tc-tf-ipucu">Bu şablonla basılan bütün tekliflerde geçerlidir. Değer, teklifin kendi formunda yazılır.</p>
+          <AlanPaneli icerik={taslak.icerik} dil={taslak.dil} degistir={icerikYaz} />
         </Kart>
 
         <Kart baslik="Doküman kutusu" simge="file">
