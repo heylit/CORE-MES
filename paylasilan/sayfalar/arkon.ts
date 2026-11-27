@@ -41,12 +41,13 @@ export const ARKON_IKINCI_MENU = {
       { anahtar: 'pano', baslik: 'Pano', yol: '/arkon/pano', simge: 'grid', islem: 'arkon.planlama', veya: PANO_ROLLERI },
       { anahtar: 'planlama', baslik: 'Plan Kuyruğu', yol: '/arkon/planlama', simge: 'list', islem: 'arkon.planlama', veya: ['arkon.hazirlik', 'arkon.amir', 'arkon.yonetici'] },
     ] },
-    { baslik: 'Hazırlık ve kalite', maddeler: [
+    { baslik: 'Hazırlık', maddeler: [
       { anahtar: 'hazirlik', baslik: 'Üretim Terminali Hazırlık', yol: '/arkon/hazirlik', simge: 'layers', islem: 'arkon.hazirlik', veya: ['arkon.planlama', 'arkon.yonetici'] },
       // Hazırlık rolleri ve amir görür (kart #1193, 2421-4 a); sunucudaki anomali uçları da bu dört işlemi ister.
       { anahtar: 'anomali', baslik: 'Üretim Anomalisi', yol: '/arkon/anomali', simge: 'alert', islem: 'arkon.hazirlik', veya: ['arkon.planlama', 'arkon.amir', 'arkon.yonetici'] },
-      { anahtar: 'kalite', baslik: 'Kalite', yol: '/arkon/kalite', simge: 'target', islem: 'arkon.kalite', veya: ['arkon.planlama', 'arkon.hazirlik', 'arkon.amir', 'arkon.yonetici'] },
-      { anahtar: 'cizim', baslik: 'Çizim', yol: '/arkon/cizim', simge: 'lab', islem: 'arkon.hazirlik', veya: ['arkon.planlama', 'arkon.yonetici'] },
+      // Numune, ölçüm ve SPC Kalite Merkezi'nde, ölçü aletleri Kalibrasyon'dadır; burada yalnız paket onayı kalır ve onu yalnız kalite ile
+      // yönetici verir (pkg.approve). Çizim stüdyosu Ayarlar'daki "PDF ve 3B okuma" kartından açılır.
+      { anahtar: 'kalite', baslik: 'Kalite onayları', yol: '/arkon/kalite', simge: 'check', islem: 'arkon.kalite', veya: ['arkon.yonetici'] },
     ] },
     { baslik: 'Takip', maddeler: [
       { anahtar: 'bakim', baslik: 'Bakım', yol: '/arkon/bakim', simge: 'wrench', islem: 'arkon.bakim', veya: ['arkon.amir', 'arkon.yonetici'] },

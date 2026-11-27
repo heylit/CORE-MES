@@ -18,7 +18,7 @@ function HazirlikBekleyen() {
 }
 function KaliteBekleyen() {
   const o = useOzet();
-  return <SayiKarti baslik="Kalite bekleyen adım" simge="target" sayi={o.data?.kaliteBekleyen} altMetin="Bekleyen ya da ölçülen numune" yol="/arkon/kalite" hata={o.isError} />;
+  return <SayiKarti baslik="Kalite bekleyen adım" simge="target" sayi={o.data?.kaliteBekleyen} altMetin="Bekleyen ya da ölçülen numune · Kalite Merkezi" yol="/kalite-merkezi" hata={o.isError} />;
 }
 function BakimIsleri() {
   const o = useOzet();

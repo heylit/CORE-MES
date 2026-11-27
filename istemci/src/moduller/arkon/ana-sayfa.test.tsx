@@ -29,14 +29,14 @@ const kart = (baslik: string) => screen.getByText(baslik).closest('.tc-sayi-kart
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Arkon rol panosu kartları', () => {
-  it('üç kart tek özet isteğiyle dolar; her kart kendi Arkon sayfasına gider', async () => {
+  it('üç kart tek özet isteğiyle dolar; kart kendi sayfasına gider (kalite Kalite Merkezine, 3815)', async () => {
     const yollar = sunucuKur(() => json(200, { hazirlikBekleyen: 4, kaliteBekleyen: 2, bakimAcik: 1 } satisfies ArkonOzetiCevabi));
     panoyuAc();
     await screen.findByText('4');
     expect(kart('Kalite bekleyen adım').textContent).toContain('2');
     expect(kart('Bakım işleri').textContent).toContain('1');
     expect(kart('Hazırlık bekleyen iş').getAttribute('href')).toBe('/arkon/hazirlik');
-    expect(kart('Kalite bekleyen adım').getAttribute('href')).toBe('/arkon/kalite');
+    expect(kart('Kalite bekleyen adım').getAttribute('href')).toBe('/kalite-merkezi');
     expect(kart('Bakım işleri').getAttribute('href')).toBe('/arkon/bakim');
     expect(yollar.filter((y) => y.endsWith('/arkon/ozet'))).toHaveLength(1);
   });

@@ -51,8 +51,8 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     sunucuKur(YONETICI);
     arkonAc('/arkon/pano');
     await bolum('Pano');
-    seritte(/^Kalite/);
-    expect((await bolum('Kalite')).getAttribute('data-sayfa')).toBe('kalite');
+    seritte(/^Kalite onayları/);
+    expect((await bolum('Kalite onayları')).getAttribute('data-sayfa')).toBe('kalite');
     expect(adres()).toBe('/arkon/kalite');
     seritte(/CORE'a yazılamayanlar/);
     await waitFor(() => { expect(adres()).toBe('/arkon/tmi-yansimalari'); });
@@ -258,9 +258,9 @@ describe('Eski görünüm adresleri', () => {
 });
 
 describe('Yeni Arkon ekranı (eski düzen)', () => {
-  it('Kalite maddesi bekleyen ve ölçülen numune sayısını kabuğun şeridine verir (283.25)', async () => {
-    const numune = (id: string, status: string) => ({ kimlik: id, surum: 1, govde: { id, status, at: 1, items: [] } });
-    sunucuKur(YONETICI, { belgeler: { requests: [numune('n1', 'waiting'), numune('n2', 'measuring'), numune('n3', 'approved')] } });
+  it('Kalite onayları maddesi onay bekleyen paket sayısını kabuğun şeridine verir (3815)', async () => {
+    const paket = (id: string, ek: object) => ({ kimlik: id, surum: 1, govde: { id, no: id, status: 'draft', plan: [], steps: [], files: [], ...ek } });
+    sunucuKur(YONETICI, { belgeler: { pkgs: [paket('p1', { apReq: { at: 5, by: 'x' } }), paket('p2', { apReq: { at: 5, by: 'x' } }), paket('p3', { apReq: { at: 5, by: 'x' }, approval: { ok: true, at: 9, by: 'y' } })] } });
     const yazilan: { kok: string; sayaclar: unknown }[] = [];
     arkonAc('/arkon/pano', { sayacYaz: (kok, sayaclar) => { yazilan.push({ kok, sayaclar }); } });
     await bolum('Pano');
