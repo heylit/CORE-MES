@@ -8,8 +8,10 @@ import { tezgahEslemeCevabi } from '#paylasilan/sozlesme/tezgah-deneme.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { adAnahtari, eslemeOnerisi } from './kurallar.ts';
-import { okumaYaz } from './sorgular.ts';
+import { adAnahtari, aktifAlarmlar, alarmFarki, eslemeOnerisi } from './kurallar.ts';
+import type { TezgahOgesi } from './kurallar.ts';
+import { alarmOlaylariniIsle } from './servis.ts';
+import { alarmOlaylari, eskiAlarmlariSil, okumaYaz } from './sorgular.ts';
 
 // Kart 3811: deneme sayfası, gerçek PostgreSQL. Makine kodları ve cihaz adları uydurmadır.
 const PAROLA = 'dogru-parola-1';
@@ -22,6 +24,24 @@ describe('Tezgâh eşleme önerisi (kart 3811)', () => {
     assert.equal(eslemeOnerisi('ORN 003', m), 2);
     assert.equal(eslemeOnerisi('ORN004', m), null);
     assert.equal(eslemeOnerisi('ORN002', [...m, { id: 3, kod: 'ORN_002' }]), null);
+  });
+});
+
+const kosul = (kimlik: string, k: string, deger: string | null = null, tur = 'SYSTEM'): TezgahOgesi => ({ tur, ad: null, bilesen: 'Controller', deger, zaman: null, kosul: k, kimlik, sira: null });
+const acilStop = (deger: string): TezgahOgesi => ({ tur: 'EmergencyStop', ad: null, bilesen: 'Controller', deger, zaman: null, kosul: null, kimlik: 'estop', sira: null });
+
+describe('Alarm olayı kuralı (kart 3811)', () => {
+  test('Fault ve tetiklenmiş acil stop alarmdır; Warning, Normal, Unavailable ve ARMED değildir', () => {
+    const a = aktifAlarmlar([kosul('k1', 'Fault', 'ORN eksen hatası'), kosul('k2', 'Warning', 'ORN uyarı'), kosul('k3', 'Normal'), kosul('k4', 'Unavailable'), acilStop('TRIGGERED')]);
+    assert.deepEqual(a, [{ oge: 'k1', kod: null, metin: 'ORN eksen hatası' }, { oge: 'estop', kod: null, metin: 'Acil stop' }]);
+    assert.deepEqual(aktifAlarmlar([acilStop('ARMED')]), []);
+  });
+
+  test('biten kapanır, süren yeniden açılmaz, metni değişen kapanıp yeniden açılır', () => {
+    const acik = [{ oge: 'k1', kod: null, metin: 'A' }, { oge: 'k2', kod: null, metin: 'B' }, { oge: 'k3', kod: null, metin: 'C' }];
+    const f = alarmFarki(acik, [{ oge: 'k1', kod: null, metin: 'A' }, { oge: 'k3', kod: null, metin: 'C2' }, { oge: 'k4', kod: null, metin: 'D' }]);
+    assert.deepEqual(f.kapanan, ['k2', 'k3']);
+    assert.deepEqual(f.acilan.map((x) => x.oge), ['k3', 'k4']);
   });
 });
 
@@ -84,5 +104,26 @@ describe('Tezgâh deneme sayfası eşleme (gerçek PostgreSQL)', () => {
     // Eşlemeyi kaldırmak ayarları korur.
     const kaldir = await kaydet('ORN002', { makineId: null, cevrimdeParca: 2, durusEsigiDk: 7 });
     assert.equal(tezgahEslemeCevabi.parse(kaldir.json()).cihazlar.find((x) => x.cihazAdi === 'ORN002')?.makineId, null);
+  });
+
+  test('alarm olayı turlar boyunca açılır ve kapanır; uyarı yazılmaz; 90 günden eski kapalı olay silinir, açık olan kalmaz', async () => {
+    const t = (dk: number) => new Date(Date.parse('2026-11-27T09:00:00Z') + dk * 60_000);
+    const iso = (z: string | null) => (z === null ? null : new Date(z).toISOString());
+    await vt().tx(async (db) => {
+      await alarmOlaylariniIsle(db, 'ORN-ALM', [kosul('k1', 'Fault', 'ORN eksen hatası'), kosul('k2', 'Warning', 'ORN uyarı')], t(0));
+      await alarmOlaylariniIsle(db, 'ORN-ALM', [kosul('k1', 'Fault', 'ORN eksen hatası'), acilStop('TRIGGERED')], t(1));
+      await alarmOlaylariniIsle(db, 'ORN-ALM', [kosul('k1', 'Normal'), acilStop('ARMED')], t(12));
+    });
+    const olaylar = await vt().tx((db) => alarmOlaylari(db, t(-60), t(60)));
+    assert.deepEqual(olaylar.filter((o) => o.cihazAdi === 'ORN-ALM').map((o) => [o.metin, iso(o.baslangic), iso(o.bitis)]), [
+      ['ORN eksen hatası', t(0).toISOString(), t(12).toISOString()],
+      ['Acil stop', t(1).toISOString(), t(12).toISOString()],
+    ]);
+    await vt().tx(async (db) => {
+      await alarmOlaylariniIsle(db, 'ORN-ALM', [kosul('k1', 'Fault', 'ORN yeni')], t(20));
+      await eskiAlarmlariSil(db, t(15));
+    });
+    const kalan = await vt().tx((db) => alarmOlaylari(db, t(-60), t(60)));
+    assert.deepEqual(kalan.filter((o) => o.cihazAdi === 'ORN-ALM').map((o) => [o.metin, o.bitis]), [['ORN yeni', null]]);
   });
 });

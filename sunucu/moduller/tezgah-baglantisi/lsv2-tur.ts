@@ -8,7 +8,7 @@ import {
 } from './kurallar.ts';
 import type { GecmisOgeDurumu, Lsv2Okumasi, Lsv2Uyarisi, SuzulecekOge, TezgahOgeleriHaritasi, TezgahOgesi } from './kurallar.ts';
 import type { Lsv2Istemcisi, Lsv2OkumaSecenegi, Lsv2Sonucu } from './lsv2.ts';
-import { lsv2ListesiOku, temizlikTuru } from './servis.ts';
+import { alarmOlaylariniIsle, lsv2ListesiOku, temizlikTuru } from './servis.ts';
 import type { TurBellegi } from './servis.ts';
 import * as s from './sorgular.ts';
 
@@ -179,6 +179,7 @@ async function isle(db: Db, cihazAdi: string, mb: Lsv2MakineBellegi, r: Lsv2Sonu
   const ozet = ozetle(ogeler);
   if ((await s.oncekiDurum(db, cihazAdi)) !== ozet.durum) await s.ornekYaz(db, cihazAdi, zaman, ozet.durum, ozet.sayac);
   await s.okumaYaz(db, cihazAdi, ozet, ogeler, zaman);
+  await alarmOlaylariniIsle(db, cihazAdi, ogeler, zaman);
   // Geçmişe EVENT ve CONDITION yalnız değişince, SAMPLE her okumada süzgeçten geçerek gider.
   const adaylar: SuzulecekOge[] = [];
   const degisenKimlik = new Set(degisen.map((d) => d.kimlik));

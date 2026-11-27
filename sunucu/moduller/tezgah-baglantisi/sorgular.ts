@@ -313,3 +313,34 @@ export async function eslemeYaz(
 export async function makineninEslemesi(db: Db, makineId: number): Promise<string | null> {
   return (await db.tek<{ cihazAdi: string }>('SELECT cihaz_adi AS "cihazAdi" FROM tezgah_makine_esleme WHERE makine_id = $1', [makineId]))?.cihazAdi ?? null;
 }
+
+export function acikAlarmlar(db: Db, cihazAdi: string): Promise<{ oge: string; kod: string | null; metin: string }[]> {
+  return db.sorgu('SELECT oge, kod, metin FROM tezgah_alarm_olayi WHERE cihaz_adi = $1 AND bitis IS NULL', [cihazAdi]);
+}
+
+export async function alarmlariKapat(db: Db, cihazAdi: string, ogeler: readonly string[], zaman: Date): Promise<void> {
+  if (ogeler.length === 0) return;
+  await db.sorgu('UPDATE tezgah_alarm_olayi SET bitis = GREATEST($3, baslangic) WHERE cihaz_adi = $1 AND oge = ANY($2::text[]) AND bitis IS NULL', [cihazAdi, [...ogeler], zaman]);
+}
+
+export async function alarmlariAc(db: Db, cihazAdi: string, alarmlar: readonly { oge: string; kod: string | null; metin: string }[], zaman: Date, isEmriNo: string | null): Promise<void> {
+  for (const a of alarmlar) {
+    await db.sorgu(
+      'INSERT INTO tezgah_alarm_olayi (cihaz_adi, oge, kod, metin, baslangic, is_emri_no) VALUES ($1, $2, $3, left($4, 1000), $5, $6)',
+      [cihazAdi, a.oge, a.kod, a.metin, zaman, isEmriNo],
+    );
+  }
+}
+
+export async function eskiAlarmlariSil(db: Db, sinir: Date): Promise<void> {
+  await db.sorgu('DELETE FROM tezgah_alarm_olayi WHERE bitis IS NOT NULL AND bitis < $1', [sinir]);
+}
+
+export interface AlarmOlayiSatiri { cihazAdi: string; kod: string | null; metin: string; baslangic: string; bitis: string | null; isEmriNo: string | null }
+export function alarmOlaylari(db: Db, baslangic: Date, bitis: Date): Promise<AlarmOlayiSatiri[]> {
+  return db.sorgu<AlarmOlayiSatiri>(
+    `SELECT cihaz_adi AS "cihazAdi", kod, metin, ${zamanMetni('baslangic')} AS baslangic, ${zamanMetni('bitis')} AS bitis, is_emri_no AS "isEmriNo"
+       FROM tezgah_alarm_olayi WHERE baslangic < $2 AND COALESCE(bitis, $2) > $1 ORDER BY baslangic, id`,
+    [baslangic, bitis],
+  );
+}

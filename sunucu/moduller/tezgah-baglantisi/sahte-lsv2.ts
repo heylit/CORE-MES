@@ -32,8 +32,17 @@ export interface SahteMakine {
   blokBoyu?: number;
   fileYetkiYok?: boolean;
   // Açılış klasörünün kayıtları (R_DR): ad, boyut, Unix saniyesi. Verilmezse R_DR 32 döner. Ham kayıt bloğu da verilebilir.
-  programlar?: { ad: string; boyut: number; zaman: number }[];
+  programlar?: SahteDosya[];
   programBloklari?: Buffer[];
+  // Klasör ağacı: tam yol (ayraçla biten) -> kayıtlar. Verilirse R_DR o anki klasörü listeler, C_DC klasör değiştirir. Açılış klasörü
+  // varsayılan 'TNC:\\ORN\\'; programlar verilirse açılış klasörünün kayıtlarıdır.
+  klasorler?: Record<string, SahteDosya[]>;
+  acilisKlasoru?: string;
+  // R_DI tanınmaz (22) ya da C_DC şu yola dönüşte reddedilir.
+  rdiYok?: boolean;
+  donusReddi?: boolean;
+  // R_FI bu T_ER koduyla reddedilir (takım tablosu dosya bilgisi).
+  rfiHatasi?: number;
   // Kumanda saati (R_DT, Unix saniyesi); verilmezse sunucu saati. DIAGNOSTICS girişi reddedilebilir.
   saat?: number;
   diagYetkiYok?: boolean;
@@ -57,7 +66,9 @@ export interface SahteMakine {
   bozuk?: 'yarim' | 'cevapsiz';
 }
 
-interface Aktarim { kalan: Buffer | null; blok: number; kayitlar: Buffer[] | null }
+export interface SahteDosya { ad: string; boyut: number; zaman: number; oznitelik?: number }
+export const SAHTE_ALT_KLASOR = 0x20;
+interface Aktarim { kalan: Buffer | null; blok: number; kayitlar: Buffer[] | null; klasor: string | null }
 
 export interface SahteLsv2 {
   kapi: number;
@@ -87,6 +98,8 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
 
   const cevap = (girisler: Set<string>, hataSirasi: { n: number }, aktarim: Aktarim, komut: string, yuk: Buffer): Buffer | null => {
     const m = makine;
+    const ayracli = (y: string): string => (y.endsWith('\\') ? y : `${y}\\`);
+    const acilis = (): string => m.acilisKlasoru ?? 'TNC:\\ORN\\';
     const sonrakiBlok = (): Buffer => {
       if (aktarim.kayitlar !== null) {
         const k = aktarim.kayitlar.shift();
@@ -195,12 +208,36 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
         b.writeUInt32BE(m.saat ?? Math.floor(Date.now() / 1000), 0);
         return cerceve('S_DT', b);
       }
+      case 'R_DI': {
+        if (!girisler.has('FILE')) return hata(23);
+        if (m.rdiYok) return hata(22);
+        return cerceve('S_DI', Buffer.concat([Buffer.alloc(164), Buffer.from(`${aktarim.klasor ?? acilis()}\0`, 'latin1')]));
+      }
+      case 'C_DC': {
+        if (!girisler.has('FILE')) return hata(23);
+        const hedef = ayracli(yuk.toString('latin1').replace(/\0$/, ''));
+        if (m.donusReddi && hedef === acilis()) return hata(24);
+        if (hedef !== acilis() && m.klasorler?.[hedef] === undefined) return hata(32);
+        aktarim.klasor = hedef;
+        return cerceve('T_OK');
+      }
+      case 'R_FI': {
+        if (!girisler.has('FILE')) return hata(23);
+        if (m.rfiHatasi !== undefined) return hata(m.rfiHatasi);
+        if (m.takimTablosu === undefined) return hata(32);
+        const b = Buffer.alloc(12);
+        b.writeUInt32BE(m.takimTablosu.length, 0);
+        return cerceve('S_FI', Buffer.concat([b, Buffer.from('tool.t\0', 'latin1')]));
+      }
       case 'R_DR': {
         if (!girisler.has('FILE')) return hata(23);
-        const kayitlar = m.programBloklari ?? m.programlar?.map((p) => {
+        const yer = aktarim.klasor ?? acilis();
+        const liste = m.klasorler?.[yer] ?? (yer === acilis() ? m.programlar : undefined);
+        const kayitlar = (yer === acilis() ? m.programBloklari : undefined) ?? liste?.map((p) => {
           const b = Buffer.alloc(12);
           b.writeUInt32BE(p.boyut, 0);
           b.writeUInt32BE(p.zaman, 4);
+          b.writeUInt32BE(p.oznitelik ?? 0, 8);
           return Buffer.concat([b, Buffer.from(`${p.ad}\0`, 'latin1')]);
         });
         if (kayitlar === undefined) return hata(32);
@@ -238,7 +275,7 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
     s.on('error', () => undefined);
     const girisler = new Set<string>();
     const hataSirasi = { n: 0 };
-    const aktarim: Aktarim = { kalan: null, blok: 0, kayitlar: null };
+    const aktarim: Aktarim = { kalan: null, blok: 0, kayitlar: null, klasor: null };
     let tampon = Buffer.alloc(0);
     s.on('data', (parca: Buffer) => {
       tampon = Buffer.concat([tampon, parca]);

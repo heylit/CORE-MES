@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, test } from 'node:test';
 import { lsv2GecmisteYok, lsv2Ogeleri, lsv2TaniMetni, ozetle } from './kurallar.ts';
-import { dosyaYuku, IZINLI_KOMUTLAR, lsv2IstemcisiKur, Lsv2Hatti, Lsv2YasakHatasi, TAKIM_TABLOSU, telgrafKur } from './lsv2.ts';
+import { dosyaYuku, IZINLI_KOMUTLAR, klasorKayitlariCoz, lsv2IstemcisiKur, Lsv2Hatti, Lsv2YasakHatasi, TAKIM_TABLOSU, telgrafKur } from './lsv2.ts';
 import type { Lsv2Komutu } from './lsv2.ts';
 import { sahteLsv2Ac } from './sahte-lsv2.ts';
 import type { SahteLsv2, SahteMakine } from './sahte-lsv2.ts';
@@ -346,7 +346,7 @@ describe('Kart 3790 beyaz liste: yalnız A_LG, A_LO, R_ okumaları ve aktarım o
 });
 
 describe('Kart 3790 giriş düzeyleri: FILE ve PLCDEBUG her yolda kapanır', () => {
-  test('başarı: FILE girişi, R_FL ve R_DR, bloklar arası T_OK, T_FD, hemen FILE çıkışı', async () => {
+  test('başarı: FILE girişi, R_FI, R_FL, R_DI ve R_DR, bloklar arası T_OK, T_FD, hemen FILE çıkışı', async () => {
     const s = await ac(tamOkuma());
     const i = istemci(s);
     const r = await i.oku({ takimTablosu: true });
@@ -355,10 +355,14 @@ describe('Kart 3790 giriş düzeyleri: FILE ve PLCDEBUG her yolda kapanır', () 
     const bas = m.indexOf('A_LG FILE|');
     assert.ok(bas >= 0);
     const dilim = m.slice(bas);
-    assert.equal(dilim[1], `R_FL ${TAKIM_TABLOSU}||`, 'önce takım tablosu');
+    assert.equal(dilim[1], `R_FI ${TAKIM_TABLOSU}|`, 'önce takım tablosunun dosya bilgisi');
+    assert.equal(dilim[2], `R_FL ${TAKIM_TABLOSU}||`, 'sonra takım tablosu');
+    const rdi = dilim.indexOf('R_DI');
+    assert.ok(dilim.slice(3, rdi).every((x) => x === 'T_OK'));
+    assert.ok(rdi - 3 >= 2, 'tablo birden çok blokta gelir');
     const rdr = dilim.indexOf('R_DR |');
-    assert.ok(dilim.slice(2, rdr).every((x) => x === 'T_OK'));
-    assert.ok(rdr - 2 >= 2, 'tablo birden çok blokta gelir');
+    assert.equal(rdr, rdi + 1);
+    assert.ok(!dilim.some((x) => x.startsWith('C_DC')), 'alt klasör yokken klasör değiştirilmez');
     const cikis = dilim.indexOf('A_LO FILE|');
     assert.deepEqual(dilim.slice(rdr + 1, cikis), ['T_OK', 'T_OK'], 'iki klasör kaydı: her kayıttan sonra T_OK');
     assert.equal(cikis, dilim.length - 1, 'FILE çıkışından sonra telgraf yok');
@@ -607,5 +611,130 @@ describe('LSV2 metin öğeleri geçmişe yazılmaz (3811)', () => {
   test('sürüm ve seçenek metinleri yalnız son durumda kalır; sayısal öğeler geçmişe girer', () => {
     for (const k of ['lsv2-secenekler', 'lsv2-kumanda-tipi', 'lsv2-nc-surumu', 'lsv2-plc-surumu', 'lsv2-protokol-surumu']) assert.ok(lsv2GecmisteYok(k), k);
     assert.equal(lsv2GecmisteYok('lsv2-takim'), false);
+  });
+});
+
+describe('Kart 3811 program listesi: alt klasörler C_DC ile, en çok 3 seviye ve 500 dosya', () => {
+  const ALT = 0x20;
+  const kok = 'TNC:\\ORN\\';
+  const dosya = (ad: string, boyut = 10) => ({ ad, boyut, zaman: Date.parse('2026-11-20T08:00:00Z') / 1000 });
+  const klasor = (ad: string) => ({ ad, boyut: 0, zaman: 0, oznitelik: ALT });
+  const agac = (): SahteMakine => ({
+    ...tamOkuma(), programlar: undefined,
+    klasorler: {
+      [kok]: [dosya('ORN-A.H'), klasor('K1'), { ad: 'TNC:', boyut: 0, zaman: 0, oznitelik: 0x10 }],
+      [`${kok}K1\\`]: [dosya('ORN-B.H'), klasor('K2')],
+      [`${kok}K1\\K2\\`]: [dosya('ORN-C.H'), klasor('K3')],
+      [`${kok}K1\\K2\\K3\\`]: [dosya('ORN-D.H'), klasor('K4')],
+      [`${kok}K1\\K2\\K3\\K4\\`]: [dosya('ORN-E.H')],
+    },
+  });
+
+  test('C_DC yalnız gezi sırasında ve yalnız açılış klasörünün en çok 3 seviye altına; başka her yol soket yazılmadan reddedilir', () => {
+    const y = (yol: string) => Buffer.from(`${yol}\0`, 'latin1');
+    assert.throws(() => telgrafKur('C_DC', y(`${kok}K1`), null), Lsv2YasakHatasi, 'gezi yokken');
+    for (const ok of [kok, 'TNC:\\ORN', `${kok}K1`, `${kok}K1\\`, `${kok}K1\\K2\\K3\\`]) assert.doesNotThrow(() => telgrafKur('C_DC', y(ok), null, false, kok), ok);
+    for (const red of [`${kok}K1\\K2\\K3\\K4\\`, 'TNC:\\', 'TNC:\\table\\', `${kok}..\\`, `${kok}K1\\..\\..\\`, `${kok}.\\`, `${kok}K1\\\\K2`, `${kok}PLC:\\`, 'TNC:/ORN/K1', 'PLC:\\ORN\\']) {
+      assert.throws(() => telgrafKur('C_DC', y(red), null, false, kok), Lsv2YasakHatasi, red);
+    }
+    assert.throws(() => telgrafKur('C_DC', Buffer.from(`${kok}K1\0\0`, 'latin1'), null, false, kok), Lsv2YasakHatasi, 'çift sonlandırıcı');
+    assert.throws(() => telgrafKur('C_DC', Buffer.from(`${kok}K1`, 'latin1'), null, false, kok), Lsv2YasakHatasi, 'sonlandırıcısız');
+    assert.throws(() => telgrafKur('R_DI', Uint8Array.of(0), null), Lsv2YasakHatasi);
+    assert.doesNotThrow(() => telgrafKur('R_DI', new Uint8Array(), null));
+    assert.doesNotThrow(() => telgrafKur('R_FI', Buffer.from(`${TAKIM_TABLOSU}\0`, 'latin1'), null));
+    assert.throws(() => telgrafKur('R_FI', Buffer.from('TNC:\\ORN\\ORN-A.H\0', 'latin1'), null), Lsv2YasakHatasi);
+  });
+
+  test('3 seviye gezilir, 4. seviye ve sürücü atlanır, adlar göreli; açılış klasörüne dönülür, sonra FILE çıkışı', async () => {
+    const s = await ac(agac());
+    const i = istemci(s);
+    const r = await i.oku({ takimTablosu: true });
+    i.kapat();
+    assert.equal(r.tur, 'basarili');
+    if (r.tur !== 'basarili') return;
+    assert.deepEqual(r.okuma.programListesi?.map((p) => p.ad), ['ORN-A.H', 'K1\\ORN-B.H', 'K1\\K2\\ORN-C.H', 'K1\\K2\\K3\\ORN-D.H']);
+    const m = metinler(s);
+    const dc = m.filter((x) => x.startsWith('C_DC'));
+    assert.deepEqual(dc, [`C_DC ${kok}K1\\|`, `C_DC ${kok}K1\\K2\\|`, `C_DC ${kok}K1\\K2\\K3\\|`, `C_DC ${kok}|`]);
+    assert.equal(m[m.lastIndexOf(`C_DC ${kok}|`) + 1], 'A_LO FILE|', 'dönüşten hemen sonra FILE çıkışı');
+    for (const g of s.gelenler) assert.ok((IZINLI_KOMUTLAR as readonly string[]).includes(g.komut), g.komut);
+    assert.ok(!s.gelenler.some((g) => g.komut.startsWith('C_') && g.komut !== 'C_DC'));
+  });
+
+  test('500 dosyada durulur; sonraki klasöre inilmez', async () => {
+    const m = agac();
+    m.klasorler = { [kok]: [...Array.from({ length: 501 }, (_, n) => dosya(`ORN-${String(n)}.H`)), klasor('K1')], [`${kok}K1\\`]: [dosya('ORN-X.H')] };
+    const s = await ac(m);
+    const i = istemci(s);
+    const r = await i.oku({ takimTablosu: true });
+    i.kapat();
+    assert.equal(r.tur === 'basarili' ? r.okuma.programListesi?.length : -1, 500);
+    assert.ok(!s.gelenler.some((g) => g.komut === 'C_DC'));
+  });
+
+  test('açılış klasörüne dönüş reddedilirse bağlantı kapatılır, nedeni yazılır, okuma düşmez', async () => {
+    const s = await ac({ ...agac(), donusReddi: true });
+    const i = istemci(s);
+    const r = await i.oku({ takimTablosu: true });
+    i.kapat();
+    assert.equal(r.tur, 'basarili');
+    if (r.tur !== 'basarili') return;
+    assert.equal(r.okuma.programListesi, null);
+    assert.equal(r.okuma.tumce, 345);
+    assert.ok(r.okuma.tani.map(lsv2TaniMetni).includes('Program listesi: açılış klasörüne dönülemedi; bağlantı kapatıldı'));
+    assert.ok(!metinler(s).includes('A_LO FILE|'), 'bağlantı kapandı; FILE oturumu bağlantıyla biter');
+    await new Promise((coz) => setTimeout(coz, 50));
+    assert.equal(s.baglantiSayisi(), 0);
+  });
+
+  test('kumanda R_DI vermezse yalnız açılış klasörü listelenir, C_DC gitmez', async () => {
+    const s = await ac({ ...agac(), rdiYok: true });
+    const i = istemci(s);
+    const r = await i.oku({ takimTablosu: true });
+    i.kapat();
+    assert.deepEqual(r.tur === 'basarili' ? r.okuma.programListesi?.map((p) => p.ad) : null, ['ORN-A.H']);
+    assert.ok(!s.gelenler.some((g) => g.komut === 'C_DC'));
+  });
+
+  test('iTNC 530 öznitelikleri: alt klasör 0x40', () => {
+    const kayit = (ad: string, oz: number) => { const b = Buffer.alloc(12); b.writeUInt32BE(oz, 8); return Buffer.concat([b, Buffer.from(`${ad}\0`, 'latin1')]); };
+    assert.deepEqual(klasorKayitlariCoz([kayit('A', 0x40), kayit('B', 0x20)], true).map((k) => [k.ad, k.klasor]), [['A', true], ['B', false]]);
+    assert.deepEqual(klasorKayitlariCoz([kayit('A', 0x40), kayit('B', 0x20), kayit('C', 0x10)]).map((k) => [k.ad, k.klasor]), [['A', false], ['B', true]]);
+  });
+});
+
+describe('Kart 3811 takım tablosu önce R_FI; desteklenmeyen okuma tekrar istenmez', () => {
+  test('R_FI reddedilirse kodu tanıya yazılır, R_FL gönderilmez, program listesi yine okunur', async () => {
+    const s = await ac({ ...tamOkuma(), rfiHatasi: 20 });
+    const i = istemci(s);
+    const r = await i.oku({ takimTablosu: true });
+    i.kapat();
+    assert.equal(r.tur, 'basarili');
+    if (r.tur !== 'basarili') return;
+    assert.equal(r.okuma.takimTablosu, null);
+    assert.equal(lsv2TaniMetni(r.okuma.tani.find((t) => t.alan === 'takim-tablosu') ?? { alan: 'takim-tablosu', kod: 0 }), 'Takım tablosu: telgraf biçimi kabul edilmedi (kod 20)');
+    assert.ok(!s.gelenler.some((g) => g.komut === 'R_FL'));
+    assert.equal(r.okuma.programListesi?.length, 2);
+  });
+
+  test('alarm ve takım 22 ile reddedilirse "kumanda desteklemiyor" yazılır ve sonraki okumalarda istenmez', async () => {
+    const s = await ac({ ...tamOkuma(), reddedilenOkumalar: new Map([[27, 22], [51, 22]]) });
+    const i = istemci(s);
+    const r1 = await i.oku();
+    const r2 = await i.oku();
+    i.kapat();
+    for (const r of [r1, r2]) {
+      assert.equal(r.tur, 'basarili');
+      if (r.tur !== 'basarili') return;
+      assert.deepEqual([r.okuma.hatalar, r.okuma.takim], [null, null]);
+      const metin = r.okuma.tani.map(lsv2TaniMetni);
+      assert.ok(metin.includes('Alarm: kumanda desteklemiyor (kod 22)') && metin.includes('Takım: kumanda desteklemiyor (kod 22)'), metin.join(' / '));
+      const alarm = lsv2Ogeleri(r.okuma, ZAMAN).find((x) => x.kimlik === 'lsv2-alarm');
+      assert.deepEqual([alarm?.kosul, alarm?.deger], ['Unavailable', 'Alarm: kumanda desteklemiyor (kod 22)']);
+    }
+    const kodlar = s.gelenler.filter((g) => g.komut === 'R_RI').map((g) => g.yuk.readUInt16BE(0));
+    assert.equal(kodlar.filter((k) => k === 27).length, 1);
+    assert.equal(kodlar.filter((k) => k === 51).length, 1);
+    assert.equal(kodlar.filter((k) => k === 24).length, 2, 'öteki okumalar sürer');
   });
 });

@@ -549,10 +549,13 @@ export const LSV2_TANI_ALANI = {
 } as const;
 export type Lsv2TaniAlani = keyof typeof LSV2_TANI_ALANI;
 export interface Lsv2Tanisi { alan: Lsv2TaniAlani; kod: number }
-export const LSV2_KUMANDA_KODU: Readonly<Record<number, string>> = { 23: 'yetki yok', 46: 'DNC durumu', 57: 'sonraki hata yok', 80: 'çok fazla bağlantı' };
+export const LSV2_KUMANDA_KODU: Readonly<Record<number, string>> = { 20: 'telgraf biçimi kabul edilmedi', 22: 'kumanda desteklemiyor', 23: 'yetki yok', 46: 'DNC durumu', 57: 'sonraki hata yok', 80: 'çok fazla bağlantı' };
 // Eksi kodlar kumandadan gelmez, istemcinin kendi nedenleridir.
-export const LSV2_ISTEMCI_KODU = { beklenmeyen: -1, cikisReddedildi: -2, sinirAsildi: -3 } as const;
-const ISTEMCI_KODU_METNI: Readonly<Record<number, string>> = { [-1]: 'beklenmeyen cevap', [-2]: 'önceki çıkış reddedildiği için okunmuyor', [-3]: 'boyut sınırı aşıldı; aktarım kesildi, bağlantı kapatıldı' };
+export const LSV2_ISTEMCI_KODU = { beklenmeyen: -1, cikisReddedildi: -2, sinirAsildi: -3, donulemedi: -4 } as const;
+const ISTEMCI_KODU_METNI: Readonly<Record<number, string>> = {
+  [-1]: 'beklenmeyen cevap', [-2]: 'önceki çıkış reddedildiği için okunmuyor', [-3]: 'boyut sınırı aşıldı; aktarım kesildi, bağlantı kapatıldı',
+  [-4]: 'açılış klasörüne dönülemedi; bağlantı kapatıldı',
+};
 export function lsv2TaniMetni(t: Lsv2Tanisi): string {
   if (t.kod < 0) return `${LSV2_TANI_ALANI[t.alan]}: ${ISTEMCI_KODU_METNI[t.kod] ?? 'okunamadı'}`;
   const ad = LSV2_KUMANDA_KODU[t.kod];
@@ -828,4 +831,24 @@ export function eslemeOnerisi(cihazAdi: string, makineler: readonly { id: number
   if (a === '') return null;
   const uyan = makineler.filter((m) => adAnahtari(m.kod) === a);
   return uyan.length === 1 ? uyan[0]!.id : null;
+}
+
+// Alarm olayı (3811): Fault hâlindeki koşul ve tetiklenmiş acil stop; Warning ve Unavailable alarm değildir. Öğe başına tek açık olay.
+export const ALARM_SAKLAMA_GUNU = 90;
+export interface AktifAlarm { oge: string; kod: string | null; metin: string }
+export function aktifAlarmlar(ogeler: readonly TezgahOgesi[]): AktifAlarm[] {
+  const sonuc = new Map<string, AktifAlarm>();
+  for (const o of ogeler) {
+    const oge = o.kimlik ?? `${o.bilesen ?? ''}:${o.tur}`;
+    if (o.kosul === 'Fault') sonuc.set(oge, { oge, kod: null, metin: (o.deger ?? '').trim() || o.tur });
+    else if (o.kosul === null && o.tur === 'EmergencyStop' && o.deger === 'TRIGGERED') sonuc.set(oge, { oge, kod: null, metin: 'Acil stop' });
+  }
+  return [...sonuc.values()];
+}
+// Açık olaylarla karşılaştırma: biten (öğe artık alarmda değil ya da metni değişti) kapanır, yeni olan açılır.
+export function alarmFarki(acik: readonly AktifAlarm[], aktif: readonly AktifAlarm[]): { kapanan: string[]; acilan: AktifAlarm[] } {
+  const simdi = new Map(aktif.map((a) => [a.oge, a]));
+  const kapanan = acik.filter((a) => simdi.get(a.oge)?.metin !== a.metin).map((a) => a.oge);
+  const surer = new Set(acik.filter((a) => !kapanan.includes(a.oge)).map((a) => a.oge));
+  return { kapanan, acilan: aktif.filter((a) => !surer.has(a.oge)) };
 }
