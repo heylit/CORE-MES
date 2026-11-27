@@ -87,6 +87,13 @@ describe('etiket-merkezi kuralları', () => {
     const [q2, y2] = dolu;
     assert.ok(q2?.tur === 'kod' && q2.boyut < 20 && q2.boyut >= 20 - 2.5 && q2.y === 2);
     assert.ok(y2?.tur === 'metin' && y2.satirlar.join('') === 'LOC:A01-02-3' && y2.y + y2.yaziMm <= 22 + 1e-9);
+    // 3758 b: dar etikette (50x25) şeride sığmayan uzun kod 1,8 mm'ye iner, yine sığmazsa kesilmeden iki satıra geçer.
+    const dar = HAZIR_SABLONLAR.find((x) => x.anahtar === 'konum-50x25');
+    assert.ok(dar);
+    const uzunKod = 'LOC:ABCDEFGHIJ-123456789';
+    const darYerlesim = yerlesim(dar, { ...ORNEK_DEGERLER.konum, qr: uzunKod }, false).filter((o) => o.tur === 'metin' && o.mono === true);
+    assert.ok(darYerlesim.length === 2 && darYerlesim.every((o) => o.tur === 'metin' && o.yaziMm >= 1.8 - 1e-9), 'iki satır, en az 1,8 mm');
+    assert.equal(darYerlesim.map((o) => (o.tur === 'metin' ? o.satirlar.join('') : '')).join(''), uzunKod);
     // Yasak: QR'sız (boş değer) etikete kod yazılmaz.
     assert.equal(yerlesim(sablon([qr], 50, 25), { qr: null }, false).length, 0);
     // Bütün hazır şablonlarda kod QR'ın altında, etiketin ve QR kutusunun ya da altındaki boş yerin içinde.
@@ -96,9 +103,17 @@ describe('etiket-merkezi kuralları', () => {
       const y = yerlesim(s, ORNEK_DEGERLER[s.tur], false);
       const i = y.findIndex((o) => o.tur === 'kod');
       const k = y[i];
-      const alt = y[i + 1];
-      assert.ok(k?.tur === 'kod' && alt?.tur === 'metin' && alt.satirlar.join('') === kimlik(k.veri), s.anahtar);
-      assert.ok(alt.y >= k.y + k.boyut && alt.y + alt.yaziMm <= kutu.y + kutu.boyut + Math.max(0, kodAltiYeri(s, kutu)) + 0.15 + 1e-9, s.anahtar);
+      // 3758 b: şeritte kodun üstünde "KOD" başlığı olur (dar etikette yok), kod gruplu ve gerekirse iki satırdır.
+      const sonra = y.slice(i + 1);
+      const basligi = sonra[0]?.tur === 'metin' && sonra[0].satirlar.join('') === 'KOD' ? 1 : 0;
+      const ilk = sonra[basligi];
+      const bitis = sonra.findIndex((o, j) => j > basligi && !(o.tur === 'metin' && o.mono === true));
+      const satirlar = ilk?.tur === 'metin' && ilk.mono === true ? sonra.slice(basligi, bitis < 0 ? undefined : bitis) : [ilk];
+      const son = satirlar.at(-1);
+      const basilan = satirlar.map((o) => (o?.tur === 'metin' ? o.satirlar.join('') : '')).join('');
+      assert.ok(k?.tur === 'kod' && ilk?.tur === 'metin' && son?.tur === 'metin', s.anahtar);
+      assert.deepEqual(kodTuru(basilan), kodTuru(kimlik(k.veri)), s.anahtar);
+      assert.ok(ilk.y >= k.y + k.boyut && son.y + son.yaziMm * (son.satirlar.length - 1) * SATIR_ARALIGI + son.yaziMm <= kutu.y + kutu.boyut + Math.max(0, kodAltiYeri(s, kutu)) + 0.15 + 1e-9, s.anahtar);
       assert.ok(k.boyut >= kutu.boyut - 2.5, s.anahtar);
     }
   });
@@ -399,7 +414,7 @@ describe('etiket-merkezi kuralları', () => {
     assert.ok(sablon);
     const ogeler = yerlesim(sablon, d, false);
     // Sabit tür adı ve alt başlık basılır; değeri olmayan ad ve yer de başlıkları da basılmaz (EM-4, EM-26).
-    assert.deepEqual(ogeler.filter((o) => o.tur === 'metin').map((o) => o.satirlar), [['LOC:R1-02-3-1'], ['KONUM'], ['Basım 19.10.2026'], ['KONUM'], ['R1-02-3-1']]);
+    assert.deepEqual(ogeler.filter((o) => o.tur === 'metin').map((o) => o.satirlar), [['KOD'], ['LOC:R1-02-3-1'], ['KONUM'], ['Basım 19.10.2026'], ['KONUM'], ['R1-02-3-1']]);
     assert.equal(ogeler.find((o) => o.tur === 'kod')?.veri, 'CM1/LOC:R1-02-3-1/BT:261019');
     // Stoktaki en uzun kod (20 karakter) konum ve istasyon şablonlarında kesilmez.
     const uzun = 'ABCDEFGHIJ-123456789';
@@ -486,6 +501,21 @@ describe('etiket-merkezi kuralları', () => {
     const p9 = refakatPartisiDegerleri(k, { qr: 'RP:7', etiket: 'x' }, { lotNo: 'LT-1', tedarikciPartiNo: 'P-9', dokumNo: null, sertifikaNo: null }, new Date());
     assert.deepEqual([p9['lot'], p9['lotNo'], p9['lotEk']], ['Lot LT-1 · Parti P-9', 'LT-1', 'Tedarikçi partisi P-9']);
     assert.equal(refakatPartisiDegerleri(k, { qr: 'RP:7', etiket: 'x' }, { lotNo: 'LT-1', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null }, new Date())['lotEk'], null);
+    // 3758 b: REFAKAT KODU kutusu partinin elle yazılacak kodunu basar; 14. işlem satırı doluysa kutu yerine çakışmasın diye basılmaz.
+    assert.equal(rp['kartKodu'], 'RP 7');
+    assert.equal(refakatDegerleri(k, new Date())['kartKodu'], undefined, 'emir kartında (UE) kutu yok');
+    const islemler = (n: number) => Array.from({ length: n }, (_, i) => ({ opNo: (i + 1) * 10, ad: `İş ${i + 1}`, yer: null, fason: false }));
+    const lot1 = { lotNo: 'LT-1', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null };
+    assert.equal(refakatPartisiDegerleri({ ...k, adimlar: islemler(12) }, { qr: 'RP:12345', etiket: 'x' }, lot1, new Date())['kartKodu'], 'RP 12 345', 'on iki işlem ve çıkış satırı: 13 satır');
+    assert.equal(refakatPartisiDegerleri({ ...k, adimlar: islemler(13) }, { qr: 'RP:12345', etiket: 'x' }, lot1, new Date())['kartKodu'], null, '14. satır (çıkış) kutuyla çakışır');
+    const kart = HAZIR_SABLONLAR.find((x) => x.anahtar === 'refakat-100x150');
+    assert.ok(kart);
+    // Kutu 13. satırın çizgisinin altında, alt çizginin üstündedir.
+    const kutuOgesi = kart.ogeler.find((o) => o.tur === 'kutu' && o.kosul === 'kartKodu');
+    assert.ok(kutuOgesi?.tur === 'kutu' && kutuOgesi.y >= 65 + 12 * 5.2 + 4.4 + 0.2 + 0.6 && kutuOgesi.y + kutuOgesi.yukseklik <= 143.4 - 0.6, 'çizgilere en az 0,6 mm boşluk (düşük dpi)');
+    const kutulu = yerlesim(kart, { ...ORNEK_DEGERLER.refakat, kartKodu: 'RP 1 234 567' }, false).filter((o) => o.tur === 'metin' && o.mono === true && o.y > 100);
+    assert.ok(kutulu.length === 1 && kutulu[0]?.tur === 'metin' && kutulu[0].satirlar.join('') === 'RP 1 234 567' && kutulu[0].yaziMm >= 3.5, 'yedi haneli kod kutuya kesilmeden sığar');
+    assert.equal(yerlesim(kart, { ...ORNEK_DEGERLER.refakat, kartKodu: null }, false).some((o) => o.tur === 'metin' && o.satirlar.join('').startsWith('REFAKAT KODU')), false);
     assert.deepEqual([kayitSablonTuru('refakat-partisi'), kayitSablonTuru('mal-kabul')], ['refakat', 'lot']);
     assert.equal(kayitUyumHatasi('refakat', 'refakat-partisi'), null, 'refakat partisi refakat şablonuyla basılır');
   });

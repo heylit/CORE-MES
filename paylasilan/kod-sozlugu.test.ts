@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { kodTuru, komutKodu, okutmaDuzelt } from './kod-sozlugu.ts';
+import { kodTuru, komutKodu, okunurKod, okutmaDuzelt } from './kod-sozlugu.ts';
 
 test('kod sözlüğü: her önek kendi türüne yönlendirir', () => {
   assert.deepEqual(kodTuru('LOC:A-01-01'), { tur: 'konum', deger: 'A-01-01' });
@@ -29,10 +29,34 @@ test('kod sözlüğü: büyük-küçük harf ve boşluk sonucu değiştirmez', (
 });
 
 test('kod sözlüğü: tanınmayan, boş ya da biçimi tutmayan kod "bilinmiyor" döner, ham değer kırpılarak kalır', () => {
-  for (const ham of ['', '   ', 'XYZ:12', 'A-01-01', '901', 'LOC:', 'LOT:', 'RAF:', 'MLZ:abc', 'MLZ:', 'UE:abc', 'UE:', 'UE-', 'LT-', 'UE-12A', 'IE:5', 'RP:', 'RP:abc', 'RP:-3', 'RP:12a', 'RP-12']) {
+  for (const ham of ['', '   ', 'XYZ:12', 'A-01-01', '901', 'LOC:', 'LOT:', 'RAF:', 'MLZ:abc', 'MLZ:', 'UE:abc', 'UE:', 'UE-', 'LT-', 'UE-12A', 'IE:5', 'RP:', 'RP:abc', 'RP:-3', 'RP:12a', 'RP-1A', 'LOCA01', 'LOT', 'RP', 'RP 12-', 'UE 4512']) {
     assert.deepEqual(kodTuru(ham), { tur: 'bilinmiyor', deger: ham.trim() }, ham);
   }
   assert.deepEqual(kodTuru(' xyz:12 '), { tur: 'bilinmiyor', deger: 'xyz:12' });
+});
+
+// 3758 b: kamera kullanmayan operatör kodu etiketten okuyup elle yazar; basılan gruplu biçim ve yaygın yazım farkları aynı kodu verir.
+test('kod sözlüğü: elle yazılan kodda önek ayracı, grup boşluğu, tire ve rakam yerine harf hoş görülür (3758)', () => {
+  for (const ham of ['RP:1234', 'rp 1234', 'RP-1234', 'RP1234', 'rp - 1234', 'RP 1 234', 'RP:12-34', 'RP:I234', 'RP:l234']) {
+    assert.deepEqual(kodTuru(ham), { tur: 'refakat-partisi', deger: '1234' }, ham);
+  }
+  assert.deepEqual(kodTuru('RP:12O4'), { tur: 'refakat-partisi', deger: '1204' });
+  assert.deepEqual(kodTuru('RP 12 345'), { tur: 'refakat-partisi', deger: '12345' });
+  assert.deepEqual(kodTuru('mlz 9O1'), { tur: 'malzeme', deger: '901' });
+  // Konum ve lot gövdesi kullanıcının tanımıdır: ayraç hoş görülür, içindeki O ve I olduğu gibi kalır.
+  assert.deepEqual(kodTuru('loc a01-02-3'), { tur: 'konum', deger: 'A01-02-3' });
+  assert.deepEqual(kodTuru('LOC-AO1-I2'), { tur: 'konum', deger: 'AO1-I2' });
+  assert.deepEqual(kodTuru('lot lt-000123'), { tur: 'lot', deger: 'LT-000123' });
+  // UE ile tire emir numarasıdır, kimlik olmaz.
+  assert.deepEqual(kodTuru('UE-004512'), { tur: 'uretim-emri', deger: 'UE-004512', bicim: 'no' });
+});
+
+test('kod sözlüğü: okunur kod rakam gövdeli öneki boşlukla ayırır, beş hane ve üstünü üçerli gruplar; elle yazılınca aynı kodu verir (3758)', () => {
+  const ornekler: [string, string][] = [['RP:1234', 'RP 1234'], ['RP:12345', 'RP 12 345'], ['RP:1234567', 'RP 1 234 567'], ['MLZ:901', 'MLZ 901'], ['LOC:A01-02-3', 'LOC:A01-02-3'], ['LOT:LT-000123', 'LOT:LT-000123'], ['UE:4512', 'UE:4512']];
+  for (const [kimlik, basilan] of ornekler) {
+    assert.equal(okunurKod(kimlik), basilan, kimlik);
+    assert.deepEqual(kodTuru(basilan), kodTuru(kimlik), basilan);
+  }
 });
 
 test('kod sözlüğü: refakat partisi kartı gelmeden basılan refakat kartı (UE:<emir>) emir olarak okunmaya devam eder', () => {

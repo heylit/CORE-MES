@@ -1,5 +1,5 @@
 import type { Sablon, SablonOgesi, SablonTuru } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import { seritEni, seritKodKenari } from './kod-yaz.ts';
+import { SERIT_KOD_BASLIGI, seritEni, seritKodBasligiVar, seritKodKenari, seritKodYazisi } from './kod-yaz.ts';
 import { metinGenisligi } from './kurallar.ts';
 
 // Kart 3562 (A, kod şeridi): her etiket soldan sağa şerit ve gövdedir. Şerit: üst ortada DataMatrix (kod altına kimlik, kurallar.ts qrVeKodu),
@@ -133,14 +133,18 @@ export function seritSablonu(g: SeritGirdisi): Sablon {
   const y0 = g.cerceve === undefined ? 1.2 : 2.5;
   ogeler.push(kutu(S, kutuKenar - 0.5, 0.3, seritH - 2 * (kutuKenar - 0.5), 0.3));
   ogeler.push({ tur: 'kod', x: yuvarla((S - kenari) / 2), y: y0, boyut: yuvarla(kenari), alan: 'qr' });
-  const by = y0 + kenari + 3.1;
+  // 3758 b: karekod ile tür adı arasında elle yazılacak kodun yeri (başlık, kod satırı); kurallar.ts qrVeKodu bu yere çizer.
+  const kodBandi = (seritKodBasligiVar(W) ? SERIT_KOD_BASLIGI * 1.2 + 0.1 : 0) + seritKodYazisi(W, H) * 1.2 + 0.7;
+  const by = y0 + kenari + kodBandi;
   const merkez = (alan: string, ornek: string, kalin: boolean, y: number): SablonOgesi => {
     const w = Math.min(S - 2, metinGenisligi(ornek, SERIT_YAZI, kalin) + 0.8);
     return metin((S - w) / 2, y, w, SERIT_YAZI * 1.2, SERIT_YAZI, alan, kalin);
   };
   ogeler.push(merkez(`=${g.turAdi}`, g.turAdi, true, by), merkez('kodBasim', 'Basım 22.11.2026', false, by + SERIT_ADIM));
-  const pb = Math.min(S - 8, 12);
-  if (!kucuk && H >= 50) ogeler.push(simge((S - pb) / 2, seritH - kutuKenar - pb + (g.cerceve === undefined ? 0.3 : 0), pb, g.simgeAlani === true ? g.simge : `=${g.simge}`));
+  // Piktogram şeridin tabanındadır; kod bandı uzayınca (3758 b) basım satırına binmesin diye gerekirse küçülür.
+  const pikAlt = seritH - kutuKenar + (g.cerceve === undefined ? 0.3 : 0);
+  const pb = Math.min(S - 8, 12, yuvarla(pikAlt - (by + SERIT_ADIM + SERIT_YAZI * 1.2) - 0.3));
+  if (!kucuk && H >= 50 && pb > 0) ogeler.push(simge((S - pb) / 2, pikAlt - pb, pb, g.simgeAlani === true ? g.simge : `=${g.simge}`));
   // ---- gövde ----
   const bx = S + 2;
   const bw = W - bx - kenar;

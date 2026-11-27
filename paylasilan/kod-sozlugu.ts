@@ -52,10 +52,32 @@ export function kodTuru(ham: string): KodTuru {
   return cozumle(okutmaDuzelt(ham));
 }
 
+// 3758 b: etikete elle yazılacak kod gruplu basılır. Gövdesi yalnız rakam olan önekte (RP, MLZ) önek ile gövde arasına boşluk konur,
+// beş hane ve üstü sağdan üçerli gruplanır ("RP 12 345"); öteki kodlar olduğu gibi kalır. Basılan biçim elle yazılınca aynı kodu verir.
+const RAKAM_GOVDELI: ReadonlySet<string> = new Set([KOD_ONEKI['refakat-partisi'], KOD_ONEKI.malzeme]);
+const gruplu = (rakam: string): string => (rakam.length < 5 ? rakam : rakam.replace(/\B(?=(\d{3})+$)/g, ' '));
+export function okunurKod(kimlik: string): string {
+  const m = /^([A-Z]+):(\d{1,9})$/.exec(kimlik);
+  return m !== null && RAKAM_GOVDELI.has(m[1]!) ? `${m[1]!} ${gruplu(m[2]!)}` : kimlik;
+}
+
+// 3758 b: elle yazılan kodda önekten sonraki ayraç ":" yerine boşluk ya da tire olabilir; rakam gövdeli önekte (RP, MLZ) ayraçsız da
+// olur, gövdedeki boşluk ve rakamlar arasındaki tire atılır, rakam yerine yazılan O sıfır, I ve L bir sayılır. Konum, lot ve raf gövdesi kullanıcının
+// tanımıdır, ona dokunulmaz. UE dışarıda kalır: "UE-" emir numarasıdır, kimlikle karışmasın.
+const HOSGORULU = /^(?:(LOC|LOT|RAF|MLZ|RP)(?:\s*[:-]\s*|\s+)|(MLZ|RP)(?=[\dOIL]))(.+)$/;
+function hosgoruluCoz(ham: string): KodTuru | null {
+  const m = HOSGORULU.exec(ham.trim().toUpperCase());
+  if (m === null) return null;
+  const onek = (m[1] ?? m[2])!;
+  const govde = RAKAM_GOVDELI.has(onek) ? m[3]!.replace(/\s+/g, '').replace(/(?<=[\dOIL])-(?=[\dOIL])/g, '').replace(/O/g, '0').replace(/[IL]/g, '1') : m[3]!.replace(/\s+/g, '');
+  const t = cozumle(`${onek}:${govde}`, false);
+  return t.tur === 'bilinmiyor' ? null : t;
+}
+
 // Okuyucu ve elle giriş boşluk ve küçük harf katabilir; kodların hiçbiri boşluk taşımaz, harfleri büyüktür.
 // Özet kod (`CM1/UE:142/...`) ilk alanıyla çözülür: kod neyi gösteriyorsa onu gösterir, ek alanlar okuyan ekranındır (etiket-kodu.ts).
 // İlk alan sözlüğün bilmediği bir önekse (koli, hatalı parça) sonuç bilinmiyor kalır.
-function cozumle(ham: string): KodTuru {
+function cozumle(ham: string, hosgoru = true): KodTuru {
   const ozet = cm1Coz(ham);
   if (ozet !== null) {
     const t = cozumle(kimlikKodu(ozet));
@@ -75,5 +97,5 @@ function cozumle(ham: string): KodTuru {
   if (onek === KOD_ONEKI['uretim-emri'] && KIMLIK.test(govde)) return { tur: 'uretim-emri', deger: govde, bicim: 'kimlik' };
   if ((onek === null || onek === KOD_ONEKI['uretim-emri']) && EMIR_NO.test(govde)) return { tur: 'uretim-emri', deger: govde, bicim: 'no' };
   if (onek === null && LOT_NO.test(govde)) return { tur: 'lot', deger: govde };
-  return { tur: 'bilinmiyor', deger: ham.trim() };
+  return (hosgoru ? hosgoruluCoz(ham) : null) ?? { tur: 'bilinmiyor', deger: ham.trim() };
 }

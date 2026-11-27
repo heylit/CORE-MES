@@ -15,7 +15,9 @@ export function kartGirdisiCoz(ham: string, kartlar: readonly Kart[]): number | 
   if (metin === '') return null;
   const okutma = terminalOkutmasi(metin);
   if (okutma.tur === 'kart') return okutma.kartId;
-  const etiketle = kartlar.find((k) => k.etiket.toUpperCase() === metin.toUpperCase());
+  // 3758 b: kart adı elle yazılırken boşluk, tire ve harf büyüklüğü fark etmez ("ue 004512 p1").
+  const sade = (m: string) => m.toUpperCase().replace(/[\s-]+/g, '');
+  const etiketle = kartlar.find((k) => sade(k.etiket) === sade(metin));
   if (etiketle) return etiketle.id;
   return /^\d{1,9}$/.test(metin) ? Number(metin) : null;
 }
@@ -38,7 +40,7 @@ export function KartlaBaslat({ is, kartlar, yetkili, kartla, kartsiz, kamera, ka
       <p role="alert"><strong>Kart okutulmadan iş başlamaz.</strong></p>
       <p>{is}: kartı el okuyucuyla okutun ya da kartın üstündeki numarayı yazın.</p>
       <form onSubmit={(e) => { e.preventDefault(); gonder(); }}>
-        <Girdi etiket="Kart" autoFocus autoComplete="off" placeholder="RP:120 ya da UE-000120-P1" value={girdi} hata={hata ?? undefined}
+        <Girdi etiket="Kart" autoFocus autoComplete="off" placeholder="RP 120 ya da UE-000120-P1" value={girdi} hata={hata ?? undefined}
           onChange={(e) => { girdiYaz(e.target.value); hataYaz(null); }} />
         <Dugme type="submit" simge="play" disabled={girdi.trim() === ''}>Kartla başlat</Dugme>
         <Dugme type="button" tur="ikincil" simge="camera" onClick={kamera}>Kamerayla okut</Dugme>

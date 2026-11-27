@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { cm1Coz, kimlikKodu } from '#paylasilan/etiket-kodu.ts';
+import { okunurKod } from '#paylasilan/kod-sozlugu.ts';
 import { randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:net';
 import { after, before, describe, test } from 'node:test';
@@ -505,7 +506,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.equal(zc.adet, 2);
     assert.equal(zc.komut.match(/\^XA/g)?.length, 2);
     assert.match(zc.komut, /Kopya 1\/2[\s\S]*Kopya 2\/2/);
-    assert.ok(zc.komut.split('^XZ').slice(0, 2).every((et) => et.includes(`RP:${acik}`)), 'iki kopyada QR aynı');
+    assert.ok(zc.komut.split('^XZ').slice(0, 2).every((et) => et.includes(okunurKod(`RP:${acik}`))), 'iki kopyada QR aynı');
     assert.doesNotMatch(zc.komut, /\^PQ2/);
     // Dosya yazıcısı PPLB konuşur: iki etiket, her biri P1; P2 yok.
     const iki = await yaz(yonetici, '/etiket-merkezi/sablonlar/refakat-100x150/indir', { yaziciId: dosya.id, adet: 2, kayit: { tur: 'refakat-partisi', idler: [acik] } });

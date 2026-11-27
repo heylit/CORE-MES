@@ -45,10 +45,13 @@ describe('şerit: kimlik ve bilgi yazısı', () => {
       const m = metinler(s);
       const e = seritEni(s.genislik, s.yukseklik);
       const serit = m.filter((o) => o.x + o.genislik <= e + 0.01 && o.y < 60);
-      const kimlik = serit[0];
-      assert.ok(kimlik?.kalin && kimlik.yaziMm >= 1.8 - 1e-9, `${s.anahtar} kimlik ${kimlik?.yaziMm}`);
+      // 3758 b: kimliğin üstünde "KOD" başlığı (50x25'te yok); kimlik kalın ve eşit aralıklıdır.
+      const baslikli = s.genislik >= 75;
+      if (baslikli) assert.deepEqual(serit[0]?.satirlar, ['KOD'], s.anahtar);
+      const kimlik = serit[baslikli ? 1 : 0];
+      assert.ok(kimlik?.kalin && kimlik.mono === true && kimlik.yaziMm >= 1.8 - 1e-9, `${s.anahtar} kimlik ${kimlik?.yaziMm}`);
       assert.match(serit.map((o) => o.satirlar.join(' ')).join('|'), /Basım \d\d\.\d\d\.\d{4}/, s.anahtar);
-      assert.equal(serit.length, 3, `${s.anahtar}: şeritte kimlik, tür adı ve basım tarihi`);
+      assert.equal(serit.length, baslikli ? 4 : 3, `${s.anahtar}: şeritte (KOD başlığı,) kimlik, tür adı ve basım tarihi`);
       for (const o of m) {
         assert.ok(!o.satirlar.join(' ').includes('CM1'), s.anahtar);
         assert.ok(!/Basım \d\d\.\d\d\.\d\d$/.test(o.satirlar.join(' ')), `${s.anahtar} iki haneli yıl`);
