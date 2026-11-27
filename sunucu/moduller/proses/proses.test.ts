@@ -61,7 +61,7 @@ describe('proses: parça dosyası ucu (gerçek PostgreSQL)', () => {
   });
   after(async () => { await ortam?.kaldir(); });
 
-  test('proses mühendisi rotasız parçanın dosyasını okur: halkalar sırayla, kaynağı olmayanlar kaynak-yok, operasyon yok', async () => {
+  test('proses mühendisi rotasız parçanın dosyasını okur: halkalar sırayla, NC kaydı yoksa NC/takım/bağlama yok, kurulum kaynak-yok, operasyon yok', async () => {
     const c = await oku('proses', urunNo);
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     assert.equal(c.govde.malzeme.no, urunNo);
@@ -69,7 +69,7 @@ describe('proses: parça dosyası ucu (gerçek PostgreSQL)', () => {
     assert.deepEqual(c.govde.operasyonlar, []);
     const durum = Object.fromEntries(c.govde.halkalar.map((h) => [h.anahtar, h.durum]));
     assert.deepEqual(durum, {
-      cizim: 'yok', rota: 'yok', nc: 'kaynak-yok', takim: 'kaynak-yok', baglama: 'kaynak-yok', kurulum: 'kaynak-yok', kontrol: 'yok', 'ilk-parca': 'gerekmez',
+      cizim: 'yok', rota: 'yok', nc: 'yok', takim: 'yok', baglama: 'yok', kurulum: 'kaynak-yok', kontrol: 'yok', 'ilk-parca': 'gerekmez',
     });
   });
 

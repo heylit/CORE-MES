@@ -134,6 +134,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'mesaj.yonet': 'Mesaj kurulumu',
   'oee.oku': 'OEE ve verimlilik görme',
   'proses.oku': 'Parça proses dosyasını görme',
+  'proses.nc-yaz': 'NC/CAM program kaydı yazma',
   'akis.kart-oku': 'Refakat kartının akışını görme',
   'takvim.oku': 'Takvimi görme',
   'takimhane.cikis-iade': 'Takım verme ve geri alma',

@@ -402,7 +402,7 @@ export const ROL_MATRISI = {
       'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
       'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol', 'projeler.sablon-yaz',
-      'proses.oku', 'sayfa.proses',
+      'proses.oku', 'proses.nc-yaz', 'sayfa.proses',
       // 3337-2 a: refakat kartı okutulmadan gerekçeyle iş başlatma.
       'uretim-emirleri.kartsiz-baslat',
       'projeler.hazirlik-dagit', 'uretim-emirleri.hazirlik-ayar', 'projeler.oku', 'sayfa.projeler',

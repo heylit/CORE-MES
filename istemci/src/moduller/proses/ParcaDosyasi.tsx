@@ -1,11 +1,19 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import type { ProsesHalkaAnahtari, ProsesHalkaDurumu, ProsesHalkasi, ProsesOperasyonu, ProsesParcaCevabi } from '#paylasilan/sozlesme/proses.ts';
-import { DurumKutusu, Kart, MalzemeSecici, Rozet, Simge, Tablo, type RozetTonu, type SeciliKayit, type Sutun } from '../../ortak/arayuz/index.ts';
+import type {
+  NcProgramYazmaCevabi, ProsesHalkaAnahtari, ProsesHalkaDurumu, ProsesHalkasi, ProsesNcProgrami, ProsesOperasyonu, ProsesParcaCevabi, ProsesRevizyonu,
+} from '#paylasilan/sozlesme/proses.ts';
+import {
+  DurumKutusu, Kart, MalzemeSecici, Rozet, Secim, Sekmeler, Simge, Tablo, useBildirim, type RozetTonu, type SeciliKayit, type Sutun,
+} from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api } from '../../ortak/veri/api.ts';
+import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { eskiGovdesi } from './NcFormu.tsx';
+import { NcSekmesi } from './NcSekmesi.tsx';
+import { dk } from './nc.ts';
 import './proses.css';
 
 const HALKA: Record<ProsesHalkaAnahtari, { ad: string; simge: SimgeAdi }> = {
@@ -40,7 +48,6 @@ function Halka({ h }: { h: ProsesHalkasi }) {
 }
 
 const var_ = (x: boolean) => <Rozet ton={x ? 'tamam' : 'uyari'} gorunum="cizgi">{x ? 'Var' : 'Yok'}</Rozet>;
-const dk = (x: string | null): string => (x === null ? '—' : `${Number(x).toLocaleString('tr-TR', { maximumFractionDigits: 2 })} dk`);
 
 // Gerçek süre: rotanın kabul bekleyen işlem ölçümlerinin ortancası ve ölçüm sayısı (rota Süreler ekranındaki pencere).
 const sure = (o: ProsesOperasyonu): string =>
@@ -56,7 +63,54 @@ const SUTUNLAR: Sutun<ProsesOperasyonu>[] = [
   { anahtar: 'numune', baslik: 'Numune planı', hucre: (o) => (o.fason ? '—' : var_(o.numunePlani)) },
 ];
 
-function Dosya({ veri }: { veri: ProsesParcaCevabi }) {
+type SekmeAnahtari = 'ozet' | 'operasyonlar' | 'nc';
+
+const REV_DURUM: Record<ProsesRevizyonu['durum'], string> = { yururlukte: 'yürürlükte', yayinda: 'yayında', eski: 'eski' };
+
+// Revizyon seçici: az revizyonda düğme dizisi (tek dokunuş), çokta açılır liste. Revizyonsuz parçada çizilmez.
+function RevizyonSecici({ veri, sec }: { veri: ProsesParcaCevabi; sec: (kod: string) => void }) {
+  if (veri.revizyonlar.length === 0 || veri.seciliRevizyon === null) return null;
+  if (veri.revizyonlar.length > 5) {
+    return (
+      <div className="tc-proses-rev-liste">
+        <Secim etiket="Teknik resim revizyonu" value={veri.seciliRevizyon} onChange={(o) => { sec(o.target.value); }}
+          secenekler={veri.revizyonlar.map((r) => ({ deger: r.kod, baslik: `Rev ${r.kod} · ${REV_DURUM[r.durum]}` }))} />
+      </div>
+    );
+  }
+  return (
+    <div className="tc-proses-rev" role="group" aria-label="Teknik resim revizyonu">
+      <span className="tc-proses-rev-etiket"><Simge ad="layers" />Teknik resim</span>
+      {veri.revizyonlar.map((r) => (
+        <button key={r.kod} type="button" className="tc-proses-rev-dugme" aria-pressed={r.kod === veri.seciliRevizyon}
+          data-durum={r.durum} onClick={() => { sec(r.kod); }}>
+          Rev {r.kod}<small>{REV_DURUM[r.durum]}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Ozet({ veri }: { veri: ProsesParcaCevabi }) {
+  return (
+    <>
+      <ol className="tc-proses-zincir" aria-label="Proses zinciri">
+        {veri.halkalar.map((h) => <Halka key={h.anahtar} h={h} />)}
+      </ol>
+      <p className="tc-proses-not">
+        Durumu her halkanın sahibi modül verir; düzenleme sahibinin sayfasında yapılır. NC program, takım listesi ve bağlama halkaları
+        seçili teknik resim revizyonunun NC/CAM kayıtlarından gelir. "Kaynak yok" halkanın parça düzeyinde okunacağı yer henüz yoktur.
+      </p>
+    </>
+  );
+}
+
+interface DosyaOzellikleri {
+  veri: ProsesParcaCevabi; sekme: SekmeAnahtari; sekmeYaz: (s: SekmeAnahtari) => void;
+  revSec: (kod: string) => void; eskiYap: (p: ProsesNcProgrami) => void;
+}
+
+function Dosya({ veri, sekme, sekmeYaz, revSec, eskiYap }: DosyaOzellikleri) {
   const eksik = veri.halkalar.filter((h) => h.durum === 'eksik' || h.durum === 'yok').length;
   return (
     <>
@@ -65,15 +119,18 @@ function Dosya({ veri }: { veri: ProsesParcaCevabi }) {
         <span>Rota {veri.rota === null ? '—' : `rev ${veri.rota.revizyon}`}</span>
         {eksik > 0 ? <Rozet ton="uyari">{eksik} halka eksik</Rozet> : <Rozet ton="tamam">Eksik halka yok</Rozet>}
       </div>
-      <ol className="tc-proses-zincir" aria-label="Proses zinciri">
-        {veri.halkalar.map((h) => <Halka key={h.anahtar} h={h} />)}
-      </ol>
-      <p className="tc-proses-not">
-        Durumu her halkanın sahibi modül verir; düzenleme sahibinin sayfasında yapılır. "Kaynak yok" halkanın parça düzeyinde okunacağı
-        yer henüz yoktur.
-      </p>
-      <Tablo etiket="Operasyonlar" sutunlar={SUTUNLAR} satirlar={veri.operasyonlar} satirAnahtari={(o) => o.opNo}
-        bosMesaj="Yürürlükte rota yok." />
+      <RevizyonSecici veri={veri} sec={revSec} />
+      <Sekmeler etiket="Parça dosyası bölümleri" secili={sekme} sec={sekmeYaz} sekmeler={[
+        { anahtar: 'ozet', baslik: 'Özet', simge: 'list' },
+        { anahtar: 'operasyonlar', baslik: 'Operasyonlar', simge: 'route' },
+        { anahtar: 'nc', baslik: 'NC/CAM', simge: 'file' },
+      ]} />
+      {sekme === 'ozet' && <Ozet veri={veri} />}
+      {sekme === 'operasyonlar' && (
+        <Tablo etiket="Operasyonlar" sutunlar={SUTUNLAR} satirlar={veri.operasyonlar} satirAnahtari={(o) => o.opNo}
+          bosMesaj="Yürürlükte rota yok." />
+      )}
+      {sekme === 'nc' && <NcSekmesi veri={veri} eskiYap={eskiYap} />}
     </>
   );
 }
@@ -87,12 +144,26 @@ const adrestekiParca = (deger: string | null): number | null => {
 export function ParcaDosyasi() {
   const [arama, aramaYaz] = useSearchParams();
   const no = adrestekiParca(arama.get('malzemeNo'));
+  const rev = arama.get('rev');
   const [secilen, secilenYaz] = useState<SeciliKayit | null>(null);
+  // Sekme revizyon değişince (yeni sorgu, yükleniyor) kaybolmasın diye dosyanın dışında tutulur.
+  const [sekme, sekmeYaz] = useState<SekmeAnahtari>('ozet');
+  const istemci = useQueryClient();
+  const bildirim = useBildirim();
   const sorgu = useQuery({
-    queryKey: anahtarlar.parca(no ?? 0),
-    queryFn: () => api.get<ProsesParcaCevabi>(`/proses/parca?malzemeNo=${String(no ?? 0)}`),
+    queryKey: anahtarlar.parca(no ?? 0, rev),
+    queryFn: () => api.get<ProsesParcaCevabi>(`/proses/parca?${new URLSearchParams({ malzemeNo: String(no ?? 0), ...(rev === null ? {} : { rev }) }).toString()}`),
     enabled: no !== null,
   });
+  const revSec = (kod: string) => { if (no !== null) aramaYaz({ malzemeNo: String(no), rev: kod }); };
+  const eskiYap = (p: ProsesNcProgrami) => {
+    if (no === null) return;
+    void tekrarKorumaliGonder((deneme) => api.post<NcProgramYazmaCevabi>(`/proses/nc-programlari/${String(p.id)}/kaydet`, eskiGovdesi(p), {
+      istekKimligi: deneme.istekKimligi, zamanAsimiMs: deneme.zamanAsimiMs, ...(deneme.sinyal ? { sinyal: deneme.sinyal } : {}),
+    }))
+      .then(async () => { await istemci.invalidateQueries({ queryKey: anahtarlar.parca(no) }); bildirim.bildir('tamam', `${p.ad} eski olarak işaretlendi.`); })
+      .catch((e: unknown) => { bildirim.bildir('hata', e instanceof Error ? e.message : 'Program güncellenemedi.'); });
+  };
   const m = sorgu.data?.malzeme;
   const parca: SeciliKayit | null = no === null ? null
     : secilen?.id === no ? secilen : m !== undefined ? { id: m.no, kod: m.kod, ad: m.ad ?? '' } : null;
@@ -110,7 +181,7 @@ export function ParcaDosyasi() {
         {no === null ? <DurumKutusu durum="bos" mesaj="Proses zincirini görmek için parça seçin." />
           : sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
           : sorgu.isError ? <DurumKutusu durum="hata" hata={sorgu.error} yenile={() => { void sorgu.refetch(); }} />
-          : <Dosya veri={sorgu.data} />}
+          : <Dosya veri={sorgu.data} sekme={sekme} sekmeYaz={sekmeYaz} revSec={revSec} eskiYap={eskiYap} />}
       </div>
     </Kart>
   );
