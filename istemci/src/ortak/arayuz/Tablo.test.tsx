@@ -268,6 +268,16 @@ describe('Açılır satır ve gruplama seçimi (3797)', () => {
   const GRUPLAR = [{ anahtar: 'durum', baslik: 'Durum', yol: (t: T) => [t.durum] }];
   const ciz = (arac?: TabloAraci<T>) => render(<Tablo etiket="Talepler" sutunlar={SUT} satirlar={L} satirAnahtari={(t) => t.no} ayrinti={ayrinti} arac={arac} />);
 
+  it('ilk sütun JSX ise aç düğmesinin adı CSV değerinden, CSV de yoksa satır anahtarından kurulur (Arayüz S2)', () => {
+    const jsx: Sutun<T>[] = [{ anahtar: 'no', baslik: 'No', hucre: (t) => <b>{t.no}</b>, csv: (t) => `${t.no} csv` }, ...SUT.slice(1)];
+    const { rerender } = render(<Tablo etiket="Talepler" sutunlar={jsx} satirlar={L} satirAnahtari={(t) => t.no} ayrinti={ayrinti} />);
+    expect(screen.getByRole('button', { name: 'Aç: ORN-1 csv' })).toBeTruthy();
+    const csvsiz: Sutun<T>[] = [{ anahtar: 'no', baslik: 'No', hucre: (t) => <b>{t.no}</b> }, ...SUT.slice(1)];
+    rerender(<Tablo etiket="Talepler" sutunlar={csvsiz} satirlar={L} satirAnahtari={(t) => `k-${t.no}`} ayrinti={ayrinti} />);
+    expect(screen.getByRole('button', { name: 'Aç: k-ORN-1' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /object/ })).toBeNull();
+  });
+
   it('ok düğmesi satırın altındaki ayrıntıyı açar ve kapatır; ayrıntısı olmayan satırda ok yok', () => {
     ciz();
     expect(screen.queryByText('ORN-MIL-20')).toBeNull();

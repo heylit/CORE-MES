@@ -196,6 +196,12 @@ function csvHucresi<S>(s: Sutun<S>, satir: S): CsvDegeri {
   return typeof icerik === 'string' || typeof icerik === 'number' ? icerik : null;
 }
 
+// Satır düğmelerinin (seç, aç) erişilebilir adı: ilk sütunun metni (JSX hücrede CSV değeri), yoksa satır anahtarı.
+function satirAdi<S>(s: Sutun<S> | undefined, satir: S, anahtar: string): string {
+  const d = s ? csvHucresi(s, satir) : null;
+  return d === null || d === undefined || d === '' ? anahtar : String(d);
+}
+
 export function tabloCsvSatirlari<S>(sutunlar: readonly Sutun<S>[], satirlar: readonly S[]): { basliklar: string[]; satirlar: CsvDegeri[][] } {
   const alinan = sutunlar.filter((s) => s.csv !== false);
   return { basliklar: alinan.map((s) => s.baslik), satirlar: satirlar.map((satir) => alinan.map((s) => csvHucresi(s, satir))) };
@@ -573,7 +579,7 @@ export function Tablo<S>({
               {topluAcik && (
                 <td className="tc-tablo-sec" data-baslik="Seç" onClick={(o) => { o.stopPropagation(); }}>
                   <input
-                    type="checkbox" aria-label={`Seç: ${String(sutunlar[0]?.hucre(satir) ?? anahtar(satir))}`}
+                    type="checkbox" aria-label={`Seç: ${satirAdi(sutunlar[0], satir, anahtar(satir))}`}
                     checked={secili.has(anahtar(satir))}
                     onChange={(o) => {
                       const k = anahtar(satir);
@@ -587,7 +593,7 @@ export function Tablo<S>({
                 <td className="tc-tablo-ac" data-baslik="">
                   {acilabilir && (
                     <button type="button" className="tc-tablo-ac-dugme" aria-expanded={acik} aria-controls={acik ? ayrintiKimligi : undefined}
-                      aria-label={`${acik ? 'Kapat' : 'Aç'}: ${String(sutunlar[0]?.hucre(satir) ?? k)}`} onClick={(o) => { o.stopPropagation(); acKapa(k); }}>
+                      aria-label={`${acik ? 'Kapat' : 'Aç'}: ${satirAdi(sutunlar[0], satir, k)}`} onClick={(o) => { o.stopPropagation(); acKapa(k); }}>
                       <Simge ad="chev-right" boyut="k" />
                       <span className="tc-tablo-ac-metin" aria-hidden="true">{acik ? 'Kapat' : 'Ayrıntı'}</span>
                     </button>
