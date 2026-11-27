@@ -2662,12 +2662,23 @@ describe('stok (gerçek PostgreSQL)', () => {
       );
     });
     // Risk N1: denetim kilidi beklerken onaylanan iş denetimde görünür (kilit ve denetim ayrı ifade): silme reddedilir.
+    // Denetim sabit süreyle değil, öteki işlemin satırı yazdığı anla başlar; öteki işlem denetim kilidini beklemeye başlayana dek açık kalır
+    // (yavaş makinede denetim yazmadan önce koşup boş dönüyordu).
+    let yazildi!: () => void;
+    const yazildiSoz = new Promise<void>((tamam) => { yazildi = tamam; });
     const bekleyen = vt.tx(async (baska) => {
+      const pid = (await baska.tek<{ pid: number }>('SELECT pg_backend_pid() AS pid'))!.pid;
       await baska.sorgu('SELECT 1 FROM stok_konum WHERE id = $1 FOR KEY SHARE', [bosKonum]);
       await baska.sorgu('INSERT INTO stok_sepet_satiri (kisi_id, malzeme_id, kaynak_konum_id, miktar) VALUES ($1, $2, $3, 1)', [kisiler.get('depo'), m, bosKonum]);
-      await baska.sorgu('SELECT pg_sleep(0.5)');
+      yazildi();
+      for (let i = 0; ; i++) {
+        const n = (await vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))', [pid]))!.n;
+        if (n > 0) return;
+        if (i >= 400) throw new Error('denetim öteki işlemin konum kilidini beklemedi');
+        await new Promise((t) => setTimeout(t, 25));
+      }
     });
-    await new Promise((bitti) => setTimeout(bitti, 150));
+    await yazildiSoz;
     assert.deepEqual(await vt.tx((db) => gozSilmeEngelleri(db, [bosGoz])), [{ gozId: bosGoz, engel: 'acik-is' }]);
     await bekleyen;
     await vt.sorgu('DELETE FROM stok_sepet_satiri WHERE kaynak_konum_id = $1', [bosKonum]);
