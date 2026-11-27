@@ -16,7 +16,7 @@ export const AZAMI_DOSYA = 2 * 1024 * 1024;
 // Boş bloklar toplamı büyütmez; hatalı kumanda aktarımı bitirmezse blok sayısı da sınırlanır.
 export const AZAMI_BLOK = 4096;
 // Program listesinde en çok bu kadar dosya tutulur.
-export const AZAMI_PROGRAM_DOSYASI = 5000;
+export const AZAMI_PROGRAM_DOSYASI = AZAMI_BLOK;
 
 // T_OK yalnız süren bir aktarımda (R_FL dosya, R_DR klasör listesi) "sonraki bloğu gönder" onayıdır (yüksüz); kumandada bir şey
 // değiştirmez. R_DT kumanda saatini, R_DR oturumun açılış klasörünün listesini okur (klasör değiştirmek C_DC ister, yoktur).
@@ -540,9 +540,10 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
       return { takimTablosu: null, programListesi: null };
     }
     return geciciDuzeyde(h, 'FILE', async () => {
-      // Önce takım tablosu: klasör listesi sınırı aşıp bağlantıyı kapatırsa tablo kaybolmasın.
+      // Önce takım tablosu: klasör listesi sınırı aşıp bağlantıyı kapatırsa okunmuş tablo korunur. Tablo sınırı aşarsa bağlantı
+      // kapanmıştır, klasör listesi okunmaz.
       const tablo = await aktar(h, 'R_FL', dosyaYuku(TAKIM_TABLOSU), 'S_FL', 'takim-tablosu', tani);
-      const programListesi = await aktar(h, 'R_DR', Uint8Array.of(RDR_TEK), 'S_DR', 'program-listesi', tani);
+      const programListesi = h.acik ? await aktar(h, 'R_DR', Uint8Array.of(RDR_TEK), 'S_DR', 'program-listesi', tani) : null;
       return {
         programListesi: programListesi === null ? null : programListesiCoz(programListesi),
         takimTablosu: tablo === null ? null : takimTablosunuCoz(CP1254.decode(Buffer.concat(tablo))),
@@ -550,7 +551,8 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
     });
   }
 
-  // Bloklu aktarım: her bloktan sonra yüksüz T_OK, T_FD ile biter. Sınır aşılırsa aktarım kesilemediği için bağlantı kapatılır.
+  // Bloklu aktarım: her bloktan sonra yüksüz T_OK, T_FD ile biter. Sınır aşılırsa aktarım kesilemediği için bağlantı kapatılır (FILE
+  // düzeyi bağlantıyla biter); okuma düşmez, o liste boş kalır ve neden tanıya yazılır. Canlı değerler o turda okunmuş olur.
   async function aktar(h: Lsv2Hatti, komut: 'R_FL' | 'R_DR', yuk: Uint8Array, blokKodu: 'S_FL' | 'S_DR', alan: Lsv2TaniAlani, tani: Lsv2Tanisi[]): Promise<Buffer[] | null> {
     const bloklar: Buffer[] = [];
     let toplam = 0;
@@ -559,7 +561,8 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
       toplam += c.icerik.length;
       if (toplam > AZAMI_DOSYA || bloklar.length >= AZAMI_BLOK) {
         h.kapat();
-        throw new Lsv2BaglantiHatasi('bozuk', `${komut === 'R_FL' ? 'Takım tablosu' : 'Program listesi'} beklenenden büyük; aktarım kesildi, bağlantı kapatıldı.`);
+        tani.push({ alan, kod: LSV2_ISTEMCI_KODU.sinirAsildi });
+        return null;
       }
       bloklar.push(c.icerik);
       c = await iste(h, 'T_OK');

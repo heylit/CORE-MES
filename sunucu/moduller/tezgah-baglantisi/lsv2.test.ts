@@ -465,6 +465,22 @@ describe('Kart 3790 giriş düzeyleri: FILE ve PLCDEBUG her yolda kapanır', () 
     assert.deepEqual(s.gelenler.filter((g) => g.komut === 'R_FL').map((g) => g.yuk.toString('latin1').split('\0')[0]), [TAKIM_TABLOSU]);
   });
 
+  test('klasör listesi blok sınırını aşarsa bağlantı kapanır ama okunmuş takım tablosu ve canlı okuma korunur', async () => {
+    const programlar = Array.from({ length: 4097 }, (_, n) => ({ ad: `ORN-P${String(n)}.H`, boyut: 1, zaman: 0 }));
+    const s = await ac({ ...tamOkuma(), programlar });
+    const i = istemci(s);
+    const r = await i.oku({ takimTablosu: true });
+    assert.equal(r.tur, 'basarili');
+    if (r.tur !== 'basarili') return;
+    assert.equal(r.okuma.takimTablosu?.length, 3);
+    assert.equal(r.okuma.programListesi, null);
+    assert.equal(lsv2TaniMetni(r.okuma.tani.find((t) => t.alan === 'program-listesi') ?? { alan: 'program-listesi', kod: 0 }), 'Program listesi: boyut sınırı aşıldı; aktarım kesildi, bağlantı kapatıldı');
+    assert.equal(r.okuma.tumce, 345);
+    await new Promise((coz) => setTimeout(coz, 50));
+    assert.equal(s.baglantiSayisi(), 0);
+    i.kapat();
+  });
+
   test('PLCDEBUG girişinden sonra R_MB T_ER verirse sayaç null, tanı yazılır, PLCDEBUG çıkışı yapılır', async () => {
     const s = await ac({ ...tamOkuma(), plc: new Map() });
     const i = istemci(s);

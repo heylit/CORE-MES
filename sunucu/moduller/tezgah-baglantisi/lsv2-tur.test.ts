@@ -278,7 +278,7 @@ describe('Heidenhain (LSV2) okuma turu (gerçek PostgreSQL)', () => {
     await ayar('tezgah-baglantisi.lsv2-seyrek-okuma', false);
   });
 
-  test('takım tablosu 2 MB\'ı aşarsa bağlantı kapanır, neden yazılır; sonraki normal tur FILE\'a girmez ve canlı okuma yazılır', async () => {
+  test('takım tablosu 2 MB\'ı aşarsa bağlantı kapanır, neden yazılır, canlı okuma yazılır; düşen seyrek okumadan sonra da aralık dolmadan FILE\'a girilmez', async () => {
     await ayar('tezgah-baglantisi.lsv2-okuma', true);
     await ayar('tezgah-baglantisi.lsv2-seyrek-okuma', true);
     sahte.makine.blokBoyu = 65_536;
@@ -287,14 +287,27 @@ describe('Heidenhain (LSV2) okuma turu (gerçek PostgreSQL)', () => {
     await tur(m);
     const fileGirisi = () => sahte.gelenler.filter((g) => g.komut === 'A_LG' && g.yuk.toString('latin1') === 'FILE\0').length;
     assert.equal(fileGirisi(), 1);
-    const t = tezgahTakimTablosuCevabi.parse((await app.inject({ method: 'GET', url: '/api/tezgah-baglantisi/tezgahlar/ORN-H01/takim-tablosu', headers: { cookie: yonetici } })).json());
-    assert.match(t.tani ?? '', /^Takım tablosu okunamadı: Takım tablosu beklenenden büyük/);
+    const tablo = async () => tezgahTakimTablosuCevabi.parse((await app.inject({ method: 'GET', url: '/api/tezgah-baglantisi/tezgahlar/ORN-H01/takim-tablosu', headers: { cookie: yonetici } })).json());
+    assert.equal((await tablo()).tani, 'Takım tablosu: boyut sınırı aşıldı; aktarım kesildi, bağlantı kapatıldı');
+    const tumce = async () => tezgahAyrintisiCevabi.parse(await vt().tx((db) => ayrinti(db, 'ORN-H01', new Date(simdi)))).alanlar.find((x) => x.tur === 'BlockNumber')?.deger;
+    assert.equal(await tumce(), '12', 'sınır aşılsa da o turun canlı okuması yazılır');
     simdi += 60_000;
     sahte.makine.tumce = 77;
     assert.deepEqual(await tur(m), { tur: 'okundu', makine: 1 });
     assert.equal(fileGirisi(), 1, 'aralık dolmadan FILE\'a yeniden girilmez');
-    const a = tezgahAyrintisiCevabi.parse(await vt().tx((db) => ayrinti(db, 'ORN-H01', new Date(simdi))));
-    assert.equal(a.alanlar.find((x) => x.tur === 'BlockNumber')?.deger, '77');
+    assert.equal(await tumce(), '77');
+    // Aktarımda tanınmayan cevap okumayı düşürür; neden yazılır, aralık yine başlar.
+    sahte.makine.takimTablosu = 'BEGIN TOOL.T MM\nT NAME\n[END]';
+    sahte.makine.blokBoyu = 4;
+    sahte.makine.aktarimHatasi = 'beklenmeyen';
+    simdi += 10 * 60_000;
+    await tur(m);
+    assert.equal(fileGirisi(), 2);
+    assert.match((await tablo()).tani ?? '', /^Takım tablosu okunamadı: /);
+    sahte.makine.aktarimHatasi = undefined;
+    simdi += 60_000;
+    await tur(m);
+    assert.equal(fileGirisi(), 2, 'düşen denemeden sonra da aralık dolmadan FILE\'a girilmez');
     await ayar('tezgah-baglantisi.lsv2-seyrek-okuma', false);
   });
 });
