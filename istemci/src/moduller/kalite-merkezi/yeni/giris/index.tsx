@@ -62,7 +62,7 @@ const BEKLEYEN_SUTUNLARI: Sutun<BekleyenSatir>[] = [
   {
     anahtar: 'malzeme', baslik: 'Malzeme', kartta: true,
     hucre: (s) => (s.tur === 'fason'
-      ? <span className="tc-km-gkk-hucre"><b>{s.f.parcaNo}</b><small>{s.f.parcaAd}</small></span>
+      ? <span className="tc-km-gkk-hucre"><b className="tc-km-gkk-kod">{s.f.parcaNo}</b><small>{s.f.parcaAd}</small></span>
       : <span className="tc-km-gkk-hucre"><b>{s.k.malzemeKod ?? `#${String(s.k.malzemeId)}`}</b><small>{s.k.malzemeAd ?? ''}</small></span>),
     csv: (s) => (s.tur === 'fason' ? `${s.f.parcaNo} ${s.f.parcaAd}` : `${s.k.malzemeKod ?? ''} ${s.k.malzemeAd ?? ''}`.trim()),
   },

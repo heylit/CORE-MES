@@ -54,6 +54,17 @@ export async function fasonGkkSatirlari(db: Db, a: { uretimEmriId?: number; opNo
   return sonuc;
 }
 
+// Fason adımının GKK durumu (adetle): karar bekleyen ve serbest + şartlı kararlanan. Adet başına miktar bulunamazsa bekleyen null.
+export async function fasonGkkDurumu(db: Db, isEmriId: number): Promise<{ bekleyenAdet: number | null; kabulAdet: number }> {
+  const is = await isEmriOzeti(db, isEmriId);
+  if (is === null || is.kaynak?.tur !== 'fason') return { bekleyenAdet: null, kabulAdet: 0 };
+  const anahtarlar = await sorgular.fasonGkkAnahtarlari(db, is.uretimEmriId, is.opNo);
+  const bekleyen = anahtarlar.reduce((t, x) => t + fasonGkkBekleyeni(x.giren, x.kararlanan, x.bakiye), 0n);
+  const kabul = anahtarlar.reduce((t, x) => t + binde(x.kabullenen), 0n);
+  const adetBasina = await fasonDonusMiktari(db, isEmriId, 1000n);
+  return { bekleyenAdet: bekleyen === 0n ? 0 : fasonAdedi(bekleyen, adetBasina), kabulAdet: fasonAdedi(kabul, adetBasina) ?? 0 };
+}
+
 // Kararın yazılmış hareketleri (Yapılan sekmesi): en yeni önce.
 export const fasonGkkKararHareketleri = (db: Db, a: { baslangic: string; bitis: string; sinir: number }) => sorgular.fasonGkkKararlari(db, a);
 

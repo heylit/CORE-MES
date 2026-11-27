@@ -6,9 +6,9 @@ import type {
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
-import { fasonGkkKarari, fasonGkkKararHareketleri, fasonGkkSatirlari } from '../stok/disari.ts';
+import { fasonGkkDurumu, fasonGkkKarari, fasonGkkKararHareketleri, fasonGkkSatirlari } from '../stok/disari.ts';
 import {
-  emirNolari, fasonGkkAnahtari, fasonGkkBaglamlari, fasonGkkKarariniIsle, kaynaktaMuayeneGorevleri, kaynaktaMuayeneOnayla,
+  emirNolari, fasonEmriniKilitle, fasonGkkAnahtari, fasonGkkBaglamlari, fasonGkkKarariniIsle, kaynaktaMuayeneGorevleri, kaynaktaMuayeneOnayla,
 } from '../uretim-emirleri/disari.ts';
 
 // 3809: fason dönüşünün GKK'sı ve kaynağında muayene Kalite Merkezi'ndedir. Stok parçanın karantinadaki adedini ve kararın hareketini,
@@ -41,6 +41,7 @@ export async function kaynaktaMuayeneBekleyenleri(db: Db): Promise<KmKaynaktaMua
 export async function fasonGkkKarariVer(
   db: Db, kullanici: Kullanici, isEmriId: number, g: { serbest: number; sartli: number; red: number; not: string | null },
 ): Promise<KmFasonGkkKararCevabi> {
+  await fasonEmriniKilitle(db, isEmriId);
   let son: Awaited<ReturnType<typeof fasonGkkKarari>> | null = null;
   for (const sonuc of ['serbest', 'sartli', 'red'] as const) {
     if (g[sonuc] <= 0) continue;
@@ -49,6 +50,14 @@ export async function fasonGkkKarariVer(
   if (son === null) throw dogrulama('Karar adedi sıfırdan büyük olmalı.', 'serbest');
   const adim = await fasonGkkKarariniIsle(db, kullanici.id, isEmriId, { saglamToplam: son.kabulAdet, bekleyen: son.bekleyenAdet });
   return { bekleyenAdet: son.bekleyenAdet, adimKapandi: adim.kapandi };
+}
+
+// Fason adımı "Fasonu tamamla" ile kapandı: dönüşlerin hepsine karar önceden verildiyse (bekleyen 0) arkadaki GKK adımı burada kapanır.
+// Bekleyen varsa adımı son karar kapatır. Otomatik GKK adımı yoksa (eski emir ya da kaynakta/kontrolsüz yol) hiçbir şey yazılmaz.
+export async function fasonTamamlandiYansit(db: Db, olay: { isEmriId: number; kisiId: number }): Promise<void> {
+  const d = await fasonGkkDurumu(db, olay.isEmriId);
+  if (d.bekleyenAdet !== 0) return;
+  await fasonGkkKarariniIsle(db, olay.kisiId, olay.isEmriId, { saglamToplam: d.kabulAdet, bekleyen: 0 });
 }
 
 export async function kaynaktaMuayeneOnayVer(db: Db, kullanici: Kullanici, isEmriId: number, g: { saglam: number; red: number }): Promise<{ uretimEmriId: number }> {

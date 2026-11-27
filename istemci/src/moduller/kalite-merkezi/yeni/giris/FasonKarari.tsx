@@ -59,7 +59,7 @@ export function FasonKarari({ satir, kapat }: { satir: KmFasonGkkSatiri; kapat: 
         <dl className="tc-km-gkk-bilgi">
           <div><dt>Parça</dt><dd><b>{satir.parcaNo}</b> {satir.parcaAd}</dd></div>
           <div><dt>Firma</dt><dd>{satir.firmaAdi ?? YOK}</dd></div>
-          <div><dt>Gelen</dt><dd>{satir.gelenAdet === null ? YOK : `${String(satir.gelenAdet)} adet`} <small>({miktarMetni(satir.gelen)} {satir.birim ?? ''})</small></dd></div>
+          <div><dt>Gelen</dt><dd>{satir.gelenAdet === null ? YOK : `${String(satir.gelenAdet)} adet`} {satir.birim !== 'adet' && <small>({miktarMetni(satir.gelen)} {satir.birim ?? ''})</small>}</dd></div>
           <div><dt>Bekleyen</dt><dd><b>{bekleyen === null ? YOK : `${String(bekleyen)} adet`}</b></dd></div>
           <div><dt>Son mal kabul</dt><dd className="tc-km-gkk-mono">{satir.malKabulNo ?? YOK} <small>{zamanKisa(satir.sonZaman)}</small></dd></div>
         </dl>

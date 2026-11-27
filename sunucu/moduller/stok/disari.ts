@@ -67,6 +67,7 @@ export type { GirisKontroluSatiri } from './servis.ts';
 // 3809: fason dönüşünün GKK'sı (karantinada karar bekleyen, fason adımı başına) ve Kalite Merkezi'nin adet kararı (serbest ve şartlı
 // mal kabul alanına, red karantinada red). Çağıranın transaction'ında yürür; yetkiyi çağıran korur.
 export const fasonGkkSatirlari = (db: Db, a: Parameters<typeof servis.fasonGkkSatirlari>[1] = {}) => servis.fasonGkkSatirlari(db, a);
+export const fasonGkkDurumu = (db: Db, isEmriId: number) => servis.fasonGkkDurumu(db, isEmriId);
 export type { FasonGkkSatiri, FasonGkkSonucu } from './servis.ts';
 export const fasonGkkKararHareketleri = (db: Db, a: { baslangic: string; bitis: string; sinir: number }) => servis.fasonGkkKararHareketleri(db, a);
 export const fasonGkkKarari = (db: Db, kisiId: number, g: Parameters<typeof servis.fasonGkkKarari>[2]) => akistan(db, 'kalite', () => servis.fasonGkkKarari(db, kisiId, g));

@@ -35,6 +35,13 @@ async function kontrolAdiminiBitir(
   await emirBittiBildir(db, { uretimEmriId: emirId, saglamAdet, kisiId });
 }
 
+// Fason GKK kararı stoğu kilitlemeden önce emri kilitler: dönüş ve tamamlama yolları da önce emri, sonra stoğu kilitler (kilit sırası tek).
+export async function fasonEmriniKilitle(db: Db, fasonIsEmriId: number): Promise<void> {
+  const fason = await s.isEmriBul(db, fasonIsEmriId);
+  if (fason === null) throw bulunamadi(IS_EMRI_YOK);
+  await ustuOnceKilitle(db, fason.uretimEmriId);
+}
+
 // Fason GKK kararı (stok yazdıktan sonra, aynı işlemde): ilk karar adımı başlatır. Fason adımı tamamsa ve karar bekleyen kalmadıysa adım
 // biter; sağlamı adımın bütün serbest ve şartlı kararıdır (stok defterinden). Fason adımının arkasında otomatik GKK adımı yoksa (3809 öncesi emir) yazılacak bir şey yoktur.
 export async function fasonGkkKarariniIsle(

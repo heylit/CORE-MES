@@ -42,7 +42,7 @@ import {
   adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, kolAdimlari, onculdenGelen, onculGirdisiIhlali, dugumGirdisiIhlali,
   SIPARIS_ONAYI_GERI_ALINDI, TESLIM_KALEMSIZ, emirEskiRevizyonIhlali, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, talimatKontrolu, gkkFasonu, gkkTipiSec, kontrolIstasyonuSec, kontrolAdimiUyarilari, otomatikGkkMi, otomatikGkkYerleri, otomatikKontrolMu, otomatikMuayeneYerleri, muayeneTipiSec, OTOMATIK_MUAYENE, OTOMATIK_MUAYENE_ADI, aktarimIhlali, donusYoluIhlali, fasonDonusPayiMs, AKTARIM_HEDEFI_SONRAKI_FIRMA_DEGIL, otomatikMuayeneMi, muayeneDonusIhlali, muayeneOnayIhlali, parcaRevizyonuMetni,
 } from './kurallar.ts';
-import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmirleriDegistiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
+import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, fasonTamamlandiBildir, isEmirleriDegistiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import { rotaBekliyorIhlali } from './siparis-acilisi-kurallar.ts';
@@ -1335,6 +1335,7 @@ export async function fasonTamamla(db: Db, kullanici: Kullanici, emirId: number,
     await s.fasonlaBitir(db, emirId, durum.donenSaglam, an);
     await emirBittiBildir(db, { uretimEmriId: emirId, saglamAdet: durum.donenSaglam, kisiId });
   }
+  await fasonTamamlandiBildir(db, { isEmriId, uretimEmriId: emirId, kisiId });
 }
 
 /* ---------------- parti bölme ve birleştirme (kart #262, kullanıcı kararları A ve PB-K1..K6) ---------------- */

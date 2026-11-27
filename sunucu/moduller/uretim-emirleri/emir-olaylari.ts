@@ -71,7 +71,16 @@ export interface AdimBittiOlayi {
   kisiId: number;
 }
 
+// 3809: fason adımı "Fasonu tamamla" ile kapandı (emrin ilerlemesinden sonra). Kalite Merkezi, dönüşlerin kararı önce verildiyse
+// arkadaki otomatik GKK adımını burada kapatır; karar sonra verilirse adımı karar kapatır.
+export interface FasonTamamlandiOlayi {
+  isEmriId: number;
+  uretimEmriId: number;
+  kisiId: number;
+}
+
 type Dinleyici<T> = (db: Db, olay: T) => Promise<void>;
+export type FasonTamamlandiDinleyicisi = Dinleyici<FasonTamamlandiOlayi>;
 export type EmirBittiDinleyicisi = Dinleyici<EmirBittiOlayi>;
 export type FasonHareketiDinleyicisi = Dinleyici<FasonHareketiOlayi>;
 export type EmirIptalDinleyicisi = Dinleyici<EmirIptalOlayi>;
@@ -107,6 +116,7 @@ const hazirlik = kayit<HazirlikTamamlandiOlayi>();
 const kopyalandi = kayit<IsEmriKopyalandiOlayi>();
 const degisti = kayit<IsEmirleriDegistiOlayi>();
 const adimBitti = kayit<AdimBittiOlayi>();
+const fasonTamam = kayit<FasonTamamlandiOlayi>();
 
 export const emirBittiDinle = bitti.dinle;
 export const emirBittiBildir = bitti.bildir;
@@ -126,3 +136,5 @@ export const isEmirleriDegistiDinle = degisti.dinle;
 export const isEmirleriDegistiBildir = degisti.bildir;
 export const adimBittiDinle = adimBitti.dinle;
 export const adimBittiBildir = adimBitti.bildir;
+export const fasonTamamlandiDinle = fasonTamam.dinle;
+export const fasonTamamlandiBildir = fasonTamam.bildir;

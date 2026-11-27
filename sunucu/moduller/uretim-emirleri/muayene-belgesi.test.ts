@@ -121,6 +121,7 @@ describe('uretim-emirleri kaynağında muayene belge kapısı (3708; gerçek Pos
     assert.equal((await istek('GET', yol(emirId, ilkId))).durum, 409, 'muayene olmayan adıma belge bağlanmaz');
     // Fason adımı açıkken (parça firmada) muayene onaylanır: kendi fason öncülü sıradan düşer. Kalite 10 sağlam onaylar; terminal adımı yürütmez.
     await assert.rejects(tx((db) => emirBaslat(db, yonetici.id, emirId, undefined, muayeneId)), new RegExp(KONTROL_ADIMI_KALITEDEN.slice(0, 30)));
+    await assert.rejects(bitir(emirId, muayeneId, 10), new RegExp(KONTROL_ADIMI_KALITEDEN.slice(0, 30)), 'terminal bitirmez');
     await onayla(muayeneId, 10);
     assert.equal((await o().sahip.tek<{ d: string }>('SELECT durum AS d FROM uretim_emirleri_is_emri WHERE id = $1', [muayeneId]))?.d, 'tamam');
     // Risk R1: muayeneden sonraki iç adım, parça firmadayken (fason açık) bitmez; dönüş girip fason kapanınca biter.

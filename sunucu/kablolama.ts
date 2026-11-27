@@ -486,6 +486,7 @@ export function sunucununBaglari(): Bag[] {
     bag('emir iptal -> stok', uretimEmirleri.emirIptalDinle, stok.emirIptalYansit),
     bag('emir birleşti -> stok', uretimEmirleri.emirBirlestiDinle, stok.emirBirlestiYansit),
     bag('fason hareketi -> stok', uretimEmirleri.fasonHareketiDinle, stok.fasonHareketiYansit),
+    bag('fason tamamlandı -> kalite merkezi GKK adımı', uretimEmirleri.fasonTamamlandiDinle, kaliteMerkezi.fasonTamamlandiYansit),
     bag('fason sevki -> stok', sevkiyat.fasonSevkiDinle, stok.fasonSevkiYansit),
     bag('depo çıkışı fason gidişi -> üretim emirleri', stok.fasonGidisYaziciKaydet, uretimEmirleri.fasonGidisYaz),
     bag('ürün sevki -> stok', sevkiyat.urunSevkiDinle, stok.urunSevkiYansit),
