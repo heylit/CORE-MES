@@ -712,8 +712,9 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     const kimlik = await vt().tx(async (db) => calismaPlani({ ...(await planlamaGirdisi(db, planlamaci)).girdi!, bugun })!.kimlik);
     const k = (a: string) => Object.entries(kimlik).find(([, x]) => x === a)![0];
     const [k1, k2, k3] = [k(a1!), k(a2!), k(a3!)];
-    // Saatler planın ekseninde (bugünün 00:00'ından saat), dakikaya yuvarlı.
-    const an0 = Math.ceil((Date.now() + 2 * 3_600_000) / 60_000) * 60_000;
+    // Saatler planın ekseninde (bugünün 00:00'ından saat). İşler yarın 01:00-08:50 arasında: her zaman gelecekte ve 'CA gunduz'
+    // vardiyasının (00:00-23:59) dışarıda kalan 23:59-00:00 dakikasından uzak; sonuç testin koştuğu saate bağlı olmaz.
+    const an0 = tesisGunBasi(bugun) + 25 * 3_600_000;
     const bas = (an0 - tesisGunBasi(bugun)) / 3_600_000;
     const ops = {
       [k1]: { S: bas, C: bas + 50 / 60, m: String(makineB) }, [k2]: { S: bas + 5, C: bas + 5 + 50 / 60, m: String(makineB) },
