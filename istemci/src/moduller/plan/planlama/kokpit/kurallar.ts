@@ -378,12 +378,9 @@ export function tezgahGunundeMi(m: KokpitModeli, e: KokpitEmri, tezgah: string, 
 // --- taşıma ---
 // Çeyrek saate yuvarlanır; şimdiden önce olamaz (sunucu geçmişe konan kilidi reddeder).
 export const tasimaSaati = (S: number, simdi: number): number => Math.max(Math.ceil(simdi * 4 - 1e-9) / 4, Math.round(S * 4) / 4);
-// Pay taşınmaz, kardeşine bırakılınca birleşir (3751); Tezgâhlar görünümünde kardeşler uzak satırlardadır, orada birleştirme sağ tık menüsündedir.
-export const PAY_TASINMAZ = 'Birleştirmek için kardeş payın üstüne bırakın; yerini "Bölmeyi yönet" değiştirir';
-export const PAY_TASINMAZ_TEZGAH = 'Pay burada sürüklenmez; birleştirmek için sağ tıklayıp "Şununla birleştir"i seçin ya da Emirler görünümünde kardeş payın üstüne bırakın';
-export const BIRLES_BOS = 'Kardeş payın üstüne bırakın; boş yere bırakmak payı taşımaz';
+// Pay da taşınır (3791): kardeşinin üstüne bırakılırsa birleşir (3751), başka yere bırakılırsa yeri değişir. Tezgâhlar görünümünde kardeşler uzak satırlardadır, orada birleştirme sağ tık menüsündedir.
+export const BIRLES_BOS = 'Biten pay taşınmaz; birleştirmek için kardeş payın üstüne bırakın';
 export function tasinabilir(x: KokpitIsi): string | null {
-  if (x.adim !== undefined || x.pay?.elle) return PAY_TASINMAZ;
   return x.bitti ? 'Biten iş taşınmaz' : x.fason ? 'Fason adım tahtadan taşınmaz' : null;
 }
 // Süren işi taşımadan önce söylenen: taşıma işi durdurur.
@@ -433,7 +430,7 @@ export function turAdaylari(m: KokpitModeli, e: KokpitEmri, isId: string | null 
   for (const adim of e.adimlar) {
     const x = m.isler[adim.id];
     if (!x) continue;
-    if (tasinabilir(x) === null && x.S > m.simdi && (isId === null || adim.id === isId)) {
+    if (x.pay === undefined && tasinabilir(x) === null && x.S > m.simdi && (isId === null || adim.id === isId)) {
       for (const tezgah of adim.adaylar) {
         if (fasonMu(tezgah)) continue;
         const baslangic = tasimaSaati(ilkBosluk(m, tezgah, x.C - x.S, onceki, x.id), m.simdi);
@@ -456,7 +453,13 @@ export function planaAlAdaylari(m: KokpitModeli, e: KokpitEmri, enCok = 3): TurA
 export function onizlemeBitisi(m: KokpitModeli, e: KokpitEmri, isler: readonly { isId: string; C: number }[]): number | null {
   const yeni = new Map(isler.map((x) => [x.isId, x.C]));
   let b: number | null = null;
-  for (const a of e.adimlar) { const C = yeni.get(a.id) ?? adimSonu(m, a.id) ?? undefined; if (C === undefined) return null; b = b === null ? C : Math.max(b, C); }
+  // Bölünmüş adımın bitişi son payın bitişidir; taşınan pay önizlemedeki yerinden sayılır.
+  for (const a of e.adimlar) {
+    const paylar = adimPaylari(m, a.id);
+    const C = paylar.length === 0 ? (yeni.get(a.id) ?? undefined) : Math.max(...paylar.map((y) => yeni.get(y.id) ?? y.C));
+    if (C === undefined) return null;
+    b = b === null ? C : Math.max(b, C);
+  }
   return b;
 }
 

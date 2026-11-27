@@ -12,7 +12,7 @@ import type { PlanlamaCalismasi } from '../tipler.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
 import { yetkiKur } from '../yetki.ts';
 import { Kokpit } from './index.tsx';
-import { IKI_KILITLI, PAY_TASINMAZ, payBirlesmesi, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
+import { IKI_KILITLI, payBirlesmesi, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
 
 // Kart 3751: bölünmüş adımın payları sağ tık menüsünden, telefondaki alt sayfadan ve Emirler görünümünde sürükleyip kardeşe bırakarak birleşir.
 // Veri uydurmadır (ORN-); sunucu çağrısı yoktur, taslak komutu sahte api'de yakalanır.
@@ -170,7 +170,10 @@ describe('Kokpit: pay birleştirme (3751)', () => {
       expect(getComputedStyle(kaynak).cursor === 'grab' || kaynak.hasAttribute('data-pay')).toBe(true);
       fireEvent.pointerDown(kaynak, { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
       fireEvent.pointerMove(kaynak, { pointerType: 'mouse', clientX: 40, clientY: 0 });
-      expect(screen.getByText(new RegExp(PAY_TASINMAZ.replace(/[.*+?^${}()|[\]\\"]/g, '\\$&')))).toBeTruthy();
+      // 3791: tutulan pay hayalet çubuk olarak imleci izler (taşıma kipi açık) ve ipucu hem birleştirmeyi hem taşımayı söyler.
+      expect(bolum.querySelector('.tc-pyq-tahta[data-tasima]')).not.toBeNull();
+      expect(kaynak.hasAttribute('data-tasinan')).toBe(true);
+      expect(screen.getByText(/Kardeş payın üstüne bırakın: birleşir · başka yere bırakın: iş taşınır/)).toBeTruthy();
       expect([...bolum.querySelectorAll<HTMLElement>('.tc-pyq-is[data-birles-aday]')].map((x) => x.dataset['is'])).toEqual(['2.20', '2.20~2']);
       // Hedef sol listedeki pay satırının tamamıdır: satırın başlık hücresinin üstüne gelinir.
       const satir = bolum.querySelector<HTMLElement>('[data-pay-satir="2.20~2"]')!;
@@ -187,7 +190,7 @@ describe('Kokpit: pay birleştirme (3751)', () => {
     } finally { geri(); }
   });
 
-  it('pay boş yere bırakılırsa taşınmaz ve birleşmez; ipucu söylenir, Esc tutmayı bırakır', () => {
+  it('pay kardeş olmayan yere (satır dışı) bırakılırsa birleşmez; Esc tutmayı bırakır', () => {
     const geri = imlecOlayiKur();
     try {
       const post = ac(3);
@@ -226,5 +229,64 @@ describe('Kokpit: pay birleştirme (3751)', () => {
     fireEvent.click(within(liste).getByRole('button', { name: /Bütün payları birleştir/ }));
     fireEvent.click(within(within(sayfa).getByRole('group', { name: 'Birleştirmeyi onayla' })).getByRole('button', { name: 'Uygula' }));
     await waitFor(() => { expect(komutlar(post)).toEqual([{ tur: 'elle-bol-sil', isId: '2.20' }]); });
+  });
+
+  // 3791: pay da taşınır; kardeşin üstüne değil kendi satırına bırakılınca normal taşıma gibi önizleme ve onay çubuğu açılır.
+  it('pay kendi satırında başka saate bırakılınca birleşme değil taşıma onayı açılır; Vazgeç yazmaz', () => {
+    const geri = imlecOlayiKur();
+    try {
+      const post = ac(3);
+      const bolum = emirlerdePaylar();
+      const kaynak = bolum.querySelector<HTMLElement>('[data-is="2.20~3"]')!;
+      const alan = kaynak.closest<HTMLElement>('[data-satir]')!.querySelector<HTMLElement>('.tc-pyq-alan')!;
+      fireEvent.pointerDown(kaynak, { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
+      fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 40, clientY: 0 });
+      fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 400, clientY: 0 });
+      expect(screen.queryByText(/Birleştir: /)).toBeNull();
+      fireEvent.pointerUp(document, { pointerType: 'mouse' });
+      expect(screen.queryByRole('group', { name: 'Birleştirmeyi onayla' })).toBeNull();
+      const onay = screen.getByRole('group', { name: 'Taşımayı onayla' });
+      expect(onay.querySelector('[data-onay-tur]')?.textContent).toBe('Taşı');
+      fireEvent.click(within(onay).getByRole('button', { name: 'Vazgeç' }));
+      expect(screen.queryByRole('group', { name: 'Taşımayı onayla' })).toBeNull();
+      expect(komutlar(post)).toEqual([]);
+    } finally { geri(); }
+  });
+
+  it('Tezgâh görünümünde pay tutulur: uyarı yok, hayalet çubuk imleci izler (taşıma kipi açık)', () => {
+    const geri = imlecOlayiKur();
+    try {
+      ac(3);
+      fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Tezgâhlar' }));
+      const bolum = document.body;
+      const kaynak = bolum.querySelector<HTMLElement>('.tc-pyq-tahta [data-is="2.20~3"]');
+      expect(kaynak).not.toBeNull();
+      fireEvent.pointerDown(kaynak!, { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
+      fireEvent.pointerMove(kaynak!, { pointerType: 'mouse', clientX: 40, clientY: 0 });
+      expect(bolum.querySelector('.tc-pyq-tahta[data-tasima]')).not.toBeNull();
+      expect(kaynak!.hasAttribute('data-tasinan')).toBe(true);
+      expect(document.body.textContent).not.toMatch(/Pay burada sürüklenmez|yerini "Bölmeyi yönet" değiştirir/);
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(bolum.querySelector('.tc-pyq-tahta[data-tasima]')).toBeNull();
+    } finally { geri(); }
+  });
+
+  // Test1 C1: Tezgâhlar görünümünde pay 2+ (~3) için aday tezgâhlar adımın kimliğinden okunur; payın kendi kimliğiyle aranırsa bulunamaz ve
+  // bırakma "bu adım bu tezgâhta yapılamaz" diye geri çevrilirdi.
+  it('Tezgâhlar görünümünde ~3 payı başka bir aday tezgâh satırına bırakılınca taşıma onayı açılır (aday tezgâhlar adımdan)', () => {
+    const geri = imlecOlayiKur();
+    try {
+      const post = ac(3);
+      fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Tezgâhlar' }));
+      const kaynak = document.body.querySelector<HTMLElement>('.tc-pyq-tahta [data-is="2.20~3"]')!;
+      // Hedef: adımın ilk payının tezgâh satırı (adımın aday tezgâhı).
+      const alan = document.body.querySelector<HTMLElement>('.tc-pyq-tahta [data-is="2.20"]')!.closest<HTMLElement>('[data-satir]')!.querySelector<HTMLElement>('.tc-pyq-alan')!;
+      fireEvent.pointerDown(kaynak, { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
+      fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 40, clientY: 0 });
+      fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 400, clientY: 0 });
+      fireEvent.pointerUp(document, { pointerType: 'mouse' });
+      expect(screen.getByRole('group', { name: 'Taşımayı onayla' }).querySelector('[data-onay-tur]')?.textContent).toBe('Taşı');
+      expect(komutlar(post)).toEqual([]);
+    } finally { geri(); }
   });
 });

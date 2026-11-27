@@ -8,7 +8,7 @@ import {
   ElleBol, bolunemezNedeni, esitParcalar, ilkParcalar, kalaniBirlestir, kalaniYenidenBol, kilitliPay, parcaDenetimi, secilenleriBirlestir, type Parca,
 } from './ElleBol.tsx';
 import {
-  PAY_TASINMAZ, adimBaglari, adimKimligi, adimPaylari, adimSonu, modelKur, payIlerlemeYazisi, payNedeni, payYazisi, payYonleri, tasinabilir, type KokpitModeli,
+  onizlemeBitisi, turAdaylari, adimBaglari, adimKimligi, adimPaylari, adimSonu, modelKur, payIlerlemeYazisi, payNedeni, payYazisi, payYonleri, tasinabilir, type KokpitModeli,
 } from './kurallar.ts';
 import { sahteTaslak } from './taslak-test-yardim.ts';
 
@@ -59,13 +59,33 @@ describe('Kokpit modeli: bölünmüş adımın payları (3681 A)', () => {
     expect(payYazisi(m.isler['2.40']!)).toBeNull();
   });
 
-  it('2+ pay tahtadan taşınmaz (bölme penceresinden yönetilir); elle bölünen adımın payı da; rotadaki paralel bölünenin 1. payı eskisi gibi', () => {
+  it('3791: pay da taşınır (elle bölünen ve rotada paralel bölünen); yalnız biten pay taşınmaz', () => {
     const { m } = bolunmusKur();
-    expect(tasinabilir(m.isler['2.20~2']!)).toBe(PAY_TASINMAZ);
-    expect(tasinabilir(m.isler['2.20']!)).toBe(PAY_TASINMAZ);
+    expect(tasinabilir(m.isler['2.20~2']!)).toBeNull();
+    expect(tasinabilir(m.isler['2.20']!)).toBeNull();
     const oto = bolunmusKur({ p1: { elle: undefined }, p2: { elle: undefined } });
     expect(tasinabilir(oto.m.isler['2.20']!)).toBeNull();
-    expect(tasinabilir(oto.m.isler['2.20~2']!)).toBe(PAY_TASINMAZ);
+    expect(tasinabilir(oto.m.isler['2.20~2']!)).toBeNull();
+    expect(tasinabilir({ ...m.isler['2.20~2']!, bitti: true })).toBe('Biten iş taşınmaz');
+  });
+
+  it('3791: taşınan payın önizlemedeki bitişi emrin bitişine girer (bölünmüş adımın bitişi son paydır)', () => {
+    const { m } = bolunmusKur();
+    const e = m.emirler.find((y) => y.adimlar.some((a) => a.id === '2.20'))!;
+    const taban = onizlemeBitisi(m, e, [])!;
+    const p2 = m.isler['2.20~2']!;
+    expect(onizlemeBitisi(m, e, [{ isId: '2.20~2', C: p2.C + 100 }])).toBeGreaterThan(taban + 50);
+  });
+
+  // Test1 C4: hamle önerileri bölünmüş adımın paylarını önermez (pay yerleşimi bölme penceresinden ve elle taşımadan yönetilir).
+  it('hamle önerileri (turAdaylari) payları önermez; aynı adım bölünmemişken öneri üretilir', () => {
+    const { m } = bolunmusKur();
+    const e = m.emirler.find((y) => y.adimlar.some((a) => a.id === '2.20'))!;
+    expect(turAdaylari(m, e, '2.20').filter((t) => t.isId.startsWith('2.20'))).toEqual([]);
+    const bolunmemis = structuredClone(m);
+    delete bolunmemis.isler['2.20']!.pay;
+    delete bolunmemis.isler['2.20~2'];
+    expect(turAdaylari(bolunmemis, e, '2.20').length).toBeGreaterThan(0);
   });
 
   it('seçili adımın payları başka satırdaysa "N pay aşağıda / yukarıda" sayılır', () => {

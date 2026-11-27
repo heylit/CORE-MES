@@ -114,14 +114,17 @@ export function isTasi(deger: unknown, g: Omit<IsTasiGovdesi, 'calismaSurumu'>, 
   const locks = nesne(d.deger.locks) ? d.deger.locks : {};
   const yeniKilit = Object.fromEntries(sonuc.isler.map((x) => [x.isId, { m: x.tezgah, S: x.S }]));
   const degisen = Object.keys(yeniKilit).filter((id) => !esit(locks[id], yeniKilit[id]));
-  if (degisen.length === 0) return { deger: d.deger, degisti: false, ileti: sonuc.ileti };
+  if (degisen.length === 0 && !sonuc.bolme) return { deger: d.deger, degisti: false, ileti: sonuc.ileti };
   const yeni = kopya(d.deger);
   yeni.locks = { ...locks, ...yeniKilit };
   const r = (planOf(d.deger)!.ops as Nesne)[g.isId];
+  const eskiBol = nesne(d.deger.elleBol) ? d.deger.elleBol : {};
+  if (sonuc.bolme) yeni.elleBol = { ...eskiBol, [sonuc.bolme.adim]: sonuc.bolme.kayit };
   // 3488 a: yerleşmeyen adımın planda satırı yoktur.
   const durdur = nesne(r) && surenIs(r);
   const ne = !nesne(r) ? 'Yerleşmeyen adım elle yerleştirildi' : durdur ? 'Süren iş durduruldu, kalanı taşındı' : String(r.m) === g.tezgah ? 'İş saati kaydırıldı' : 'İş başka tezgâha taşındı';
   const geri: GeriYama[] = degisen.map((id) => (locks[id] === undefined ? { yol: ['locks'], id } : { yol: ['locks'], id, once: locks[id] }));
+  if (sonuc.bolme) geri.push(eskiBol[sonuc.bolme.adim] === undefined ? { yol: ['elleBol'], id: sonuc.bolme.adim } : { yol: ['elleBol'], id: sonuc.bolme.adim, once: eskiBol[sonuc.bolme.adim] });
   if (durdur) {
     const w = nesne(d.deger.w) ? d.deger.w : {};
     yeni.w = { ...w, durdurulan: { ...(nesne(w.durdurulan) ? w.durdurulan : {}), [g.isId]: 1 } };
