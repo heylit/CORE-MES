@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { etkinResimler, kmBagi, kmIlkParcaAcik, kmNumuneDurumu, kmNumuneKurallari, kmNumunePlani, kmPlani, kmResimDurumu, kmSahibi, kmAlimEtiketi, kmOtomatikKarari, kmTopluPlani, otoKaynakOku, otoKaynakYaz, otomatikKmNumunesi, type KmParcaVerisi } from './km-cizim.ts';
+import { etkinResimler, kmBagi, kmIlkParcaAcik, kmPlanBagsiz, kmPlaniBagli, kmPlanFarki, kmNumuneDurumu, kmNumuneKurallari, kmNumunePlani, kmPlani, kmResimDurumu, kmSahibi, kmAlimEtiketi, kmOtomatikKarari, kmTopluPlani, otoKaynakOku, otoKaynakYaz, otomatikKmNumunesi, type KmParcaVerisi } from './km-cizim.ts';
 
 // Kalite Merkezi resmi ve balonları (789, 795 a); değerler uydurmadır.
 const BALON = {
@@ -121,5 +121,13 @@ describe('Kalite Merkezi çizimi', () => {
     expect(kmIlkParcaAcik({ kurallar: [{ ...ilk, kapi: true }] })).toBe(true);
     expect(kmIlkParcaAcik({ kurallar: [] })).toBe(false);
     expect(kmIlkParcaAcik({ kurallar: [ilk] })).toBeNull();
+  });
+  it('3795: plan her satırı balona bağlıysa bağlıdır; dolu ve bağsız plan işaretlenir; fark balon numarasıyla', () => {
+    const p = (plan: unknown[], malzemeNo: number | null = 5) => ({ malzemeNo, plan }) as never;
+    expect(kmPlaniBagli([{ id: 1, nom: '1', min: 0, max: 1, kmBalon: 3 }])).toBe(true);
+    expect(kmPlaniBagli([{ id: 1, nom: '1', min: 0, max: 1, kmBalon: 3 }, { id: 2, nom: '1', min: 0, max: 1 }])).toBe(false);
+    expect([kmPlanBagsiz(p([{ id: 1, nom: '1', min: 0, max: 1 }])), kmPlanBagsiz(p([])), kmPlanBagsiz(p([{ id: 1, nom: '1', min: 0, max: 1 }], null))]).toEqual([true, false, false]);
+    const f = kmPlanFarki([{ id: 1, nom: '4.7', min: 4.6, max: 4.8 }, { id: 2, nom: '5', min: 0, max: 0, gauge: true }], [{ id: 1, nom: '47', min: 46.6, max: 47.4 }, { id: 2, nom: '5', min: 0, max: 0, gauge: true }, { id: 3, nom: '8', min: 7.9, max: 8.1 }]);
+    expect(f).toEqual({ eski: 2, yeni: 3, degisen: [{ no: 1, once: '4.7 [4.6 … 4.8]', sonra: '47 [46.6 … 47.4]' }, { no: 3, once: null, sonra: '8 [7.9 … 8.1]' }] });
   });
 });

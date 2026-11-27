@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
-import { kmTaslakDoldur } from './km-plan-ceviri.ts';
+import { kmPlaniBagli, kmTaslakDoldur, SABLON_BAGSIZ_ETIKETI, sablonPlaniniAyikla } from './km-plan-ceviri.ts';
 
 // 3701: taslak planın Kalite Merkezi resminden kurulması. İstemcinin km-cizim.test.ts'indeki kuralla aynı beklentiler; değerler uydurmadır.
 const balon = (no: number, ek: Record<string, unknown> = {}) => ({
@@ -48,5 +48,29 @@ describe('Kalite Merkezi resminden taslak planı', () => {
     assert.equal(kmTaslakDoldur(taslak({ status: 'published' }), [resim()]), null);
     assert.equal(kmTaslakDoldur(taslak({ malzemeNo: null }), [resim()]), null);
     assert.notEqual(kmTaslakDoldur(taslak({ files: [{ name: 'a.pdf', merkez: 12 }] }), [resim()]), null);
+  });
+});
+
+describe('3795: şablondan gelen bağsız plan', () => {
+  const eski = [{ id: 1, nom: '4.7' }, { id: 2, nom: '5', kmBalon: 102 }];
+  test('kısmen bağlı plan bağsızdır; boş ve tam bağlı plan bağlıdır', () => {
+    assert.equal(kmPlaniBagli(eski), false);
+    assert.equal(kmPlaniBagli([{ id: 2, kmBalon: 102 }]), true);
+    assert.equal(kmPlaniBagli([]), true);
+    assert.equal(kmPlaniBagli([{ id: 3, kmBalon: 0 }]), false);
+  });
+  test('balonlu resim varsa plan, numune kuralları ve resim bağı düşer; kmTaslakDoldur yeniden kurar', () => {
+    const t = taslak({ plan: eski, samp: [{ id: 'n' }], kmResim: { id: 1, surum: 1 }, otoKaynak: { depo: { kaynak: 'rota' }, plan: { kaynak: 'sablon' } } });
+    const a = sablonPlaniniAyikla(t, [resim()])!;
+    assert.deepEqual([a['plan'], a['samp'], 'kmResim' in a, a['otoKaynak']], [[], [], false, { depo: { kaynak: 'rota' } }]);
+    assert.equal((kmTaslakDoldur(a, [resim()])!['plan'] as unknown[]).length, 3);
+    assert.deepEqual(sablonPlaniniAyikla(taslak({ plan: eski }), [resim(), resim({ id: 8 })])!['plan'], [], 'birden çok aday: plan boşalır, kişi seçer');
+  });
+  test('balonlu resim yoksa eski plan kalır ve kaynağı yazılır; bağlı, boş ve yayındaki plana dokunulmaz', () => {
+    const a = sablonPlaniniAyikla(taslak({ plan: eski }), [resim({ balonlar: [] })])!;
+    assert.deepEqual([a['plan'], a['otoKaynak']], [eski, { plan: { kaynak: 'sablon', etiket: SABLON_BAGSIZ_ETIKETI } }]);
+    assert.equal(sablonPlaniniAyikla(taslak({ plan: [{ id: 2, kmBalon: 102 }] }), [resim()]), null);
+    assert.equal(sablonPlaniniAyikla(taslak(), [resim()]), null);
+    assert.equal(sablonPlaniniAyikla(taslak({ plan: eski, status: 'published' }), [resim()]), null);
   });
 });

@@ -549,6 +549,12 @@ button.tc-ay2-esitleme { cursor: pointer; }
 .tc-ay2-toplu-grup h3[data-ton="hold"] > b, .tc-ay2-toplu-grup h3[data-ton="hold"] > svg { color: var(--hold); }
 .tc-ay2-toplu-grup h3[data-ton="stop"] > b, .tc-ay2-toplu-grup h3[data-ton="stop"] > svg { color: var(--stop); }
 .tc-ay2-toplu-grup ul { margin: 0; padding-inline-start: var(--b-5); color: var(--muted); font-size: var(--yazi-s); max-block-size: calc(var(--dokunma) * 6); overflow: auto; }
+.tc-ay2-yenile-liste { list-style: none; padding-inline-start: 0; display: grid; gap: var(--b-2); }
+.tc-ay2-yenile-satir { display: grid; gap: var(--b-1); min-inline-size: 0; overflow-wrap: anywhere; }
+.tc-ay2-yenile-satir > span { color: var(--ink); }
+.tc-ay2-yenile-fark summary { cursor: pointer; min-block-size: var(--dokunma); display: flex; align-items: center; }
+.tc-ay2-yenile-fark ul { list-style: none; padding-inline-start: var(--b-3); max-block-size: none; }
+.tc-ay2-yenile-fark b { font-variant-numeric: tabular-nums; margin-inline-end: var(--b-1); }
 .tc-ay2-toplu-kutu { display: flex; align-items: flex-start; gap: var(--b-2); font-size: var(--yazi-s); min-block-size: var(--dokunma); }
 .tc-ay2-toplu-kutu input { inline-size: var(--b-5); block-size: var(--b-5); flex: none; }
 .tc-ay2-toplu-kutu small { display: block; color: var(--muted); }

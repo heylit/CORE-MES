@@ -2794,6 +2794,47 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.equal(yeni1?.['no'], (await emirOku(r2.emirId)).emirNo);
     assert.deepEqual(yeni2?.['steps'], []);
     assert.deepEqual(yeni2?.['plan'], []);
+    // 3795: Kalite Merkezi'nde balonlu resim yokken bağsız plan kopyalanır, kaynağı "eski paketten, bağlı değil" yazılır.
+    assert.deepEqual((yeni1?.['otoKaynak'] as { plan?: unknown } | undefined)?.plan, { kaynak: 'sablon', etiket: 'Eski paketten · Kalite Merkezi’ne bağlı değil' });
+  });
+
+  // 3795 (3689-2 a): şablonun Kalite Merkezi'ne bağsız planı, parçanın balonlu resmi varsa yeni pakete kopyalanmaz; plan Kalite Merkezi'nden
+  // kurulur ve bağsız plana yazılmış numune kuralları düşer. Bağlı plan olduğu gibi kopyalanır. Değerler uydurmadır.
+  test('3795: bağsız şablon planı yerine Kalite Merkezi planı; bağlı şablon planı olduğu gibi', async () => {
+    const sahip = ortam!.sahip;
+    const r1 = await rotaliEmirKur();
+    const [a1] = await isEmriIdleri(r1.emirId);
+    const t1 = (await paketOku(ieKimligi(a1!)))!.govde;
+    const bagsiz = [1, 2, 3, 4].map((id) => ({ id, nom: '4.7', min: 4.6, max: 4.8 }));
+    const samp = [{ id: 'n1', when: 'first', who: ['q'], items: [1, 2] }];
+    const sablonYazimi = await paketYaz(ieKimligi(a1!), null, { ...t1, plan: bagsiz, samp, steps: [{ id: 's1', t: 'Adım', d: '', r: true }], status: 'published', version: 1, publishedAt: 2_000 });
+    assert.equal(sablonYazimi.durum, 200, JSON.stringify(sablonYazimi.govde));
+    const icerik = Buffer.from(`%PDF-1.4\n% km3795-${r1.emirId}\n%%EOF\n`);
+    const ozet = createHash('sha256').update(icerik).digest('hex');
+    await sahip.sorgu("INSERT INTO dosya (ozet, boyut, tur, ilk_yukleyen_id) VALUES ($1, $2, 'pdf', $3) ON CONFLICT DO NOTHING", [ozet, icerik.length, yoneticiId]);
+    const belge = (await sahip.tek<{ id: number }>("INSERT INTO belge_merkezi_belge (ad, tur, olusturan_id) VALUES ('KM 3795', 'teknik-resim', $1) RETURNING id", [yoneticiId]))!.id;
+    const resim = (await sahip.tek<{ id: number }>(
+      "INSERT INTO kalite_merkezi_resim (malzeme_no, tur, merkez_belge_id, ozet, ad, ekleyen_id, guncelleyen_id) VALUES ($1, 'resim', $2, $3, 'KM 3795', $4, $4) RETURNING id",
+      [r1.kart, belge, ozet, yoneticiId]))!.id;
+    for (const no of [1, 2]) await sahip.sorgu('INSERT INTO kalite_merkezi_balon (resim_id, no, nominal, alt, ust, kritik, guncelleyen_id) VALUES ($1, $2, $3, $4, $5, false, $6)', [resim, no, '47', '46.6', '47.4', yoneticiId]);
+    const r2 = await rotaliEmirKur({ kart: r1.kart });
+    const [b1] = await isEmriIdleri(r2.emirId);
+    const yeni = (await paketler()).get(ieKimligi(b1!))!.govde;
+    const plan = yeni['plan'] as Record<string, unknown>[];
+    assert.deepEqual(plan.map((k) => [k['id'], k['nom'], k['min'], k['max']]), [[1, '47', 46.6, 47.4], [2, '47', 46.6, 47.4]], 'eski 4 satır kopyalanmadı');
+    assert.ok(plan.every((k) => typeof k['kmBalon'] === 'number'));
+    assert.equal((yeni['kmResim'] as { id: number }).id, resim);
+    assert.equal((yeni['otoKaynak'] as { plan: { kaynak: string } }).plan.kaynak, 'km');
+    assert.deepEqual(yeni['samp'], [], 'bağsız plana yazılmış numune kuralı düşer');
+    // Bağlı şablon: olduğu gibi kopyalanır (bugünkü davranış).
+    const bagli = plan.map((k) => ({ ...k, nom: '47.0' }));
+    const tb = (await paketOku(ieKimligi(b1!)))?.govde ?? yeni;
+    assert.equal((await paketYaz(ieKimligi(b1!), null, { ...tb, plan: bagli, samp: [], steps: [{ id: 's1', t: 'Adım', d: '', r: true }], status: 'published', version: 1, publishedAt: 3_000 })).durum, 200);
+    const r3 = await rotaliEmirKur({ kart: r1.kart });
+    const [c1] = await isEmriIdleri(r3.emirId);
+    const ucuncu = (await paketler()).get(ieKimligi(c1!))!.govde;
+    assert.deepEqual(ucuncu['plan'], bagli);
+    assert.equal((ucuncu['otoKaynak'] as { plan?: unknown } | undefined)?.plan, undefined);
   });
 
   test('geçiş ve kapanış: kayıtlı eski paketi olan rotalı emre iş emri paketi açılmaz; iptal edilen emrin kayıtlı iş emri paketi düşer; açık olmayan iş emrine paket yazılamaz', async () => {

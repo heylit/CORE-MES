@@ -38,6 +38,28 @@ const etiket = (r: Pick<KmResim, 'ad' | 'revizyon' | 'balonlar'> & { gruplar?: K
 // Taslağın elle konmuş (Çizim Merkezi dışı) dosyası resmin yerine geçmez; kişi dosyasını bilerek koymuştur.
 const dosyaElle = (g: Record<string, unknown>): boolean => Array.isArray(g['files']) && g['files'].some((f) => !kayitMi(f) || typeof f['merkez'] !== 'number');
 
+const kmAdaylari = (resimler: readonly KmResim[]): KmResim[] => resimler.filter((r) => r.aktif && r.eski !== true && r.tur === 'resim' && r.balonlar.length > 0);
+
+// 3795: plan Kalite Merkezi'ne bağlı sayılır ancak her satırı bir balonu taşıyorsa (`kmBalon`); kısmen bağlı plan bağsızdır.
+export function kmPlaniBagli(plan: unknown): boolean {
+  return Array.isArray(plan) && plan.every((x) => kayitMi(x) && typeof x['kmBalon'] === 'number' && Number.isSafeInteger(x['kmBalon']) && x['kmBalon'] > 0);
+}
+export const SABLON_BAGSIZ_ETIKETI = 'Eski paketten · Kalite Merkezi’ne bağlı değil';
+
+// 3795 (3689-2 a: Kalite Merkezi planı tek kaynak): şablondan kopyalanan bağsız plan, parçanın Kalite Merkezi'nde balonlu resmi varsa
+// taslağa alınmaz; plan ve ona bağlı numune kuralları boşalır, `kmTaslakDoldur` tek aday resimden kurar (birden çok aday varsa kişi seçer).
+// Balonlu resim yoksa eski plan kalır ve kaynağı "eski paketten, bağlı değil" yazılır. Bağlı plan ve boş plan olduğu gibi kalır.
+export function sablonPlaniniAyikla(taslak: Record<string, unknown>, resimler: readonly KmResim[]): Record<string, unknown> | null {
+  if (taslak['status'] !== 'draft' || !Array.isArray(taslak['plan']) || taslak['plan'].length === 0 || kmPlaniBagli(taslak['plan'])) return null;
+  const oto = taslak['otoKaynak'];
+  if (kmAdaylari(resimler).length > 0) {
+    const { kmResim: _r, otoKaynak: _o, ...kalan } = taslak;
+    const { plan: _p, ...otoKalan } = kayitMi(oto) ? oto : {};
+    return { ...kalan, plan: [], samp: [], ...(Object.keys(otoKalan).length ? { otoKaynak: otoKalan } : {}) };
+  }
+  return { ...taslak, otoKaynak: { ...(kayitMi(oto) ? oto : {}), plan: { kaynak: 'sablon', etiket: SABLON_BAGSIZ_ETIKETI } } };
+}
+
 // Boş, bağsız ve kişinin bilerek boşaltmadığı taslak, tek aday resim varsa onun planıyla dolar. Aday: etkin, güncel revizyon, PDF resim, en az bir balonlu.
 // Birden çok ya da hiç aday varsa dokunulmaz (seçim kişinindir; istemci "resim seçin" der). Zaman ve kişi yazılmaz: taslak her okumada aynı içeriği vermelidir.
 export function kmTaslakDoldur(taslak: Record<string, unknown>, resimler: readonly KmResim[]): Record<string, unknown> | null {
@@ -45,7 +67,7 @@ export function kmTaslakDoldur(taslak: Record<string, unknown>, resimler: readon
   if (kayitMi(taslak['kmResim']) || (Array.isArray(taslak['plan']) && taslak['plan'].length > 0)) return null;
   const oto = taslak['otoKaynak'];
   if (kayitMi(oto) && kayitMi(oto['plan']) && oto['plan']['kaynak'] === 'el') return null;
-  const adaylar = resimler.filter((r) => r.aktif && r.eski !== true && r.tur === 'resim' && r.balonlar.length > 0);
+  const adaylar = kmAdaylari(resimler);
   if (adaylar.length !== 1) return null;
   const r = adaylar[0]!;
   const tmi = taslak['tmi'];

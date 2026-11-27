@@ -14,7 +14,7 @@ import {
   PAKET_DURUMLARI, TAKIP_SUZGECLERI, calisiyorMu, geriCekilebilir, topluGeriCekilebilir, takipEmirleri,
   type AdimDilimi, type TakipSatiri, type TakipSuzgeci,
 } from './kurallar.ts';
-import { kmDoldurulabilir } from './km-cizim.ts';
+import { kmDoldurulabilir, kmPlanBagsiz } from './km-cizim.ts';
 import { PlanCipi } from './PlanCipi.tsx';
 import { topluGonderilebilir } from './toplu.ts';
 import type { Pkg, Result, Ton } from './tipler.ts';
@@ -44,6 +44,7 @@ interface Ozellikler {
   gonderSor: (l: readonly Pkg[]) => void;
   benzerSor: (l: readonly Pkg[]) => void;
   kmDoldurSor: (l: readonly Pkg[]) => void;
+  kmYenileSor: (l: readonly Pkg[]) => void;
 }
 
 const saat = (ms: number) => new Date(ms).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -64,8 +65,10 @@ const satirDurumu = (hz: ReadonlyMap<number, HazirlikCevabi>, x: TakipSatiri): B
   const h = x.paket ? paketHazirligi(hz, x.paket) : null;
   return h ? baslamaDurumu(h) : null;
 };
+// 3795: "Plan bağsız" süzgeci kontrol planı dolu ama Kalite Merkezi'ne bağlı olmayan paketleri gösterir (satırdaki işaret de bu süzgeci açar).
 export function ekSuzgec(hz: ReadonlyMap<number, HazirlikCevabi>, d: TakipSuzgeci, eksikMadde: HazirlikMaddesi | ''): ((x: TakipSatiri) => boolean) | null {
-  const durumSart = d === 'durur' || d === 'uyari' ? (x: TakipSatiri) => satirDurumu(hz, x) === d : null;
+  const durumSart = d === 'durur' || d === 'uyari' ? (x: TakipSatiri) => satirDurumu(hz, x) === d
+    : d === 'kmBagsiz' ? (x: TakipSatiri) => !!x.paket && kmPlanBagsiz(x.paket) : null;
   if (eksikMadde === '') return durumSart;
   return (x) => {
     const h = x.paket ? paketHazirligi(hz, x.paket) : null;
@@ -74,7 +77,7 @@ export function ekSuzgec(hz: ReadonlyMap<number, HazirlikCevabi>, d: TakipSuzgec
 }
 
 export function TakipTablosu({
-  paketler, sonuclar, hazirlik, hazirlikOkundu, suz, suzYaz, eksikMadde, grup, grupAdi, yayinlar, seciliId, ac, geriCekSor, duzenler, gonderSor, benzerSor, kmDoldurSor,
+  paketler, sonuclar, hazirlik, hazirlikOkundu, suz, suzYaz, eksikMadde, grup, grupAdi, yayinlar, seciliId, ac, geriCekSor, duzenler, gonderSor, benzerSor, kmDoldurSor, kmYenileSor,
 }: Ozellikler) {
   const gruplar = useMemo(() => paketleriGrupla(paketler, grup, grupAdi), [paketler, grup, grupAdi]);
   const durumu = (x: TakipSatiri) => satirDurumu(hazirlik, x);
@@ -100,6 +103,7 @@ export function TakipTablosu({
   const cekilecek = seciliPaketler().filter((p) => topluGeriCekilebilir(p, sonucu(p)));
   const doldurulacak = seciliPaketler().filter((p) => p.status === 'draft');
   const kmDoldurulacak = seciliPaketler().filter(kmDoldurulabilir);
+  const kmYenilenecek = seciliPaketler().filter(kmPlanBagsiz);
 
   // Telefonda çubuk tek satır kalsın: tek birincil işlem görünür (gönder; gönderilecek yoksa geri çek), gerisi tek menüde.
   const cekGorunur = !gonderilecek.length && cekilecek.length > 0;
@@ -110,6 +114,10 @@ export function TakipTablosu({
       anahtar: 'km', baslik: 'Kalite Merkezi’nden doldur', simge: 'target' as const, sec: () => kmDoldurSor(kmDoldurulacak),
       pasif: !kmDoldurulacak.length, pasifNedeni: kmDoldurulacak.length ? undefined : 'Seçilenlerin hepsi dolu ya da Kalite Merkezi’ne bağlı',
     }] : []),
+    ...(duzenler ? [{
+      anahtar: 'kmYenile', baslik: 'Kalite Merkezi’nden yenile', simge: 'rotate' as const, sec: () => kmYenileSor(kmYenilenecek),
+      pasif: !kmYenilenecek.length, pasifNedeni: kmYenilenecek.length ? undefined : 'Seçilenlerde Kalite Merkezi’ne bağsız plan yok',
+    }] : []),
     { anahtar: 'kaldir', baslik: 'Seçimi kaldır', simge: 'x', sec: () => seciliYaz(new Set()) },
   ];
 
@@ -118,6 +126,7 @@ export function TakipTablosu({
       <div className="tc-ay2-takip-cipler" role="group" aria-label="İş durumu">
         {TAKIP_SUZGECLERI.map(([k, l]) => {
           const n = sayilar.get(k) ?? 0;
+          if (k === 'kmBagsiz' && n === 0 && suz !== k) return null;
           return (
             <button key={k} type="button" className="tc-ay2-takip-cip" aria-pressed={suz === k} data-sifir={n === 0 ? '' : undefined} data-ton={k === 'durur' && n ? 'stop' : undefined} onClick={() => suzYaz(k)}>
               {l} <span className="tc-ay2-takip-cip-sayi">{n}</span>
@@ -220,6 +229,13 @@ export function TakipTablosu({
                       <Cip ton={d.ton}>{d.l.replace('Paket: ', '')}</Cip>
                       {p.dirty && p.status !== 'draft' ? <Cip ton="hold">Değişiklik var</Cip> : null}
                       <PlanCipi paket={p} />
+                      {kmPlanBagsiz(p) ? (
+                        <button
+                          type="button" className="tc-ay2-takip-madde" data-ton="hold" title="Kontrol planı Kalite Merkezi’ne bağlı değil; bu paketleri listele"
+                          aria-label={`${adi}: kontrol planı Kalite Merkezi’ne bağlı değil, bağsız planlı paketleri listele`}
+                          onClick={(o) => { o.stopPropagation(); suzYaz('kmBagsiz'); }}
+                        ><Simge ad="target" boyut="k" />Plan bağsız</button>
+                      ) : null}
                       {acikNot ? <Cip ton="hazard">{acikNot} not</Cip> : null}
                     </span>
                   </td>

@@ -29,9 +29,10 @@ import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
 import { IstasyonSecimi } from './IstasyonSecici.tsx';
 import { KaliteMerkeziCizimleri } from './KaliteMerkeziCizimleri.tsx';
 import { ApiHatasi } from '../../../../ortak/veri/api.ts';
-import { kmAlimEtiketi, kmBagi, kmDoldurulabilir, kmDosyaElle, type KmTopluSatiri, kmIlkParcaAcik, kmNumuneDurumu, kmNumuneKurallari, kmNumunePlani, kmOtomatikKarari, kmPlani, kmSahibi, otoKaynakYaz, otomatikKmNumunesi } from './km-cizim.ts';
+import { kmAlimEtiketi, kmBagi, kmDoldurulabilir, kmDosyaElle, type KmTopluSatiri, type KmYenileSatiri, kmIlkParcaAcik, kmPlanBagsiz, kmNumuneDurumu, kmNumuneKurallari, kmNumunePlani, kmOtomatikKarari, kmPlani, kmSahibi, otoKaynakYaz, otomatikKmNumunesi } from './km-cizim.ts';
 import { KmPlanBilgisi } from './KmPlanBilgisi.tsx';
 import { KmTopluPenceresi, type KmTopluSonucu } from './KmTopluPenceresi.tsx';
+import { KmYenilePenceresi } from './KmYenilePenceresi.tsx';
 import type { KmNumunePlani } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type { HazirlikMaddesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { HAZIRLIK_MADDE_BILGISI } from '../../../uretim-emirleri/disari.ts';
@@ -198,6 +199,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const [nSor, nSorYaz] = useState<number | null>(null);
   const [merkezSec, merkezSecYaz] = useState(false);
   const [kmToplu, kmTopluYaz] = useState<readonly Pkg[] | null>(null);
+  const [kmYenile, kmYenileYaz] = useState<readonly Pkg[] | null>(null);
   const [merkezMesgul, merkezMesgulYaz] = useState(false);
   const [yayinda, yayindaYaz] = useState(false);
   const [geriSor, geriSorYaz] = useState<{ l: readonly Pkg[]; toplu: boolean } | null>(null);
@@ -579,6 +581,32 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     await yenile();
     return { doldu, hatalar };
   };
+  // 3795: bağsız planlı taslağın planı Kalite Merkezi'nin planıyla değişir; elle dosya varsa yerinde kalır, resim yanına eklenir (kmdenAl gibi).
+  // Bağsız plana yazılmış numune kuralları ve bağı düşer; Kalite Merkezi numune planı taslağa kendiliğinden gelir (otomatikKmNumunesi).
+  const kmYenileUygula = async (l: readonly KmYenileSatiri[]): Promise<KmTopluSonucu> => {
+    if (!duzenler) { yetkisiz(); return { doldu: 0, hatalar: [] }; }
+    await bekleyeniYaz();
+    let doldu = 0;
+    const hatalar: KmTopluSonucu['hatalar'] = [];
+    for (const { hedef, resim } of l) {
+      const ad = hedef.no + ' · ' + (hedef.op || 'Operasyon');
+      try {
+        const taze = (await depo.DB.get('pkgs', hedef.id).catch(() => undefined)) as Pkg | undefined;
+        if (!taze || resim === null || taze.status !== 'draft' || !kmPlanBagsiz(taze)) { hatalar.push({ paket: ad, neden: 'paket bu arada değişti' }); continue; }
+        const f = await depo.Server.merkezdenAl(resim.merkezBelgeId);
+        const elle = kmDosyaElle(taze), k = elle ? { files: [...taze.files.filter((x) => x.name !== f.name), f], primary: taze.primary } : merkezDosyasiniKoy(taze, f);
+        const opNo = typeof taze.tmi?.opNo === 'number' ? taze.tmi.opNo : null;
+        const { kmNumune: _n, ...bagsiz } = taze as Pkg & { kmNumune?: unknown };
+        const g: Pkg = {
+          ...bagsiz, files: k.files, primary: elle ? taze.primary : f.name, plan: kmPlani(resim, opNo), samp: [], kmResim: { id: resim.id, surum: resim.surum }, partNo: taze.partNo || resim.ad,
+          ...otoKaynakYaz(taze, 'plan', { kaynak: 'km', etiket: 'Yenilendi · ' + kmAlimEtiketi(resim, opNo), at: Date.now(), by: benAdi() }), dirty: true, updatedAt: Date.now(),
+        };
+        await depo.DB.put('pkgs', g); doldu++; seciliYaz((c) => (c && c.id === g.id ? g : c));
+      } catch (e) { hatalar.push({ paket: ad, neden: e instanceof Error ? e.message : 'resim dosyası alınamadı' }); }
+    }
+    await yenile();
+    return { doldu, hatalar };
+  };
   const geriCekOnayla = async (l: readonly Pkg[]) => {
     geriMesgulYaz(true);
     try { await geriCekListe(l, geriSor?.toplu ?? false); } finally { geriMesgulYaz(false); geriSorYaz(null); }
@@ -729,7 +757,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
             paketler={liste} sonuclar={sonuclar} hazirlik={hz.harita} hazirlikOkundu={hz.zaman !== null} suz={takipSuz} suzYaz={takipSuzSec} eksikMadde={eksikMadde}
             grup={grup} grupAdi={grupAdi} yayinlar={yayinlar} seciliId={duzenAcik && p ? p.id : null}
             ac={(x, ilk, el) => { if (el) sonTik.current = el; void sec(x, ilk); }} geriCekSor={(l, toplu) => geriSorYaz({ l, toplu })}
-            duzenler={duzenler} gonderSor={gonderSorYaz} benzerSor={(l) => benzerPlanYaz(topluDoldurmaPlani(l, paketler))} kmDoldurSor={kmTopluYaz}
+            duzenler={duzenler} gonderSor={gonderSorYaz} benzerSor={(l) => benzerPlanYaz(topluDoldurmaPlani(l, paketler))} kmDoldurSor={kmTopluYaz} kmYenileSor={kmYenileYaz}
           />
           {paketler.length && !liste.length ? (
             <div className="tc-ay2-soluk tc-ay2-bos-satir">Süzgece uyan paket yok.<button type="button" className="tc-ay2-bag" onClick={temizle}><Simge ad="x" boyut="k" />Süzgeci temizle</button></div>
@@ -1112,6 +1140,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
       ) : null}
       <BenzerPaketPenceresi hedef={benzerAcik ? p : null} paketler={paketler} kapat={() => benzerAcikYaz(false)} uygula={(k, a) => { void benzerUygula(k, a); }} />
       <KmTopluPenceresi hedefler={kmToplu} kapat={() => kmTopluYaz(null)} uygula={kmTopluUygula} />
+      <KmYenilePenceresi hedefler={kmYenile} kapat={() => kmYenileYaz(null)} uygula={kmYenileUygula} />
       <TopluBenzerPenceresi plan={benzerPlan} mesgul={benzerMesgul} kapat={() => benzerPlanYaz(null)} uygula={(l) => { void topluDoldur(l); }} />
       <GeriCekPenceresi paketler={geriSor ? geriSor.l : null} sonuclar={sonuclar} mesgul={geriMesgul} kapat={() => geriSorYaz(null)} onayla={(l) => { void geriCekOnayla(l); }} />
       {gonderOnay && p ? (
