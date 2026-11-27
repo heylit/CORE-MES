@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
@@ -79,6 +80,7 @@ describe('bitiş tarihi akışı: kayıt yazılırken (gerçek PostgreSQL)', () 
   let yoneticiId = 0;
   let planci = '';
   let yalnizYazar = '';
+  let kilitci = '';
   const vt = (): TestVeritabani['vt'] => { if (!ortam) throw new Error('Test veritabanı açılamadı.'); return ortam.vt; };
 
   async function girisCerezi(kullaniciAdi: string): Promise<string> {
@@ -107,6 +109,7 @@ describe('bitiş tarihi akışı: kayıt yazılırken (gerçek PostgreSQL)', () 
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yonetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     planci = await islemliKisi('planci', ['recete-rota.yaz', 'plan.yaz']);
     yalnizYazar = await islemliKisi('yazar', ['recete-rota.yaz']);
+    kilitci = await islemliKisi('kilitci', ['recete-rota.yaz', 'plan.yaz', 'plan.kilitle']);
   });
   after(async () => { await ortam?.kaldir(); });
 
@@ -140,5 +143,37 @@ describe('bitiş tarihi akışı: kayıt yazılırken (gerçek PostgreSQL)', () 
     const sonra = await kayit();
     assert.equal(sonra?.surum, k?.surum);
     assert.deepEqual(sonra?.deger, k?.deger);
+  });
+
+  // 3803 N6 (karar a): kayıtlı kilidi kaldıran çalışma yazması plan.kilitle ister; kilit eklemek, taşımak ve geçici kilidi kaldırmak plan.yaz ile kalır.
+  test('BA-10: plan.kilitle taşımayan kilit ekler ve taşır; kayıtlı kilidi kaydederek ya da sürüme dönerek kaldıramaz (403, kayıt değişmez); kilitleme yetkilisi kaldırır', async () => {
+    const J = { O1: { C: 40 } };
+    const surum = async () => (await kayit())?.surum ?? null;
+    const ekle = await yaz(planci, calisma(J, { locks: { 'O1.10': { m: 'M1', S: 10 }, 'O1.20': { m: 'M1', S: 12, gecici: 1 } } }), await surum());
+    assert.equal(ekle.statusCode, 200, ekle.body);
+    const tasi = await yaz(planci, calisma(J, { locks: { 'O1.10': { m: 'M2', S: 14 } } }), await surum());
+    assert.equal(tasi.statusCode, 200, `geçici kilit düşer, kayıtlı kilit taşınır: ${tasi.body}`);
+    const once = await kayit();
+    const kaldir = await yaz(planci, calisma(J, { locks: {} }), once?.surum ?? null);
+    assert.equal(kaldir.statusCode, 403, kaldir.body);
+    assert.match(kaldir.body, /Kilidi kaldırmak plan kilitleme yetkisi ister/);
+    assert.equal((await kayit())?.surum, once?.surum);
+    const yetkili = await yaz(kilitci, calisma(J, { locks: {} }), once?.surum ?? null);
+    assert.equal(yetkili.statusCode, 200, yetkili.body);
+    assert.deepEqual((await kayit())?.deger && ((await kayit())!.deger as { locks?: unknown }).locks, {});
+    // Sürüme dönüş de bir yazmadır: kilidi geri getiren dönüş serbest, kayıtlı kilidi düşüren dönüş aynı yetkiyi ister.
+    const don = async (cerez: string) => app.inject({
+      method: 'POST', url: '/api/plan/planlama-calismasi/geri-al', headers: { cookie: cerez, 'istek-kimligi': randomUUID() }, payload: { calismaSurumu: await surum() },
+    });
+    const getir = await don(planci);
+    assert.equal(getir.statusCode, 200, getir.body);
+    assert.deepEqual(Object.keys(((await kayit())!.deger as { locks: object }).locks), ['O1.10']);
+    const dusurOnce = await surum();
+    const dusur = await don(planci);
+    assert.equal(dusur.statusCode, 403, dusur.body);
+    assert.match(dusur.body, /Kilidi kaldırmak plan kilitleme yetkisi ister/);
+    assert.equal(await surum(), dusurOnce);
+    assert.equal((await don(kilitci)).statusCode, 200);
+    assert.deepEqual(((await kayit())!.deger as { locks: object }).locks, {});
   });
 });

@@ -484,3 +484,6 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - Test: `durdurulan-kosulu.test.ts`; `bolunmus-oncul-akisi.test.ts` 9 (yapılı alan ile ileti aynı); `zincir-tek-komut.test.ts` önizleme
   uyarısı; istemci `KokpitOnaySira.test.tsx` 3805, 3803 N2/N3/N7, `KilitKaydi.test.tsx` 3804 K2/K5/K6; ekran
   `planlama-kokpit-kilit-kaydi.spec.ts` (768, 1280).
+- Kilit kaldırma yetkisi (3803 N6, kullanıcı kararı a "Sunucu da denetlesin"): çalışmaya giden yazma (`planlama-kayitlari/yaz` ve
+  sürüme dönüş `planlama-calismasi/geri-al`) kayıtlı (geçici olmayan) bir kilidi düşürüyorsa `plan.kilitle` ister, yoksa 403 ve kayıt
+  değişmez; kilit eklemek ve taşımak `plan.yaz` ile kalır. Önceden bu yalnız istemcide denetleniyordu. Test: `bitis-akisi.test.ts` BA-10.

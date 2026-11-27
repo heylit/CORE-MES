@@ -343,6 +343,13 @@ export function calismaKilitleri(kayit: unknown): Set<string> {
   return new Set(Object.entries(l ?? {}).filter(([, v]) => { const x = nesne(v); return x !== null && !x['gecici']; }).map(([k]) => k));
 }
 
+// 3803 N6: çalışma yazması kayıtlı (kalıcı) bir kilidi kaldırıyorsa plan kilitleme yetkisi gerekir; kilit taşımak ya da eklemek
+// plan yazma ile kalır. Motorun geçici kilidi sayılmaz.
+export function kaldirilanKilitler(onceki: unknown, yeni: unknown): string[] {
+  const kalan = calismaKilitleri(yeni);
+  return [...calismaKilitleri(onceki)].filter((k) => !kalan.has(k));
+}
+
 // 507 2 a: çalışmanın ek vardiyaları plan modülünün diliyle (makine ve vardiya kimliği sayı, gün takvim günü). Sayı olmayan kimlik
 // (sayfada elle girilmiş tezgâh ya da vardiya) yazılamaz; sayısı döner. 3282 2a-2: operatör kişi kimliğidir; sayı değilse operatörsüz.
 export function calismaEkMesaisi(baslangic: string, l: readonly { m: string; gun: number; vardiya: string; personel?: string }[]) {

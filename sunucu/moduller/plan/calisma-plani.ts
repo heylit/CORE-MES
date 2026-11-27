@@ -9,7 +9,7 @@ import { calismaTaslagiYaz, canliSira, tabanPlani, taslakYerlesimleriOku } from 
 import { calismaDurdurulanlari, calismaEkMesaisi, kaymaNedeni, planAni, type KaymaAdimi, type YerindeIs, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, durdurmaBekleyenler, YAKINSAMADI_UYARISI, kimlikEmireCevir, motorAnahtarlari, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './planlama-kurallar.ts';
 import { saklanmayanKayitDegeri } from './motor-ayari-kurallar.ts';
 import { calismaPlani, type CalismaPlani } from './plan-girdisi.ts';
-import { PLANLAMA_ANAHTARI, planlamaGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
+import { kilitKaldirmaDenetimi, PLANLAMA_ANAHTARI, planlamaGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
 import { canliyaAl, canliyaAlOnizlemesi, motorNumaralariOku, onayaGonder, plan as planOku, planlanacakIsler } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import type { YerlesimSatiri } from './sorgular.ts';
@@ -241,6 +241,7 @@ export async function calismaGeriAl(db: Db, kullanici: Kullanici, calismaSurumu:
   if (mevcut !== calismaSurumu) throw eskiSurum();
   const onceki = await sorgular.planlamaSonGecmis(db, PLANLAMA_ANAHTARI);
   if (onceki === null) throw cakisma('Geri alınacak önceki sürüm yok.');
+  kilitKaldirmaDenetimi(kullanici, (await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI))?.deger, onceki.deger);
   const k = await sorgular.planlamaKaydiGuncelle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: onceki.bicim, deger: saklanmayanKayitDegeri(onceki.bicim, onceki.deger), kisiId: kullanici.id });
   return { calismaSurumu: k!.surum, donulenSurum: onceki.surum };
 }
