@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type HTMLAttributes, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type HTMLAttributes, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { csvIndir, type CsvDegeri } from '../veri/csv.ts';
 import { etkiAcik } from '../veri/etki.ts';
-import { useGizliSutunlar, useYogunluk, type Yogunluk } from '../veri/tablo-tercihi.ts';
+import { useGizliSutunlar, useGrupSecimi, useYogunluk, type Yogunluk } from '../veri/tablo-tercihi.ts';
 import { sonrakiSiralama, type Siralama } from '../veri/liste-durumu.ts';
 import { Girdi } from './Alan.tsx';
 import { Dugme } from './Dugme.tsx';
@@ -57,7 +57,17 @@ export interface TabloAraci<S> {
   sag?: ReactNode;
   // 3748: "Görünüm" menüsü: satır aralığı (bütün tablolar) ve bu tablonun sütunları. `anahtar` gizlenen sütunların saklandığı
   // tablo adıdır (ekranlar arasında tekil). İlk sütun gizlenmez; gizlenen sütun CSV'de kalır.
-  gorunum?: { anahtar: string };
+  // 3797: `gruplar` verilince menüde "Grupla" seçimi çıkar (Yok + seçenekler); seçim tabloya göre saklanır, ilk açılışta
+  // `varsayilanGrup` (verilmezse Yok) geçer. Tabloya ayrıca `grup` verilmişse o geçerlidir, seçim çıkmaz.
+  gorunum?: { anahtar: string; gruplar?: readonly TabloGrupSecenegi<S>[]; varsayilanGrup?: string };
+}
+
+export interface TabloGrupSecenegi<S> {
+  anahtar: string;
+  baslik: string;
+  yol: (satir: S) => readonly string[];
+  // Grup başlığında yazılan; verilmezse yolun son parçası.
+  grupBasligi?: (yol: readonly string[]) => ReactNode;
 }
 
 // Satırlar dıştan içe başlıklarla gruplanır (kart 3284). Grup sırası satırların ilk göründüğü sıradır; ekran satırları
@@ -140,6 +150,9 @@ interface Ozellikler<S> {
   serit?: (satir: S) => RozetTonu | null | undefined;
   // Verilince satırlar katlanır başlıklarla gruplanır (kart 3284); katlama tablo açık kaldıkça sürer.
   grup?: TabloGrubu<S>;
+  // 3797: verilince satırın solunda açma oku çıkar; açılan satırın altında tam genişlikte bu içerik durur (kalem alt tablosu gibi).
+  // null dönen satırda ok yoktur. `satirSec` verilmemişse satıra basmak da açar ve kapatır.
+  ayrinti?: (satir: S) => ReactNode;
 }
 
 export interface TopluEylem<S> {
@@ -183,15 +196,23 @@ function csvHucresi<S>(s: Sutun<S>, satir: S): CsvDegeri {
   return typeof icerik === 'string' || typeof icerik === 'number' ? icerik : null;
 }
 
+// Satır düğmelerinin (seç, aç) erişilebilir adı: ilk sütunun metni (JSX hücrede CSV değeri), yoksa satır anahtarı.
+function satirAdi<S>(s: Sutun<S> | undefined, satir: S, anahtar: string): string {
+  const d = s ? csvHucresi(s, satir) : null;
+  return d === null || d === undefined || d === '' ? anahtar : String(d);
+}
+
 export function tabloCsvSatirlari<S>(sutunlar: readonly Sutun<S>[], satirlar: readonly S[]): { basliklar: string[]; satirlar: CsvDegeri[][] } {
   const alinan = sutunlar.filter((s) => s.csv !== false);
   return { basliklar: alinan.map((s) => s.baslik), satirlar: satirlar.map((satir) => alinan.map((s) => csvHucresi(s, satir))) };
 }
 
+const GRUPSUZ = 'yok';
 const YOGUNLUK_SECENEKLERI: readonly [Yogunluk | null, string][] = [[null, 'Cihaza göre'], ['rahat', 'Rahat'], ['yogun', 'Yoğun']];
 
-function GorunumMenusu<S>({ sutunlar, gizli, gizle }: {
+function GorunumMenusu<S>({ sutunlar, gizli, gizle, gruplar, grupSecili, grupSec }: {
   sutunlar: readonly Sutun<S>[]; gizli: ReadonlySet<string>; gizle: (anahtar: string, gizli: boolean) => void;
+  gruplar: readonly TabloGrupSecenegi<S>[]; grupSecili: string; grupSec: (secim: string) => void;
 }) {
   const [yogunluk, yogunlukYaz] = useYogunluk();
   const kok = useRef<HTMLDetailsElement>(null);
@@ -206,6 +227,7 @@ function GorunumMenusu<S>({ sutunlar, gizli, gizle }: {
     return () => { document.removeEventListener('pointerdown', dis); document.removeEventListener('keydown', tus); };
   }, [acik]);
   const secilir = sutunlar.filter((s, i) => i > 0 && s.baslik !== '');
+  const kimlik = useId();
   return (
     <details ref={kok} className="tc-tablo-gorunum" open={acik} onToggle={(o) => { acikYaz(o.currentTarget.open); }}>
       <summary className="tc-dugme tc-dugme-ikincil tc-dugme-normal"><Simge ad="eye" boyut="k" /> Görünüm</summary>
@@ -216,6 +238,14 @@ function GorunumMenusu<S>({ sutunlar, gizli, gizle }: {
             <label key={b}><input type="radio" name="tc-tablo-yogunluk" checked={yogunluk === d} onChange={() => { yogunlukYaz(d); }} /> {b}</label>
           ))}
         </fieldset>
+        {gruplar.length > 0 && (
+          <fieldset>
+            <legend>Grupla</legend>
+            {[{ anahtar: GRUPSUZ, baslik: 'Yok' }, ...gruplar].map((g) => (
+              <label key={g.anahtar}><input type="radio" name={`tc-tablo-grup-${String(kimlik)}`} checked={grupSecili === g.anahtar} onChange={() => { grupSec(g.anahtar); }} /> {g.baslik}</label>
+            ))}
+          </fieldset>
+        )}
         {secilir.length > 0 && (
           <fieldset>
             <legend>Sütunlar</legend>
@@ -229,9 +259,10 @@ function GorunumMenusu<S>({ sutunlar, gizli, gizle }: {
   );
 }
 
-function AracCubugu<S>({ arac, sutunlar, satirlar, gizli, gizle }: {
+function AracCubugu<S>({ arac, sutunlar, satirlar, gizli, gizle, grupSecili, grupSec, grupSecilir }: {
   arac: TabloAraci<S>; sutunlar: readonly Sutun<S>[]; satirlar: readonly S[];
   gizli: ReadonlySet<string>; gizle: (anahtar: string, gizli: boolean) => void;
+  grupSecili: string; grupSec: (secim: string) => void; grupSecilir: boolean;
 }) {
   const { arama, suzgec, csv, sag, gorunum } = arac;
   const aktarilan = csv?.satirlar ?? satirlar;
@@ -257,7 +288,7 @@ function AracCubugu<S>({ arac, sutunlar, satirlar, gizli, gizle }: {
       {(csv || sag || gorunum) && (
         <div className="tc-tablo-arac-sag">
           {sag}
-          {gorunum && <GorunumMenusu sutunlar={sutunlar} gizli={gizli} gizle={gizle} />}
+          {gorunum && <GorunumMenusu sutunlar={sutunlar} gizli={gizli} gizle={gizle} gruplar={grupSecilir ? (gorunum.gruplar ?? []) : []} grupSecili={grupSecili} grupSec={grupSec} />}
           {csv && (
             <Dugme
               simge="download" disabled={aktarilan.length === 0}
@@ -365,11 +396,19 @@ const bosDeger = (d: ReactNode) => d === null || d === undefined || d === '';
 
 export function Tablo<S>({
   etiket, sutunlar: tumSutunlar, satirlar, satirAnahtari, satirSec, bosMesaj, bosEylem, siralama = null, siralamaDegistir, sayfalama, mesgul = false, arac,
-  yukleniyor = false, satirEylemi, toplu, kip = 'uyarlanir', serit, grup,
+  yukleniyor = false, satirEylemi, toplu, kip = 'uyarlanir', serit, grup: verilenGrup, ayrinti,
 }: Ozellikler<S>) {
   const [katli, katliYaz] = useState<ReadonlySet<string>>(() => new Set());
   const [gizliSutunlar, sutunGizle] = useGizliSutunlar(arac?.gorunum?.anahtar ?? null);
   const [yogunluk] = useYogunluk();
+  const [grupTercihi, grupSec] = useGrupSecimi(arac?.gorunum?.gruplar?.length ? arac.gorunum.anahtar : null);
+  const grupSecenekleri = arac?.gorunum?.gruplar ?? [];
+  const grupSecili = grupSecenekleri.some((g) => g.anahtar === grupTercihi) || grupTercihi === GRUPSUZ
+    ? (grupTercihi ?? GRUPSUZ) : (arac?.gorunum?.varsayilanGrup ?? GRUPSUZ);
+  const secilenGrup = grupSecenekleri.find((g) => g.anahtar === grupSecili);
+  const grup: TabloGrubu<S> | undefined = verilenGrup ?? (secilenGrup
+    ? { yol: secilenGrup.yol, baslik: secilenGrup.grupBasligi ?? ((yol) => yol[yol.length - 1]) } : undefined);
+  const [acikSatirlar, acikSatirlarYaz] = useState<ReadonlySet<string>>(() => new Set());
   // İlk sütun satırın kimliğidir: kullanıcı gizleyemez, boş olsa da çizilir.
   const sutunlar = tumSutunlar.filter((s, i) => i === 0 || !(
     (arac?.gorunum && gizliSutunlar.has(s.anahtar)) || (s.bossaGizle && satirlar.length > 0 && satirlar.every((r) => bosDeger(s.hucre(r))))
@@ -377,7 +416,7 @@ export function Tablo<S>({
   const telefon = useTelefon();
   const kayitKarti = kip === 'kayit' && telefon;
   const kaydir = kip === 'kaydir' || (kip === 'kayit' && !telefon);
-  const kartBasligi = sutunlar.find((s) => s.baslik !== '');
+  const kartBasligi = sutunlar.find((s) => s.baslik !== '' && s.kartta !== false);
   const acikIsaretli = sutunlar.some((s) => s.kartta === true);
   const ilkUc = new Set(sutunlar.filter((s) => s.baslik !== '').slice(0, 3));
   const rozetMi = (s: Sutun<S>) => s.kartRozet === true || (s.anahtar === 'durum' && s.kartta !== false);
@@ -392,6 +431,7 @@ export function Tablo<S>({
   const topluAcik = toplu !== undefined && toplu.eylemler.length > 0 && etkiAcik('toplu-islem');
   const [secili, seciliYaz] = useState<ReadonlySet<string>>(() => new Set());
   const anahtar = (satir: S) => String(satirAnahtari(satir));
+  const kimlik = useId();
 
   useLayoutEffect(() => {
     const yeni = new Map(satirlar.map((satir) => [anahtar(satir), satirImzasi(satir)] as const));
@@ -459,7 +499,7 @@ export function Tablo<S>({
   };
   const alt = sayfalama && <Sayfalama {...sayfalama} degistir={sayfaDegistir} satirSayisi={satirlar.length} />;
 
-  const ust = arac && <AracCubugu arac={arac} sutunlar={tumSutunlar} satirlar={satirlar} gizli={gizliSutunlar} gizle={sutunGizle} />;
+  const ust = arac && <AracCubugu arac={arac} sutunlar={tumSutunlar} satirlar={satirlar} gizli={gizliSutunlar} gizle={sutunGizle} grupSecili={grupSecili} grupSec={grupSec} grupSecilir={verilenGrup === undefined} />;
 
   if (bos && yukleniyor) {
     return <>{ust}{etkiAcik('tablo-iskelet') ? <TabloIskeleti etiket={etiket} sutunlar={sutunlar} /> : <DurumKutusu durum="yukleniyor" />}</>;
@@ -476,7 +516,9 @@ export function Tablo<S>({
     return <span className="tc-tablo-sirasiz"><Simge ad="sort" boyut="k" /></span>;
   };
 
-  const sutunSayisi = sutunlar.length + (topluAcik ? 1 : 0) + (kart && satirEylemi ? 1 : 0);
+  const acilir = ayrinti !== undefined;
+  const sutunSayisi = sutunlar.length + (topluAcik ? 1 : 0) + (acilir ? 1 : 0) + (kart && satirEylemi ? 1 : 0);
+  const acKapa = (k: string) => { acikSatirlarYaz((o) => { const y = new Set(o); if (y.has(k)) y.delete(k); else y.add(k); return y; }); };
   const ogeler: Ogesi<S>[] = grup ? grupOgeleri(satirlar, grup.yol) : satirlar.map((satir) => ({ tur: 'satir', satir }));
   // Katlanmış grubun altındaki satırlar ve alt gruplar çizilmez.
   const gizli = (yol: readonly string[], kendisi: boolean) => {
@@ -507,16 +549,27 @@ export function Tablo<S>({
   };
   const satirCiz = (satir: S) => {
     if (grup && gizli(grup.yol(satir), false)) return null;
-    return (
+    const k = anahtar(satir);
+    const icerik = acilir ? ayrinti(satir) : null;
+    const acilabilir = acilir && !bosDeger(icerik);
+    const acik = acilabilir && acikSatirlar.has(k);
+    const ayrintiKimligi = `${kimlik}-ayrinti-${k}`;
+    const satirTiklama = satirSec ? () => satirSec(satir) : acilabilir ? (o: MouseEvent) => {
+      // Satırdaki bağlantı, düğme ya da girdiye basmak satırı açıp kapatmaz.
+      if ((o.target as Element).closest('a, button, input, select, textarea, label')) return;
+      acKapa(k);
+    } : undefined;
+    return [
             <tr
               key={satirAnahtari(satir)}
               data-satir={anahtar(satir)}
               data-secili={topluAcik && secili.has(anahtar(satir)) ? '' : undefined}
               data-serit={kayitKarti ? (serit?.(satir) ?? undefined) : undefined}
-              className={satirSec ? 'tc-tablo-secilir' : undefined}
+              data-acik={acik ? '' : undefined}
+              className={satirSec || acilabilir ? 'tc-tablo-secilir' : undefined}
               tabIndex={satirSec ? 0 : undefined}
               {...kaydirma()}
-              onClick={satirSec ? () => satirSec(satir) : undefined}
+              onClick={satirTiklama}
               onKeyDown={satirSec ? (o) => {
                 if (o.target !== o.currentTarget || (o.key !== 'Enter' && o.key !== ' ')) return;
                 o.preventDefault();
@@ -526,7 +579,7 @@ export function Tablo<S>({
               {topluAcik && (
                 <td className="tc-tablo-sec" data-baslik="Seç" onClick={(o) => { o.stopPropagation(); }}>
                   <input
-                    type="checkbox" aria-label={`Seç: ${String(sutunlar[0]?.hucre(satir) ?? anahtar(satir))}`}
+                    type="checkbox" aria-label={`Seç: ${satirAdi(sutunlar[0], satir, anahtar(satir))}`}
                     checked={secili.has(anahtar(satir))}
                     onChange={(o) => {
                       const k = anahtar(satir);
@@ -534,6 +587,17 @@ export function Tablo<S>({
                       seciliYaz((onceki) => { const y = new Set(onceki); if (acik) y.add(k); else y.delete(k); return y; });
                     }}
                   />
+                </td>
+              )}
+              {acilir && (
+                <td className="tc-tablo-ac" data-baslik="">
+                  {acilabilir && (
+                    <button type="button" className="tc-tablo-ac-dugme" aria-expanded={acik} aria-controls={acik ? ayrintiKimligi : undefined}
+                      aria-label={`${acik ? 'Kapat' : 'Aç'}: ${satirAdi(sutunlar[0], satir, k)}`} onClick={(o) => { o.stopPropagation(); acKapa(k); }}>
+                      <Simge ad="chev-right" boyut="k" />
+                      <span className="tc-tablo-ac-metin" aria-hidden="true">{acik ? 'Kapat' : 'Ayrıntı'}</span>
+                    </button>
+                  )}
                 </td>
               )}
               {sutunlar.map((s) => {
@@ -557,8 +621,13 @@ export function Tablo<S>({
                   </button>
                 </td>
               )}
-            </tr>
-    );
+            </tr>,
+            acik && (
+              <tr key={`${String(satirAnahtari(satir))}:ayrinti`} className="tc-tablo-ayrinti" id={ayrintiKimligi}>
+                <td colSpan={sutunSayisi}>{icerik}</td>
+              </tr>
+            ),
+    ];
   };
 
   return (
@@ -591,6 +660,7 @@ export function Tablo<S>({
                   />
                 </th>
               )}
+              {acilir && <th scope="col" className="tc-tablo-ac"><span className="tc-gizli-etiket">Ayrıntı</span></th>}
               {sutunlar.map((s) => {
                 const siralanir = siralanan.includes(s);
                 const y = yon(s);

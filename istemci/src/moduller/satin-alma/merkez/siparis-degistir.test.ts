@@ -16,7 +16,7 @@ const talep = (): PurchaseRequest => ({
   items: [{ id: 'k1', name: 'ORN kalem A', spec: '', qty: 10, unit: 'adet' }, { id: 'k2', name: 'ORN kalem B', spec: '', qty: 4, unit: 'adet' }],
   quotes: [{ id: 'qa', supplierId: '', supplierName: 'ORN Tedarikçi', date: '2026-10-05', currency: 'TRY', payDays: 30, prices: { k1: 10, k2: 5 } }],
   award: {
-    mode: 'single', quoteId: 'qa', reason: '', by: '', decidedAt: '2026-10-06', approvals: [], orderNo: 'SA-0009',
+    mode: 'single', quoteId: 'qa', reason: '', by: '', decidedAt: '2026-10-06', approvals: [], orderNo: 'SA-0009', orderDate: '2026-11-20', expectedDate: '2026-12-01',
     lines: [{ id: 1, itemId: 'k1', quoteId: 'qa', qty: 10, unit: 'adet', received: 3 }, { id: 2, itemId: 'k2', quoteId: 'qa', qty: 4, unit: 'adet', received: null }],
   },
   siparisGecmisi: { qa: { no: 1, kdvOrani: null, degisiklikler: [
@@ -60,6 +60,36 @@ describe('3574-2a tahmin ve gövde', () => {
     const g = degisiklikGovdesi(t);
     expect(g.satirlar.map((s) => [s.kalemId, s.miktar, s.birimFiyat, s.iptal])).toEqual([['k1', '10', '10', false], ['k2', '4', '5', true]]);
     expect(g.baslik).toEqual({ vadeGun: 30, kdvOrani: null, teslimYeri: '', tedarikciNotu: '', icNot: '' });
+  });
+});
+
+describe('3802 siparişi değiştirde satır termini zorunlu', () => {
+  it('kayıtlı termini olmayan satır siparişin terminiyle dolar; değişmezse gövdede boş gider, değişirse tarih gider', () => {
+    const t = degisiklikTaslagiKur(talep(), 'qa')!;
+    expect(t.satirlar.map((s) => s.exp)).toEqual(['2026-12-01', '2026-12-01']);
+    t.gerekce = 'ORN';
+    expect(degisiklikHatalari(t)).toEqual([]);
+    expect(degisiklikTahmini(t).ogeler).toEqual([]);
+    t.satirlar[1]!.exp = '2026-12-10';
+    expect(degisiklikGovdesi(t).satirlar.map((s) => s.beklenenTeslim)).toEqual([null, '2026-12-10']);
+  });
+
+  it('boş termin ve sipariş tarihinden önceki termin hata; alana işaret düşer', () => {
+    const t = degisiklikTaslagiKur(talep(), 'qa')!;
+    t.gerekce = 'ORN';
+    t.satirlar[0]!.exp = '';
+    t.satirlar[1]!.exp = '2026-11-19';
+    expect(degisiklikHatalari(t)).toEqual([
+      { alan: 'sd-t-0', ileti: 'ORN kalem A: termin girin.' },
+      { alan: 'sd-t-1', ileti: 'ORN kalem B: termin sipariş tarihinden (20.11.2026) önce olamaz.' },
+    ]);
+    t.hata = 'x';
+    const kutu = document.createElement('div');
+    kutu.innerHTML = siparisDegistirHTML(t, [], { onayli: false, dortGoz: true });
+    expect(kutu.querySelector('#sd-t-0')!.getAttribute('aria-invalid')).toBe('true');
+    expect(kutu.querySelector('#sd-t-0')!.hasAttribute('required')).toBe(true);
+    t.satirlar[0]!.iptal = true;
+    expect(degisiklikHatalari(t).map((h) => h.alan)).toEqual(['sd-t-1']);
   });
 });
 

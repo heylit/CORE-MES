@@ -254,3 +254,62 @@ describe('Tablo standardı (3748)', () => {
     expect(screen.queryByText('Görünüm')).toBeNull();
   });
 });
+
+describe('Açılır satır ve gruplama seçimi (3797)', () => {
+  afterEach(() => { cleanup(); tabloTercihleriniSifirla(); localStorage.clear(); });
+  interface T { no: string; durum: string; kalemler: string[] }
+  const SUT: readonly Sutun<T>[] = [{ anahtar: 'no', baslik: 'No', hucre: (t) => t.no }, { anahtar: 'durum', baslik: 'Durum', hucre: (t) => t.durum }];
+  const L: T[] = [
+    { no: 'ORN-1', durum: 'Onayda', kalemler: ['ORN-MIL-20'] },
+    { no: 'ORN-2', durum: 'Satın almada', kalemler: [] },
+    { no: 'ORN-3', durum: 'Onayda', kalemler: ['ORN-PUL-8'] },
+  ];
+  const ayrinti = (t: T) => (t.kalemler.length ? <ul>{t.kalemler.map((k) => <li key={k}>{k}</li>)}</ul> : null);
+  const GRUPLAR = [{ anahtar: 'durum', baslik: 'Durum', yol: (t: T) => [t.durum] }];
+  const ciz = (arac?: TabloAraci<T>) => render(<Tablo etiket="Talepler" sutunlar={SUT} satirlar={L} satirAnahtari={(t) => t.no} ayrinti={ayrinti} arac={arac} />);
+
+  it('ilk sütun JSX ise aç düğmesinin adı CSV değerinden, CSV de yoksa satır anahtarından kurulur (Arayüz S2)', () => {
+    const jsx: Sutun<T>[] = [{ anahtar: 'no', baslik: 'No', hucre: (t) => <b>{t.no}</b>, csv: (t) => `${t.no} csv` }, ...SUT.slice(1)];
+    const { rerender } = render(<Tablo etiket="Talepler" sutunlar={jsx} satirlar={L} satirAnahtari={(t) => t.no} ayrinti={ayrinti} />);
+    expect(screen.getByRole('button', { name: 'Aç: ORN-1 csv' })).toBeTruthy();
+    const csvsiz: Sutun<T>[] = [{ anahtar: 'no', baslik: 'No', hucre: (t) => <b>{t.no}</b> }, ...SUT.slice(1)];
+    rerender(<Tablo etiket="Talepler" sutunlar={csvsiz} satirlar={L} satirAnahtari={(t) => `k-${t.no}`} ayrinti={ayrinti} />);
+    expect(screen.getByRole('button', { name: 'Aç: k-ORN-1' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /object/ })).toBeNull();
+  });
+
+  it('ok düğmesi satırın altındaki ayrıntıyı açar ve kapatır; ayrıntısı olmayan satırda ok yok', () => {
+    ciz();
+    expect(screen.queryByText('ORN-MIL-20')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Aç: ORN-2' })).toBeNull();
+    const ok = screen.getByRole('button', { name: 'Aç: ORN-1' });
+    fireEvent.click(ok);
+    expect(screen.getByText('ORN-MIL-20')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Kapat: ORN-1' }).getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Kapat: ORN-1' }));
+    expect(screen.queryByText('ORN-MIL-20')).toBeNull();
+  });
+
+  it('satıra basmak açar; satırdaki düğmeye basmak açmaz', () => {
+    const { container } = ciz();
+    fireEvent.click(screen.getByText('ORN-3'));
+    expect(screen.getByText('ORN-PUL-8')).toBeTruthy();
+    expect(container.querySelector('tr[data-satir="ORN-3"]')?.hasAttribute('data-acik')).toBe(true);
+  });
+
+  it('Görünüm menüsünde Grupla: varsayılan grup çizilir, Yok seçilince kalkar ve seçim saklanır', () => {
+    const { container } = ciz({ gorunum: { anahtar: 'deneme-talep', gruplar: GRUPLAR, varsayilanGrup: 'durum' } });
+    const gruplar = () => [...container.querySelectorAll('tr.tc-tablo-grup')].map((g) => g.textContent);
+    expect(gruplar()).toEqual(['Onayda2', 'Satın almada1']);
+    fireEvent.click(screen.getByText('Görünüm'));
+    fireEvent.click(screen.getByRole('radio', { name: 'Yok' }));
+    expect(gruplar()).toEqual([]);
+    expect(localStorage.getItem('tmi:tablo:grup:deneme-talep')).toBe('yok');
+  });
+
+  it('gruplar verilmeyen tabloda Grupla seçimi yok', () => {
+    ciz({ gorunum: { anahtar: 'deneme-talep' } });
+    fireEvent.click(screen.getByText('Görünüm'));
+    expect(screen.queryByText('Grupla')).toBeNull();
+  });
+});

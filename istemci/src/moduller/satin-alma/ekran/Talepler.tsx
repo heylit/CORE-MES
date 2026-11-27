@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Dugme, LogoBelgeAramasi, KilitliSutunNotu, Rozet, SayfaBasligi, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, tabloCsvSatirlari, useTelefon, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { Dugme, LogoBelgeAramasi, KilitliSutunNotu, Rozet, SayfaBasligi, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, tabloCsvSatirlari, useTelefon, type RozetTonu, type Sutun, type TabloGrupSecenegi } from '../../../ortak/arayuz/index.ts';
 import { csvIndir } from '../../../ortak/veri/csv.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { durumEtiketi } from '../merkez/calc.ts';
@@ -10,6 +10,8 @@ import { S, V, settings } from '../merkez/store.ts';
 import type { PurchaseRequest, RequestStatus } from '../merkez/tipler.ts';
 import { go } from '../merkez/ui.ts';
 import { dayDiff, fiyatKilitli, fmtDate, money, norm, todayStr } from '../merkez/util.ts';
+import { isSatirlari } from '../merkez/is-tablosu.ts';
+import { TalepKalemleri } from './SatirAyrintisi.tsx';
 import { TalepTarihi } from './TalepTarihi.tsx';
 import { gelisGunu } from '../merkez/kimlik.ts';
 import { STATUS_FILTERS, filteredRequests, gecikmisMi, kimde, render, reqValue } from '../merkez/views.ts';
@@ -39,6 +41,19 @@ function ihtiyac(r: PurchaseRequest, bugun: string) {
     </span>
   );
 }
+
+// 3798: Görünüm menüsünden gruplama; varsayılan Yok (bugünkü düz liste).
+function terminGrubu(r: PurchaseRequest, bugun: string): string {
+  if (!r.needDate) return 'Termin yok';
+  const d = dayDiff(bugun, r.needDate);
+  return d < 0 ? 'Gecikmiş' : d <= 7 ? 'Bu hafta' : 'Sonra';
+}
+const gruplar = (bugun: string): TabloGrupSecenegi<PurchaseRequest>[] => [
+  { anahtar: 'durum', baslik: 'Durum', yol: (r) => [durumEtiketi(r)] },
+  { anahtar: 'kimde', baslik: 'Kimde bekliyor', yol: (r) => [kimde(r) ?? 'Bekleyen yok'] },
+  { anahtar: 'emir', baslik: 'Üretim emri', yol: (r) => [r.uretimEmriNo ? `Emir ${r.uretimEmriNo}` : 'Emirsiz'] },
+  { anahtar: 'termin', baslik: 'İstenen termin', yol: (r) => [terminGrubu(r, bugun)] },
+];
 
 function SuzMenusu({ birimler, satirlar, sutunlar }: { birimler: string[]; satirlar: PurchaseRequest[]; sutunlar: Sutun<PurchaseRequest>[] }) {
   const kutu = useRef<HTMLDetailsElement>(null);
@@ -93,6 +108,7 @@ export function Talepler() {
   const birimler = [...new Set([...(settings().departments || []).map((d) => d.name), ...hepsi.map((r) => r.department).filter(Boolean)])] as string[];
   const kilit = fiyatKilitli();
   const telefon = useTelefon();
+  const isler = new Map(isSatirlari().map((s) => [s.r.id, s]));
   const tumSutunlar: Sutun<PurchaseRequest>[] = [
     { anahtar: 'no', baslik: 'No', hucre: (r) => r.no, mono: true, kirilmaz: true, sirala: true, sabit: 'sol' },
     {
@@ -148,12 +164,13 @@ export function Talepler() {
           <Tablo
             kip="kayit" etiket="Talepler" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(r) => r.id}
             satirSec={(r) => { go('request', r.id, 'items'); }}
+            ayrinti={(r) => <TalepKalemleri r={r} is={isler.get(r.id)} />}
             bosMesaj={hepsi.length ? 'Bu süzgece uyan talep yok.' : 'Henüz talep yok. Talepler Taleplerim sayfasından açılır.'}
             siralama={V.sort ? { alan: V.sort, yon: V.dir > 0 ? 'artan' : 'azalan' } : null}
             siralamaDegistir={(s) => degistir(() => { V.sort = s?.alan ?? ''; V.dir = s?.yon === 'azalan' ? -1 : 1; })}
             arac={{
               arama: { deger: V.q, degistir: (q) => degistir(() => { V.q = q; }), etiket: 'Taleplerde ara', yerTutucu: 'No, talep, kalem, tedarikçi ya da emir no' },
-              gorunum: { anahtar: 'satin-alma-talepler' },
+              gorunum: { anahtar: 'satin-alma-talepler', gruplar: gruplar(bugun), varsayilanGrup: 'yok' },
               sag: <SuzMenusu birimler={birimler} satirlar={liste} sutunlar={sutunlar} />,
             }}
           />

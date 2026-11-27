@@ -6,6 +6,7 @@ export type Yogunluk = 'rahat' | 'yogun';
 
 const YOGUNLUK_ANAHTARI = 'tmi:tablo:yogunluk';
 const sutunAnahtari = (tablo: string): string => `tmi:tablo:sutun:${tablo}`;
+const grupAnahtari = (tablo: string): string => `tmi:tablo:grup:${tablo}`;
 
 const bellek = new Map<string, string | null>();
 const dinleyiciler = new Set<() => void>();
@@ -57,6 +58,13 @@ export function useGizliSutunlar(tablo: string | null): [ReadonlySet<string>, (a
     yaz(sutunAnahtari(tablo), yeni.size ? [...yeni].sort().join(',') : null);
   }, [tablo]);
   return [gizli, degistir];
+}
+
+// 3797: tablonun seçili gruplaması. Saklanan değer seçeneğin anahtarı ya da 'yok'; hiç seçilmemişse null (ekranın varsayılanı geçer).
+export function useGrupSecimi(tablo: string | null): [string | null, (secim: string) => void] {
+  const deger = useSyncExternalStore(abone, () => (tablo === null ? null : oku(grupAnahtari(tablo))));
+  const degistir = useCallback((secim: string) => { if (tablo !== null) yaz(grupAnahtari(tablo), secim); }, [tablo]);
+  return [deger, degistir];
 }
 
 // Testlerin birbirini etkilememesi için.

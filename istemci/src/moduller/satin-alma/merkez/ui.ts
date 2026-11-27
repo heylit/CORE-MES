@@ -1722,7 +1722,7 @@ function spTaslak(r: PurchaseRequest): ReturnType<typeof taslak> | null {
   const kok = spKoku();
   if (!kok) return null;
   const t = taslak(r);
-  taslagiOku(t, kok);
+  taslagiOku(t, kok, r);
   return t;
 }
 ACTIONS["sp-pay-ekle"] = (el, r) => {
@@ -1772,7 +1772,8 @@ document.addEventListener("change", (e) => {
   if (el.dataset.spSec) { firmaSec(r, t, el.dataset.spSec, (el as HTMLSelectElement).value); setTimeout(render, 0); return; }
   // Tutar ve onay rozeti miktar, fiyat ve para biriminden çıkar; çizim odak yeni alana geçtikten sonra (odak kimlikle korunur).
   const alan = el.dataset.spAlan;
-  if (alan === "qty" || alan === "price" || alan === "currency") setTimeout(render, 0);
+  // 3798: alttaki sipariş önizlemesi termin ve sipariş tarihini de gösterir.
+  if (alan === "qty" || alan === "price" || alan === "currency" || alan === "exp" || alan === "orderDate") setTimeout(render, 0);
 });
 // 3574-2a: "Siparişi değiştir" penceresi siparişin bütün satırlarını ve başlığını birlikte değiştirir; kalem tablosundaki "Değiştir"
 // pencereyi o kalemin siparişiyle ve satırına odaklı açar (3442-5). Taslak pencere açıkken burada tutulur.

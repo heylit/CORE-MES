@@ -4,7 +4,8 @@ import { DEFAULT_SETTINGS } from './constants.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import { S, bump } from './store.ts';
 import { evaluate } from './calc.ts';
-import { firmaSec, payEkle, paySil, siparisGovdesi, siparisOnerisiHTML, siparisOzeti, siparisSatirlariHTML, taslagiOku, taslak, taslakKur } from './siparis-satirlari.ts';
+import { addDays, todayStr } from './util.ts';
+import { beklenenTeslim, firmaSec, payEkle, paySil, siparisGovdesi, siparisOnerisiHTML, siparisOzeti, siparisSatirlariHTML, taslagiOku, taslak, taslakKur } from './siparis-satirlari.ts';
 
 // 3574-1: sipariş satırları (Kurgu A). Onaylı karar A: K1 10 x 10, K2 4 x 5 = 120 TL.
 const teklif = (id: string, supplierId: string, prices: Record<string, number>, ek: Partial<Quote> = {}): Quote => ({
@@ -114,5 +115,59 @@ describe('sipariş satırları taslağı (3574-1)', () => {
     expect(document.querySelectorAll('[data-sa-siparis-onerisi-satirlari] td[data-l="Firma"]').length).toBe(2);
     expect(siparisOnerisiHTML(r, true, true)).not.toContain('data-act="sp-oneri-onayla"');
     expect(siparisOnerisiHTML(r, false, false)).not.toContain('data-act="sp-oneri-reddet"');
+  });
+});
+
+describe('sipariş aşamasında termin tek yerde (3798)', () => {
+  it('satır termini tekliften dolu gelir; firmanın beklenen teslimi en geç satır terminidir ve sunucuya o gider', () => {
+    const r = talep();
+    const t = taslakKur(r);
+    const bugun = todayStr();
+    expect(t.pays.map((p) => p.exp)).toEqual([addDays(bugun, 7), addDays(bugun, 7)]);
+    t.pays[1]!.exp = addDays(bugun, 12);
+    expect(beklenenTeslim(t, 'qa')).toBe(addDays(bugun, 12));
+    const g = siparisGovdesi(r, t);
+    expect(g.siparisler[0]!.beklenenTeslim).toBe(addDays(bugun, 12));
+    expect(g.paylar.map((p) => p.beklenenTeslim)).toEqual([addDays(bugun, 7), addDays(bugun, 12)]);
+  });
+
+  it('termin zorunludur ve sipariş tarihinden önce olamaz', () => {
+    const r = talep();
+    const t = taslakKur(r);
+    t.pays[0]!.exp = '';
+    t.pays[1]!.exp = '2000-01-01';
+    const oz = siparisOzeti(r, t);
+    expect(oz.hatalar).toEqual(['ORN-MIL: termin girin.', 'ORN-PUL: termin sipariş tarihinden önce olamaz.']);
+    expect(oz.hataAlanlari).toEqual([`sp-${t.pays[0]!.id}-exp`, `sp-${t.pays[1]!.id}-exp`]);
+  });
+
+  it('firma değişince tekliften gelen termin yeni teklifle gelir; elle girilen termin korunur', () => {
+    const r = { ...talep(), quotes: [teklif('qa', 'fa', { k1: 10, k2: 5 }), teklif('qb', 'fb', { k1: 12, k2: 5 }, { leadDays: 20 })] } as PurchaseRequest;
+    const t = taslakKur(r);
+    const bugun = todayStr();
+    t.pays[1]!.exp = addDays(bugun, 3);
+    firmaSec(r, t, t.pays[0]!.id, 'q:qb');
+    firmaSec(r, t, t.pays[1]!.id, 'q:qb');
+    expect(t.pays.map((p) => p.exp)).toEqual([addDays(bugun, 20), addDays(bugun, 3)]);
+    payEkle(r, t, 'k1');
+    expect(t.pays.at(-1)!.exp).toBe(addDays(bugun, 7));
+  });
+
+  it('alt bölüm salt okunur önizlemedir: beklenen teslim girilmez; sipariş tarihi değişince önerilen termin kayar', () => {
+    const r = talep();
+    const t = taslakKur(r);
+    const bugun = todayStr();
+    t.pays[1]!.exp = addDays(bugun, 30);
+    document.body.innerHTML = siparisSatirlariHTML(r, t);
+    const kok = document.querySelector<HTMLElement>('[data-sa-siparis-satirlari]')!;
+    expect(kok.querySelector('[data-sp-alan="expectedDate"]')).toBeNull();
+    const onizleme = kok.querySelector('[data-sp-firma="qa"] .sp-onizleme')!;
+    expect(onizleme.querySelectorAll('input, select').length).toBe(0);
+    expect([...onizleme.querySelectorAll('td[data-l="Termin"]')].map((td) => td.textContent)).toHaveLength(2);
+    expect(kok.querySelector('[data-sp-beklenen]')!.textContent).toContain(addDays(bugun, 30).split('-').reverse().join('.'));
+    kok.querySelector<HTMLInputElement>('[data-sp-baslik="qa"][data-sp-alan="orderDate"]')!.value = addDays(bugun, 2);
+    taslagiOku(t, kok, r);
+    expect(t.heads[0]!.orderDate).toBe(addDays(bugun, 2));
+    expect(t.pays.map((p) => p.exp)).toEqual([addDays(bugun, 9), addDays(bugun, 30)]);
   });
 });

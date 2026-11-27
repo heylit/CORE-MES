@@ -1,7 +1,10 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Simge, Tablo, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Kart, Rozet, Simge, Tablo, type Sutun } from '../../../ortak/arayuz/index.ts';
+import type { TabloGrupSecenegi } from '../../../ortak/arayuz/Tablo.tsx';
+import type { Siralama } from '../../../ortak/veri/liste-durumu.ts';
+import { useGrupSecimi } from '../../../ortak/veri/tablo-tercihi.ts';
 import { ayrintiyiBirlestir, useKartSatirlari } from '../merkez/kart-satirlari.ts';
 import { fmtDate, tsDate } from '../merkez/util.ts';
 import { TalepCizimleri } from './Cizimler.tsx';
@@ -32,16 +35,6 @@ export function suzgeceUyar(t: Talebim, s: DurumSuzgeci): boolean {
     case 'siparis': return t.durum === 'siparis_verildi';
     case 'hepsi': return true;
   }
-}
-
-function Adimlar({ t }: { t: Talebim }) {
-  const sira = ADIM_SIRASI[t.durum];
-  if (sira === null) return null;
-  return (
-    <ol className="sa-talep-adimlar" aria-label={`İlerleme: ${DURUM[t.durum].metin}`}>
-      {ADIMLAR.map((a, i) => <li key={a} data-durum={i < sira ? 'bitti' : i === sira ? 'simdi' : undefined}>{a}</li>)}
-    </ol>
-  );
 }
 
 // 3121: kartın kalite, durum, işlem ve ölçüsü ayrı sütunlarda; dar ekranda sütunlar gizlenir, değerler kalem adının altında etiketli satırdır.
@@ -122,57 +115,156 @@ function KalemTablosu({ t }: { t: Talebim }) {
   return <Tablo etiket={`${t.no} kalemleri`} sutunlar={sutunlar} satirlar={t.kalemler} satirAnahtari={(x) => x.id ?? `${x.ad}:${x.miktar ?? ''}`} />;
 }
 
-function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Talebim, kip: Duzenleme) => void) | undefined }) {
-  const [acik, acikYaz] = useState(false);
+// 3797: Taleplerim sayfası tek tablodur: başlıklı sütunlar, durum süzgeci, Görünüm'de gruplama; satır açılınca kalemler,
+// çizim ve düzenleme satırın altında. Telefonda kayıt kartı, dokununca açılır.
+const TABLO = 'taleplerim';
+const bugunNo = () => { const d = new Date(); return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000); };
+const kalanGun = (t: Talebim) => (t.ihtiyacTarihi && t.durum !== 'teslim_alindi' && t.durum !== 'iptal' ? gunNo(t.ihtiyacTarihi) - bugunNo() : null);
+const DURUM_SIRASI = (t: Talebim) => ADIM_SIRASI[t.durum] ?? 9;
+const terminGrubu = (t: Talebim) => {
+  const k = kalanGun(t);
+  return k === null ? 'Termin yok' : k < 0 ? 'Gecikmiş' : k <= 7 ? 'Bu hafta' : 'Sonra';
+};
+const TERMIN_GRUPLARI = ['Gecikmiş', 'Bu hafta', 'Sonra', 'Termin yok'];
+const GRUPLAR: readonly TabloGrupSecenegi<Talebim>[] = [
+  { anahtar: 'durum', baslik: 'Durum', yol: (t) => [DURUM[t.durum].metin] },
+  { anahtar: 'emir', baslik: 'Üretim emri', yol: (t) => [t.uretimEmriNo ? `Emir ${t.uretimEmriNo}` : 'Emirsiz'] },
+  { anahtar: 'termin', baslik: 'İstenen termin', yol: (t) => [terminGrubu(t)] },
+];
+const GRUP_SIRASI: Record<string, (t: Talebim) => number | string> = {
+  durum: DURUM_SIRASI,
+  emir: (t) => (t.uretimEmriNo ? `0${t.uretimEmriNo}` : '1'),
+  termin: (t) => TERMIN_GRUPLARI.indexOf(terminGrubu(t)),
+};
+const SIRALAMA: Record<string, (t: Talebim) => number | string> = {
+  no: (t) => t.no, baslik: (t) => t.baslik.toLocaleLowerCase('tr'), durum: DURUM_SIRASI,
+  termin: (t) => t.ihtiyacTarihi ?? '9999', kalem: (t) => t.kalemler.length, emir: (t) => t.uretimEmriNo ?? '', tarih: (t) => t.olusturma,
+};
+const karsilastir = (a: number | string, b: number | string) => (a < b ? -1 : a > b ? 1 : 0);
+
+function DurumHucresi({ t }: { t: Talebim }) {
   const d = DURUM[t.durum];
   const bekleyen = t.kalemler.filter((k) => k.kartBekliyor).length;
-  const k = KAYNAK[t.kaynak];
   const sartli = bekleyenSartli(t);
-  const ust = (
-    <>
-      <div className="sa-talep-satir-ust">
-        <span className="sa-talep-no">{t.no}</span>
+  const sira = ADIM_SIRASI[t.durum];
+  return (
+    <span className="sa-talep-durum">
+      <span className="sa-talep-rozetler">
         <Rozet ton={d.ton}>{d.metin}</Rozet>
-        {t.kaynak !== 'elle' && <Rozet ton="uyari" gorunum="cizgi">{k.metin}</Rozet>}
-        {bekleyen > 0 && <Rozet ton="uyari">{bekleyen} kalem kart bekliyor</Rozet>}
-        {sartli > 0 && <span className="sa-talep-rozet-sar"><Rozet ton="uyari">{sartli > 1 ? `${String(sartli)} alternatif` : 'Alternatif'} onayınızda</Rozet></span>}
-        {tam && <span className="sa-talep-ok"><Simge ad={acik ? 'up' : 'down'} boyut="k" /></span>}
-      </div>
-      <div><b>{t.baslik}</b></div>
-      <div className="sa-talep-not">
-        {tam ? `${t.kalemler.length} kalem` : t.kalemler.map((x) => `${x.ad}${x.miktar === null ? '' : ` ${x.miktar} ${x.birim}`}${x.karsilik ? ` (${karsilikYaz(x.karsilik)})` : ''}`).join(', ')}
-        {` · talep ${talepGunu(t.olusturma)}`}
-        {t.ihtiyacTarihi && <> · istenen {gunYaz(t.ihtiyacTarihi)}</>}
-        {t.uretimEmriNo && <> · üretim emri {t.uretimEmriNo}</>}
-      </div>
+        {t.kaynak !== 'elle' && <Rozet ton="uyari" gorunum="cizgi">{KAYNAK[t.kaynak].metin}</Rozet>}
+      </span>
+      <span className="sa-talep-durum-alt">
+        {sira !== null && (
+          <span className="sa-talep-ilerleme" role="img" aria-label={`İlerleme: ${String(Math.min(sira + 1, ADIMLAR.length))} / ${String(ADIMLAR.length)} adım, ${d.metin}`}>
+            {ADIMLAR.map((a, i) => <span key={a} title={a} data-durum={i < sira ? 'bitti' : i === sira ? 'simdi' : undefined} />)}
+          </span>
+        )}
+        {bekleyen > 0 && <span className="sa-talep-uyari">{bekleyen} kart bekliyor</span>}
+        {sartli > 0 && <span className="sa-talep-uyari">{sartli > 1 ? `${String(sartli)} alternatif` : 'Alternatif'} onayınızda</span>}
+      </span>
+    </span>
+  );
+}
+
+function TerminHucresi({ t }: { t: Talebim }) {
+  if (!t.ihtiyacTarihi) return null;
+  const k = kalanGun(t);
+  return (
+    <span className="sa-talep-kalem-hucre">
+      <span>{gunYaz(t.ihtiyacTarihi)}</span>
+      {k !== null && <span className={k < 0 ? 'sa-talep-gecikti' : 'sa-talep-not'}>{k < 0 ? `${String(-k)} gün gecikti` : k === 0 ? 'bugün' : `${String(k)} gün`}</span>}
+    </span>
+  );
+}
+
+function TalepAyrintisi({ t, duzenle }: { t: Talebim; duzenle: ((t: Talebim, kip: Duzenleme) => void) | undefined }) {
+  return (
+    <div className="sa-talep-acik">
       {t.guncellemeGrubu && (
-        <div className="sa-talep-not">
+        <p className="sa-talep-not">
           <Simge ad="layers" boyut="k" /> {t.guncellemeGrubu.find((x) => x.kok)?.id === t.id ? 'Güncellemeleri' : 'Güncelleme grubu'}:{' '}
           {t.guncellemeGrubu.filter((x) => x.id !== t.id).map((x) => `${x.no}${x.kok ? ' (ilk talep)' : ''} ${DURUM[x.durum].metin.toLocaleLowerCase('tr-TR')}`).join(', ')}
-        </div>
+        </p>
       )}
-    </>
-  );
-  if (!tam) return <li className="sa-talep-satir">{ust}</li>;
-  return (
-    <li className="sa-talep-satir">
-      <button type="button" className="sa-talep-ac" aria-expanded={acik} onClick={() => acikYaz((a) => !a)}>
-        {ust}
-        <Adimlar t={t} />
-      </button>
-      {acik && (
-        <div className="sa-talep-kalem-tablo"><KalemTablosu t={t} /></div>
-      )}
-      {acik && <div className="sa-talep-cizim-blok"><TalepCizimleri talepId={t.id} yazabilir={t.duzenlenebilir === true} /></div>}
-      {acik && t.duzenlenebilir && duzenle && (
+      <div className="sa-talep-kalem-tablo"><KalemTablosu t={t} /></div>
+      <div className="sa-talep-cizim-blok"><TalepCizimleri talepId={t.id} yazabilir={t.duzenlenebilir === true} /></div>
+      {t.duzenlenebilir && duzenle && (
         <div className="sa-talep-duzenle"><Dugme simge="edit" onClick={() => duzenle(t, 'duzenle')}>Düzenle</Dugme></div>
       )}
-      {acik && t.guncellenebilir && duzenle && (
+      {t.guncellenebilir && duzenle && (
         <div className="sa-talep-duzenle">
           <span className="sa-talep-not">Teklif toplanıyor: talep değişmez, değişiklik yeni bir güncelleme talebiyle gider; satın alma ikisini birlikte görür.</span>
           <Dugme simge="layers" onClick={() => duzenle(t, 'guncelle')}>Güncelleme talebi aç</Dugme>
         </div>
       )}
+    </div>
+  );
+}
+
+function TalepTablosu({ talepler, yukleniyor, arac, duzenle }: {
+  talepler: readonly Talebim[]; yukleniyor: boolean; arac: Parameters<typeof Tablo<Talebim>>[0]['arac'];
+  duzenle: ((t: Talebim, kip: Duzenleme) => void) | undefined;
+}) {
+  const [siralama, siralamaYaz] = useState<Siralama | null>(null);
+  const [grupTercihi] = useGrupSecimi(TABLO);
+  const grup = grupTercihi ?? 'durum';
+  const satirlar = useMemo(() => {
+    const anahtar = siralama ? SIRALAMA[siralama.alan] : undefined;
+    const grupAnahtari = GRUP_SIRASI[grup];
+    return [...talepler].sort((a, b) => (grupAnahtari ? karsilastir(grupAnahtari(a), grupAnahtari(b)) : 0)
+      || (anahtar && siralama ? karsilastir(anahtar(a), anahtar(b)) * (siralama.yon === 'artan' ? 1 : -1) : karsilastir(b.no, a.no)));
+  }, [talepler, siralama, grup]);
+  const sutunlar: Sutun<Talebim>[] = [
+    { anahtar: 'no', baslik: 'No', mono: true, kirilmaz: true, sabit: 'sol', sirala: true, kartta: false, hucre: (t) => t.no },
+    {
+      anahtar: 'baslik', baslik: 'Talep', kes: true, sirala: true, csv: (t) => t.baslik,
+      hucre: (t) => (
+        <span className="sa-talep-baslik">
+          <b>{t.baslik}</b>
+          <small>{[t.no, t.kalemler.map((x) => x.ad).join(', ')].join(' · ')}</small>
+        </span>
+      ),
+    },
+    { anahtar: 'durum', baslik: 'Durum', sirala: true, kartRozet: true, csv: (t) => DURUM[t.durum].metin, hucre: (t) => <DurumHucresi t={t} /> },
+    { anahtar: 'termin', baslik: 'İstenen termin', kirilmaz: true, sirala: true, kartta: true, csv: (t) => t.ihtiyacTarihi, hucre: (t) => <TerminHucresi t={t} /> },
+    { anahtar: 'kalem', baslik: 'Kalem', hizala: 'sag', sirala: true, kartta: true, hucre: (t) => t.kalemler.length },
+    { anahtar: 'emir', baslik: 'Üretim emri', mono: true, kirilmaz: true, sirala: true, bossaGizle: true, kartta: true, hucre: (t) => t.uretimEmriNo },
+    { anahtar: 'tarih', baslik: 'Talep tarihi', kirilmaz: true, sirala: true, csv: (t) => t.olusturma.slice(0, 10), hucre: (t) => talepGunu(t.olusturma) },
+  ];
+  return (
+    <div className="sa-taleplerim">
+    <Tablo
+      etiket="Taleplerim" kip="kayit" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(t) => t.id} yukleniyor={yukleniyor}
+      siralama={siralama} siralamaDegistir={siralamaYaz} bosMesaj="Bu süzgeçle talep yok."
+      serit={(t) => (t.durum === 'iptal' ? 'pasif' : (kalanGun(t) ?? 0) < 0 ? 'hata' : t.kalemler.some((k) => k.kartBekliyor) || bekleyenSartli(t) > 0 ? 'uyari' : null)}
+      ayrinti={(t) => <TalepAyrintisi t={t} duzenle={duzenle} />}
+      arac={arac && { ...arac, gorunum: { anahtar: TABLO, gruplar: GRUPLAR, varsayilanGrup: 'durum' } }}
+    />
+    </div>
+  );
+}
+
+// Ana sayfadaki kısa liste (son on talep); Taleplerim sayfası tablodur (TalepTablosu).
+function Satir({ t }: { t: Talebim }) {
+  const d = DURUM[t.durum];
+  const bekleyen = t.kalemler.filter((k) => k.kartBekliyor).length;
+  const sartli = bekleyenSartli(t);
+  return (
+    <li className="sa-talep-satir">
+      <div className="sa-talep-satir-ust">
+        <span className="sa-talep-no">{t.no}</span>
+        <Rozet ton={d.ton}>{d.metin}</Rozet>
+        {t.kaynak !== 'elle' && <Rozet ton="uyari" gorunum="cizgi">{KAYNAK[t.kaynak].metin}</Rozet>}
+        {bekleyen > 0 && <Rozet ton="uyari">{bekleyen} kalem kart bekliyor</Rozet>}
+        {sartli > 0 && <span className="sa-talep-rozet-sar"><Rozet ton="uyari">{sartli > 1 ? `${String(sartli)} alternatif` : 'Alternatif'} onayınızda</Rozet></span>}
+      </div>
+      <div><b>{t.baslik}</b></div>
+      <div className="sa-talep-not">
+        {t.kalemler.map((x) => `${x.ad}${x.miktar === null ? '' : ` ${x.miktar} ${x.birim}`}${x.karsilik ? ` (${karsilikYaz(x.karsilik)})` : ''}`).join(', ')}
+        {` · talep ${talepGunu(t.olusturma)}`}
+        {t.ihtiyacTarihi && <> · istenen {gunYaz(t.ihtiyacTarihi)}</>}
+        {t.uretimEmriNo && <> · üretim emri {t.uretimEmriNo}</>}
+      </div>
     </li>
   );
 }
@@ -197,24 +289,32 @@ export function Taleplerim({ tam = false, suzgec, suzgecYaz, duzenle }: {
   const metin = ara.trim().toLocaleLowerCase('tr');
   const gorunen = (liste.data?.talepler ?? []).filter((t) => !tam || (suzgeceUyar(t, durum)
     && (metin === '' || [t.no, t.baslik, t.uretimEmriNo ?? '', ...t.kalemler.map((x) => x.ad)].join(' ').toLocaleLowerCase('tr').includes(metin))));
+  const say = (s: DurumSuzgeci) => (liste.data?.talepler ?? []).filter((t) => suzgeceUyar(t, s)).length;
+  if (tam) {
+    if (liste.isError) return <DurumKutusu durum="hata" mesaj="Talepler okunamadı." yenile={() => void liste.refetch()} />;
+    if (liste.data && liste.data.talepler.length === 0) return <DurumKutusu durum="bos" mesaj="Henüz talebiniz yok." />;
+    return (
+      <TalepTablosu
+        talepler={gorunen} yukleniyor={liste.isPending} duzenle={duzenle}
+        arac={{
+          arama: { deger: ara, degistir: araYaz, yerTutucu: 'Talep no, kalem ya da emir no' },
+          suzgec: {
+            etiket: 'Durum', secili: durum, sec: (d) => durumYaz(d as DurumSuzgeci),
+            secenekler: SUZGECLER.map(([a, b]) => ({ deger: a, baslik: liste.data ? `${b} ${String(say(a))}` : b })),
+          },
+          csv: { ad: 'taleplerim' },
+        }}
+      />
+    );
+  }
   return (
     <Kart baslik="Taleplerim" sag={!tam && liste.data && liste.data.toplam > SON
       ? <Dugme simge="list" onClick={() => hepsiYaz((h) => !h)}>{hepsi ? 'Son 10' : `Tümü (${liste.data.toplam})`}</Dugme> : undefined}>
-      {tam && (
-        <div className="sa-talep-suzgec">
-          <Girdi etiket="Ara" type="search" placeholder="Talep no, kalem ya da emir no" value={ara} onChange={(e) => araYaz(e.target.value)} />
-          <div className="sa-talep-tur" role="group" aria-label="Durum">
-            {SUZGECLER.map(([a, b]) => (
-              <Dugme key={a} tur={durum === a ? 'birincil' : 'ikincil'} aria-pressed={durum === a} onClick={() => durumYaz(a)}>{b}</Dugme>
-            ))}
-          </div>
-        </div>
-      )}
       {liste.isPending ? <DurumKutusu durum="yukleniyor" />
         : liste.isError ? <DurumKutusu durum="hata" mesaj="Talepler okunamadı." yenile={() => void liste.refetch()} />
           : liste.data.talepler.length === 0 ? <DurumKutusu durum="bos" mesaj="Henüz talebiniz yok." />
             : gorunen.length === 0 ? <DurumKutusu durum="bos" mesaj="Bu süzgeçle talep yok." />
-              : <ul className="sa-talep-liste">{gorunen.map((t) => <Satir key={t.id} t={t} tam={tam} duzenle={duzenle} />)}</ul>}
+              : <ul className="sa-talep-liste">{gorunen.map((t) => <Satir key={t.id} t={t} />)}</ul>}
     </Kart>
   );
 }

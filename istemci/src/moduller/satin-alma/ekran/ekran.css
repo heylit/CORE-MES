@@ -192,7 +192,11 @@
 .sa-ekran .tc-tablo-kes .sa-ekran-govde > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sa-ekran .tc-tablo td .sa-ekran-govde > small { font-size: var(--yazi-xs); }
 .sa-is-tablosu .tc-tablo td .sa-ekran-govde > small { font-size: var(--yazi-xs); }
-/* 1280'de sekiz sütun kaba 24 px sığmıyordu ve son sütun (termin) kaydırma ipucu olmadan kesiliyordu; talep adı biraz daha erken "…" ile biter. */
+/* 1280'de sekiz sütun ve satırı açan ok (3798) kaba sığmıyordu, son sütun (termin) kaydırma ipucu olmadan kesiliyordu; talep adı
+   daha erken "…" ile biter, tamamı ipucunda ve açılan satırda. */
 @media (min-width: 1024px) {
-  .sa-ekran-talepler .tc-tablo-kap[data-kaydir] .tc-tablo-kes { max-inline-size: calc(var(--menu-genis) - var(--b-6)); }
+  .sa-ekran-talepler .tc-tablo-kap[data-kaydir] .tc-tablo-kes { max-inline-size: calc(var(--menu-genis) - var(--b-6) - var(--dokunma)); }
 }
+/* 3798: Talepler ve Siparişler satırı açılınca kalem alt tablosu; üstte sıradaki iş. */
+.sa-ekran-ayrinti { display: grid; gap: var(--b-2); padding-block: var(--b-2); min-width: 0; }
+.sa-ekran-ayrinti-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-s); color: var(--muted); }

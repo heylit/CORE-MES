@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { SiparisLogoOzeti } from '#paylasilan/sozlesme/logo.ts';
-import { LogoBelgeAramasi, KilitliSutunNotu, LOGO_DURUM_ADI, LOGO_DURUM_TONU, Rozet, SayfaBasligi, SayiKarti, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { LogoBelgeAramasi, KilitliSutunNotu, LOGO_DURUM_ADI, LOGO_DURUM_TONU, Rozet, SayfaBasligi, SayiKarti, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, type RozetTonu, type Sutun, type TabloGrupSecenegi } from '../../../ortak/arayuz/index.ts';
 import type { Siralama } from '../../../ortak/veri/liste-durumu.ts';
 import { useYetki } from '../../../ortak/veri/yetki.ts';
 import { siparisListesi, siparisEtiketi, type SiparisSatiri } from '../merkez/calc.ts';
 import { faturaOzeti, iptalFaturaOzeti, irsaliyeOzeti, logoOzetleriniOku, type LogoOzetiOkumasi } from '../merkez/logo-ozeti.ts';
 import { go } from '../merkez/ui.ts';
 import { CizimSayisi } from './KalemOzeti.tsx';
+import { SiparisKalemleri } from './SatirAyrintisi.tsx';
 import { fiyatKilitli, fmtDate, money, norm, todayStr } from '../merkez/util.ts';
 
 // Siparişler (2430): tedarikçiye verilen her sipariş bir satır; satıra basınca talebin Sipariş adımı açılır, geri tuşu buraya döner.
@@ -25,6 +26,11 @@ const BOLUMLER: readonly [Bolum, string, (s: SiparisSatiri) => boolean, Sayim][]
   ['hepsi', 'Tümü', () => true, null],
 ];
 const nfm = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 3 });
+// 3798: Görünüm menüsünden gruplama; varsayılan Yok.
+const GRUPLAR: TabloGrupSecenegi<SiparisSatiri>[] = [
+  { anahtar: 'tedarikci', baslik: 'Tedarikçi', yol: (s) => [s.tedarikci] },
+  { anahtar: 'durum', baslik: 'Durum', yol: (s) => [s.teslim ? 'Geldi' : s.gecikme !== null ? 'Geciken' : s.buHafta ? 'Bu hafta gelecek' : 'Bekleniyor'] },
+];
 
 function logoDurumu(s: SiparisSatiri): [RozetTonu, string, string] | null {
   const l = s.logo;
@@ -184,12 +190,13 @@ export function Siparisler() {
         })} />
       <Tablo kip="kayit" etiket="Siparişler" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(s) => s.anahtar}
         satirSec={(s) => { go('request', s.talepId, 'order'); }}
+        ayrinti={(s) => <SiparisKalemleri talepId={s.talepId} anahtar={s.anahtar} />}
         siralama={siralama} siralamaDegistir={siralamaYaz}
         bosMesaj={hepsi.length === 0 ? 'Henüz verilmiş sipariş yok.' : 'Bu süzgece uyan sipariş yok.'}
         arac={{
           arama: { deger: ara, degistir: araYaz, etiket: 'Siparişlerde ara', yerTutucu: 'Sipariş no, tedarikçi, talep ya da kalem' },
           csv: { ad: 'siparisler' },
-          gorunum: { anahtar: 'satin-alma-siparisler' },
+          gorunum: { anahtar: 'satin-alma-siparisler', gruplar: GRUPLAR, varsayilanGrup: 'yok' },
           sag: (
             <Secim etiket="Tedarikçi" value={tedarikci} onChange={(e) => { tedarikciYaz(e.target.value); }} bosSecenek="Tüm tedarikçiler"
               secenekler={tedarikciler.map(([deger, baslik]) => ({ deger, baslik }))} />

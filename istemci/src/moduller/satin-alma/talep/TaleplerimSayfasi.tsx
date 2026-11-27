@@ -12,7 +12,7 @@ import './talep.css';
 type Bolum = 'on' | 'liste' | 'yeni';
 
 // 898 a: Taleplerim üç bölümdür: sistemin önerdiği ön talepler, açılan talepler ve yeni talep. Ön talep "Talebe çevir" ile formu doldurur.
-// Özet kutuları listeyi o duruma süzer. Sayılar talep listesinden (en çok 500 talep) ve ön talep ucundan gelir.
+// Sayılar talep listesinden (en çok 500 talep) ve ön talep ucundan gelir.
 export function TaleplerimSayfasi() {
   const [bolum, bolumYaz] = useState<Bolum>('on');
   const [taslak, taslakYaz] = useState<readonly OnTalep[] | null>(null);
@@ -39,26 +39,15 @@ export function TaleplerimSayfasi() {
   const talepler = useQuery({ queryKey: anahtarlar.taleplerim(HEPSI), queryFn: () => cagri.get('/satin-alma-taleplerim', { sorgu: { sinir: HEPSI }, ...SURE }) });
   const say = (s: DurumSuzgeci) => talepler.data?.talepler.filter((t) => suzgeceUyar(t, s)).length;
   const onSayisi = on.data?.onTalepler.length;
+  // Özet kutuları yerine (3797) açık talep sayısı sekmede, durum sayıları listenin süzgeç çiplerinde yazar.
+  const acikSayisi = say('acik');
   const sekmeler: Sekme<Bolum>[] = [
     { anahtar: 'on', baslik: 'Ön talepler', simge: 'rotate', ...(onSayisi === undefined ? {} : { sayi: onSayisi }) },
-    { anahtar: 'liste', baslik: 'Taleplerim', simge: 'list' },
+    { anahtar: 'liste', baslik: 'Taleplerim', simge: 'list', ...(acikSayisi === undefined ? {} : { sayi: acikSayisi }) },
     { anahtar: 'yeni', baslik: 'Yeni talep', simge: 'plus' },
-  ];
-  const ozet: readonly [string, number | undefined, () => void][] = [
-    ['Ön talep bekliyor', onSayisi, () => bolumYaz('on')],
-    ...(['satin', 'onay', 'siparis'] as const).map((s): [string, number | undefined, () => void] => [
-      { satin: 'Satın almada', onay: 'Onayda', siparis: 'Sipariş verildi' }[s], say(s), () => { suzgecYaz(s); bolumYaz('liste'); }]),
   ];
   return (
     <div className="sa-talep">
-      <div className="sa-talep-ozet" role="group" aria-label="Özet">
-        {ozet.map(([ad, sayi, git]) => (
-          <button key={ad} type="button" className="sa-talep-ozet-kutu" onClick={git}>
-            <b>{sayi === undefined ? '…' : sayi.toLocaleString('tr-TR')}</b>
-            <span>{ad}</span>
-          </button>
-        ))}
-      </div>
       <Sekmeler etiket="Taleplerim bölümleri" sekmeler={sekmeler} secili={bolum} sec={bolumYaz} />
       {bolum === 'on' && <OnTalepler talepler={talepler.data?.talepler ?? []} talepteGit={() => { suzgecYaz('hepsi'); bolumYaz('liste'); }}
         cevir={(l) => { taslakYaz(l); taslakEmriYaz(null); bolumYaz('yeni'); }} />}

@@ -1,7 +1,8 @@
 /**
  * 3574-1: Sipariş adımında "Sipariş satırları" tablosu (Kurgu A, tek tablo). Her kalemin altında bir ya da birden çok pay: firma,
  * miktar, birim fiyat, satır termini, not. "Pay ekle" kalemi ikinci firmaya böler; "Başka firma" teklifi olmayan tedarikçidir.
- * Tablonun altında firma başına sipariş başlığı. Kayıt tek komuttur (POST /siparis-ver); onaylı tutarı aşan ya da yeni firmaya
+ * 3798: termin yalnız satırda girilir (tekliften dolu gelir, zorunlu); tablonun altında firma başına salt okunur sipariş önizlemesi
+ * ve küçük "Sipariş bilgileri" alanı. Firmanın beklenen teslimi en geç satır terminidir, girilmez. Kayıt tek komuttur (POST /siparis-ver); onaylı tutarı aşan ya da yeni firmaya
  * giden sipariş onaya düşer (S1 a), bunun kesin kararı sunucudadır; ekrandaki rozet tahmindir.
  */
 import type { SiparisVerGovdesi } from "#paylasilan/sozlesme/satin-alma.ts";
@@ -13,7 +14,7 @@ import { addDays, esc, fmtDate, isNum, money, numIn, parseNum, todayStr, uid } f
 export interface Pay { id: string; itemId: string; quoteId: string; qty: number | null; price: number | null; exp: string; note: string }
 export interface YeniFirma { supplierId: string; name: string; currency: Currency; payDays: number }
 export interface Baslik {
-  quoteId: string; yeni?: YeniFirma; poNo: string; orderDate: string; expectedDate: string; teslimYeri: string; tedarikciNotu: string; icNot: string;
+  quoteId: string; yeni?: YeniFirma; poNo: string; orderDate: string; teslimYeri: string; tedarikciNotu: string; icNot: string;
 }
 export interface Taslak {
   version: number | undefined; pays: Pay[]; heads: Baslik[]; gerekce: string;
@@ -36,6 +37,13 @@ export function kapsam(r: PurchaseRequest): Map<string, string> {
 }
 
 const terminOnerisi = (q: Quote | undefined, siparisTarihi: string): string => (q && isNum(q.leadDays) ? addDays(siparisTarihi, q.leadDays) : "");
+const siparisTarihiOf = (t: Taslak, quoteId: string): string => t.heads.find((h) => h.quoteId === quoteId)?.orderDate || todayStr();
+/** Payın tekliften gelen termini: firmanın sipariş tarihi + teklifin termin günü; teklifsiz (başka firma) payda boş. */
+const payTerminOnerisi = (r: PurchaseRequest, t: Taslak, quoteId: string): string =>
+  terminOnerisi(r.quotes.find((x) => x.id === quoteId), siparisTarihiOf(t, quoteId));
+/** Firmanın beklenen teslimi: o firmaya giden payların en geç termini (girilmez; sunucuya bu gider). Termin yoksa boş. */
+export const beklenenTeslim = (t: Taslak, quoteId: string): string =>
+  t.pays.filter((p) => p.quoteId === quoteId).map((p) => p.exp).filter(Boolean).sort().at(-1) ?? "";
 
 /** Onaylı karardan ilk taslak: kalem başına tek pay (karardaki firma, kalem miktarı, teklif fiyatı); firma başına başlık. */
 export function taslakKur(r: PurchaseRequest): Taslak {
@@ -43,14 +51,13 @@ export function taslakKur(r: PurchaseRequest): Taslak {
   const bugun = todayStr();
   const pays: Pay[] = r.items.filter((it) => k.has(it.id)).map((it) => {
     const q = r.quotes.find((x) => x.id === k.get(it.id));
-    return { id: uid(), itemId: it.id, quoteId: k.get(it.id)!, qty: it.qty, price: q && isNum(q.prices[it.id]) ? q.prices[it.id]! : null, exp: "", note: "" };
+    return { id: uid(), itemId: it.id, quoteId: k.get(it.id)!, qty: it.qty, price: q && isNum(q.prices[it.id]) ? q.prices[it.id]! : null, exp: terminOnerisi(q, bugun), note: "" };
   });
-  const heads = [...new Set(pays.map((p) => p.quoteId))].map((qid) => yeniBaslik(r, qid, bugun));
+  const heads = [...new Set(pays.map((p) => p.quoteId))].map((qid) => yeniBaslik(qid, bugun));
   return { version: r.version, pays, heads, gerekce: "" };
 }
-function yeniBaslik(r: PurchaseRequest, quoteId: string, bugun: string, yeni?: YeniFirma): Baslik {
-  const q = r.quotes.find((x) => x.id === quoteId);
-  return { quoteId, ...(yeni ? { yeni } : {}), poNo: "", orderDate: bugun, expectedDate: terminOnerisi(q, bugun), teslimYeri: "", tedarikciNotu: "", icNot: "" };
+function yeniBaslik(quoteId: string, bugun: string, yeni?: YeniFirma): Baslik {
+  return { quoteId, ...(yeni ? { yeni } : {}), poNo: "", orderDate: bugun, teslimYeri: "", tedarikciNotu: "", icNot: "" };
 }
 
 /** Talebin taslağı; talep sunucuda değişince (sürüm) yeniden kurulur. */
@@ -67,6 +74,8 @@ export const taslagiBirak = (talepId: string): void => { TASLAKLAR.delete(talepI
 export function firmaSec(r: PurchaseRequest, t: Taslak, payId: string, deger: string): void {
   const p = t.pays.find((x) => x.id === payId);
   if (!p) return;
+  // Elle girilmemiş termin (eski firmanın önerisi ya da boş) yeni firmanın teklifinden yeniden gelir.
+  const oneriydi = !p.exp || p.exp === payTerminOnerisi(r, t, p.quoteId);
   if (deger.startsWith("q:")) {
     p.quoteId = deger.slice(2);
     const q = r.quotes.find((x) => x.id === p.quoteId);
@@ -78,11 +87,12 @@ export function firmaSec(r: PurchaseRequest, t: Taslak, payId: string, deger: st
     if (mevcut) p.quoteId = mevcut.quoteId;
     else {
       const qid = uid();
-      t.heads.push(yeniBaslik(r, qid, todayStr(), { supplierId: sid, name: sup?.name ?? "", currency: "TRY", payDays: 0 }));
+      t.heads.push(yeniBaslik(qid, todayStr(), { supplierId: sid, name: sup?.name ?? "", currency: "TRY", payDays: 0 }));
       p.quoteId = qid;
     }
   }
-  basliklariEsitle(r, t);
+  basliklariEsitle(t);
+  if (oneriydi) p.exp = payTerminOnerisi(r, t, p.quoteId);
 }
 /** Kalemi ikinci bir firmaya böler: yeni pay, kalanı (talep miktarı - paylar) ile, karardaki ilk başka teklifle açılır. */
 export function payEkle(r: PurchaseRequest, t: Taslak, itemId: string): boolean {
@@ -92,20 +102,21 @@ export function payEkle(r: PurchaseRequest, t: Taslak, itemId: string): boolean 
   const aday = r.quotes.find((q) => q.source !== "siparis" && !mevcut.some((p) => p.quoteId === q.id) && isNum(q.prices[itemId])) ?? r.quotes.find((q) => !mevcut.some((p) => p.quoteId === q.id));
   if (!aday) return false;
   t.pays.push({ id: uid(), itemId, quoteId: aday.id, qty: kalan && kalan > 0 ? kalan : null, price: isNum(aday.prices[itemId]) ? aday.prices[itemId]! : null, exp: "", note: "" });
-  basliklariEsitle(r, t);
+  basliklariEsitle(t);
+  t.pays.at(-1)!.exp = payTerminOnerisi(r, t, aday.id);
   return true;
 }
 export function paySil(r: PurchaseRequest, t: Taslak, payId: string): void {
   const p = t.pays.find((x) => x.id === payId);
   if (!p || t.pays.filter((x) => x.itemId === p.itemId).length < 2) return;
   t.pays = t.pays.filter((x) => x.id !== payId);
-  basliklariEsitle(r, t);
+  basliklariEsitle(t);
 }
 /** Payı olmayan başlık düşer, payı olan firmaya başlık açılır (girilen başlık alanları korunur). */
-function basliklariEsitle(r: PurchaseRequest, t: Taslak): void {
+function basliklariEsitle(t: Taslak): void {
   const kullanilan = [...new Set(t.pays.map((p) => p.quoteId))];
   const bugun = todayStr();
-  t.heads = kullanilan.map((qid) => t.heads.find((h) => h.quoteId === qid) ?? yeniBaslik(r, qid, bugun));
+  t.heads = kullanilan.map((qid) => t.heads.find((h) => h.quoteId === qid) ?? yeniBaslik(qid, bugun));
 }
 
 const firmaAdi = (r: PurchaseRequest, t: Taslak, quoteId: string): string => {
@@ -186,6 +197,8 @@ export function siparisOzeti(r: PurchaseRequest, t: Taslak): SiparisOzeti {
     const ad = r.items.find((x) => x.id === p.itemId)?.name ?? "";
     if (!isNum(p.qty) || p.qty <= 0) { hatalar.push(`${ad}: miktar girin.`); hataAlanlari.push(`sp-${p.id}-qty`); }
     if (!isNum(p.price) || p.price < 0) { hatalar.push(`${ad}: birim fiyat girin.`); hataAlanlari.push(`sp-${p.id}-price`); }
+    if (!p.exp) { hatalar.push(`${ad}: termin girin.`); hataAlanlari.push(`sp-${p.id}-exp`); }
+    else if (p.exp < siparisTarihiOf(t, p.quoteId)) { hatalar.push(`${ad}: termin sipariş tarihinden önce olamaz.`); hataAlanlari.push(`sp-${p.id}-exp`); }
   }
   for (const it of kalemler) {
     const firmalar = t.pays.filter((p) => p.itemId === it.it.id).map((p) => p.quoteId);
@@ -194,7 +207,6 @@ export function siparisOzeti(r: PurchaseRequest, t: Taslak): SiparisOzeti {
       hataAlanlari.push(...t.pays.filter((p) => p.itemId === it.it.id).map((p) => `sp-${p.id}-firma`));
     }
   }
-  for (const h of t.heads) if (!h.expectedDate) { hatalar.push(`${firmaAdi(r, t, h.quoteId)}: beklenen teslim girin.`); hataAlanlari.push(`sp-${h.quoteId}-expectedDate`); }
   const onayliTutar = awardTotals(r)?.totalTRY ?? null;
   const yeniTutar = hatalar.length ? null : awardTotals(varsayimTalebi(r, t))?.totalTRY ?? null;
   const onayGerekir = yeniFirmalar.length > 0 || (onayliTutar !== null && yeniTutar !== null && yeniTutar > onayliTutar + 0.005);
@@ -208,7 +220,7 @@ export function siparisGovdesi(r: PurchaseRequest, t: Taslak): Omit<SiparisVerGo
     siparisler: t.heads.map((h) => ({
       teklifId: h.quoteId,
       yeniFirma: h.yeni ? { firmaId: Number(h.yeni.supplierId), paraBirimi: h.yeni.currency, vadeGun: h.yeni.payDays, terminGun: null } : null,
-      siparisNo: h.poNo.trim(), siparisTarihi: h.orderDate || todayStr(), beklenenTeslim: h.expectedDate, vadeBaslangici: r.award?.vadeBaslangici ?? "teslim",
+      siparisNo: h.poNo.trim(), siparisTarihi: h.orderDate || todayStr(), beklenenTeslim: beklenenTeslim(t, h.quoteId), vadeBaslangici: r.award?.vadeBaslangici ?? "teslim",
       teslimYeri: h.teslimYeri.trim(), tedarikciNotu: h.tedarikciNotu.trim(), icNot: h.icNot.trim(),
     })),
     paylar: t.pays.map((p) => ({ kalemId: p.itemId, teklifId: p.quoteId, miktar: ond(p.qty ?? 0), birimFiyat: ond(p.price ?? 0), beklenenTeslim: p.exp || null, notlar: p.note.trim() })),
@@ -218,7 +230,7 @@ export function siparisGovdesi(r: PurchaseRequest, t: Taslak): Omit<SiparisVerGo
 }
 
 /** Ekrandaki alanlar taslağa okunur (her eylemden önce; tablo yeniden çizilince girilen değer kaybolmaz). */
-export function taslagiOku(t: Taslak, kok: ParentNode): void {
+export function taslagiOku(t: Taslak, kok: ParentNode, r?: PurchaseRequest): void {
   kok.querySelectorAll<HTMLInputElement>("[data-sp-pay]").forEach((el) => {
     const p = t.pays.find((x) => x.id === el.dataset.spPay);
     if (!p) return;
@@ -234,7 +246,13 @@ export function taslagiOku(t: Taslak, kok: ParentNode): void {
     if (!h || !alan) return;
     if (alan === "currency" && h.yeni) h.yeni.currency = el.value as Currency;
     else if (alan === "payDays" && h.yeni) h.yeni.payDays = Math.max(0, Math.round(parseNum(el.value) ?? 0));
-    else if (alan === "poNo" || alan === "orderDate" || alan === "expectedDate" || alan === "teslimYeri" || alan === "tedarikciNotu" || alan === "icNot") h[alan] = el.value;
+    else if (alan === "orderDate" && r && el.value && el.value !== h.orderDate) {
+      // Sipariş tarihi değişince tekliften gelen (elle değiştirilmemiş) satır terminleri de kayar.
+      const q = r.quotes.find((x) => x.id === h.quoteId);
+      const eski = terminOnerisi(q, h.orderDate);
+      h.orderDate = el.value;
+      for (const p of t.pays) if (p.quoteId === h.quoteId && (!p.exp || p.exp === eski)) p.exp = terminOnerisi(q, h.orderDate);
+    } else if (alan === "poNo" || alan === "orderDate" || alan === "teslimYeri" || alan === "tedarikciNotu" || alan === "icNot") h[alan] = el.value;
   });
   const g = kok.querySelector<HTMLTextAreaElement>("#sp-gerekce");
   if (g) t.gerekce = g.value;
@@ -272,7 +290,7 @@ export function siparisSatirlariHTML(r: PurchaseRequest, t: Taslak): string {
         <td class="lead" data-l="Firma"><select id="sp-${esc(p.id)}-firma" data-sp-sec="${esc(p.id)}" aria-label="${esc(it.name)} firması"${gecersiz(`sp-${p.id}-firma`)}>${firmaSecenekleri(r, t, p)}</select>${teklifDisi ? '<span class="sub"><span class="flag warn">teklif dışı</span></span>' : ""}</td>
         <td class="r" data-l="Miktar (${birim(it)})"><input class="qty" inputmode="decimal" id="sp-${esc(p.id)}-qty" data-sp-pay="${esc(p.id)}" data-sp-alan="qty" value="${esc(numIn(p.qty))}" aria-label="${esc(it.name)} miktarı"${gecersiz(`sp-${p.id}-qty`)}></td>
         <td class="r" data-l="Birim fiyat (${esc(pb)})"><input class="price" inputmode="decimal" id="sp-${esc(p.id)}-price" data-sp-pay="${esc(p.id)}" data-sp-alan="price" value="${esc(numIn(p.price))}" aria-label="${esc(it.name)} birim fiyatı (${esc(pb)})"${gecersiz(`sp-${p.id}-price`)}></td>
-        <td data-l="Termin"><input type="date" id="sp-${esc(p.id)}-exp" data-sp-pay="${esc(p.id)}" data-sp-alan="exp" value="${esc(p.exp)}" aria-describedby="sp-termin-notu" aria-label="${esc(it.name)} satır termini"></td>
+        <td data-l="Termin"><input type="date" required id="sp-${esc(p.id)}-exp" data-sp-pay="${esc(p.id)}" data-sp-alan="exp" value="${esc(p.exp)}" aria-label="${esc(it.name)} termini"${gecersiz(`sp-${p.id}-exp`) || ' aria-describedby="sp-termin-notu"'}></td>
         <td data-l="Not"><input type="text" maxlength="500" id="sp-${esc(p.id)}-note" data-sp-pay="${esc(p.id)}" data-sp-alan="note" value="${esc(p.note)}" placeholder="Satır notu" aria-label="${esc(it.name)} satır notu"></td>
         <td class="r num" data-l="Tutar (TL)">${tutar === null ? "–" : money(tutar, "TRY", 0)}</td>
         <td class="acts">${paylar.length > 1 ? `<button class="btn sm ghost danger" data-act="sp-pay-sil" data-pay="${esc(p.id)}" aria-label="Payı kaldır">Kaldır</button>` : ""}</td></tr>`;
@@ -283,16 +301,29 @@ export function siparisSatirlariHTML(r: PurchaseRequest, t: Taslak): string {
   const basliklar = t.heads.map((h) => {
     const q = r.quotes.find((x) => x.id === h.quoteId);
     const tutar = oz.firmaTutari[h.quoteId];
+    const pb = q?.currency ?? h.yeni?.currency ?? "TRY";
     const alan = (ad: string, etiket: string, deger: string, tur = "text", ek = "") =>
       `<label class="f"><span>${etiket}</span><input type="${tur}" id="sp-${esc(h.quoteId)}-${ad}" data-sp-baslik="${esc(h.quoteId)}" data-sp-alan="${ad}" value="${esc(deger)}"${ek}${gecersiz(`sp-${h.quoteId}-${ad}`)}></label>`;
     const yeni = h.yeni ? `<label class="f"><span>Para birimi</span><select id="sp-${esc(h.quoteId)}-currency" data-sp-baslik="${esc(h.quoteId)}" data-sp-alan="currency">${(["TRY", ...Object.keys(r.award?.fx ?? {})] as Currency[]).filter((c, i, l) => l.indexOf(c) === i).map((c) => `<option${c === h.yeni!.currency ? " selected" : ""}>${c}</option>`).join("")}</select></label>
       ${alan("payDays", "Vade (gün)", String(h.yeni.payDays), "number", ' min="0" max="3650"')}` : "";
     const odeme = q ? `<p class="xs muted span2">Ödeme şartı tekliften: ${q.advancePct ? `%${numIn(q.advancePct)} avans, ` : ""}${q.payDays ? `${q.payDays} gün vade` : "peşin"}</p>` : "";
+    // Önizleme yalnız okunur: değer üstteki tablodan gelir, burada girilmez.
+    const onizleme = t.pays.filter((p) => p.quoteId === h.quoteId).map((p) => {
+      const it = r.items.find((x) => x.id === p.itemId);
+      const satirTl = satirTutari(q, pb, p, r);
+      return `<tr><td class="lead" data-l="Kalem">${esc(it?.name ?? "")}</td><td class="r num" data-l="Miktar">${isNum(p.qty) ? `${numIn(p.qty)} ${esc(it?.unit ?? "")}` : "–"}</td>
+        <td class="r num" data-l="Birim fiyat">${isNum(p.price) ? money(p.price, pb) : "–"}</td><td class="num" data-l="Termin">${p.exp ? fmtDate(p.exp) : '<span class="flag bad">girilmedi</span>'}</td>
+        <td class="r num" data-l="Tutar (TL)">${satirTl === null ? "–" : money(satirTl, "TRY", 0)}</td></tr>`;
+    }).join("");
+    const beklenen = beklenenTeslim(t, h.quoteId);
     return `<section class="panel" data-sp-firma="${esc(h.quoteId)}"><div class="panel-h"><h3>${esc(firmaAdi(r, t, h.quoteId))}</h3>${h.yeni ? '<span class="flag warn">yeni firma</span>' : ""}<span class="spacer"></span><span class="num">${tutar === null || tutar === undefined ? "–" : money(tutar, "TRY", 0)}</span></div>
-      <div class="panel-b"><div class="grid ${t.heads.length > 1 ? "g2" : "g4"}">
+      <div class="panel-b stack">
+        <div class="tw"><table class="itbl sp-onizleme"><caption class="sr-only">${esc(firmaAdi(r, t, h.quoteId))} sipariş önizlemesi</caption><thead><tr><th>Kalem</th><th class="r">Miktar</th><th class="r">Birim fiyat</th><th>Termin</th><th class="r">Tutar</th></tr></thead><tbody>${onizleme}</tbody></table></div>
+        <p class="small" data-sp-beklenen>Beklenen teslim <b class="num">${beklenen ? fmtDate(beklenen) : "–"}</b> <span class="xs muted">en geç satır termini</span></p>
+        <h4 class="small">Sipariş bilgileri</h4>
+        <div class="grid ${t.heads.length > 1 ? "g2" : "g4"}">
         ${alan("poNo", "Tedarikçi / dış sipariş no", h.poNo, "text", ' maxlength="40"')}
         ${alan("orderDate", "Sipariş tarihi", h.orderDate, "date")}
-        ${alan("expectedDate", "Beklenen teslim <small>— zorunlu</small>", h.expectedDate, "date")}
         ${alan("teslimYeri", "Teslim yeri", h.teslimYeri, "text", ' maxlength="200"')}
         ${yeni}
         <label class="f span2"><span>Tedarikçiye not <small>— sipariş metnine girer</small></span><input type="text" maxlength="2000" data-sp-baslik="${esc(h.quoteId)}" data-sp-alan="tedarikciNotu" value="${esc(h.tedarikciNotu)}"></label>
@@ -305,12 +336,12 @@ export function siparisSatirlariHTML(r: PurchaseRequest, t: Taslak): string {
   return `<div class="stack" data-sa-siparis-satirlari>
     <div class="tw"><table class="itbl rt sp-tablo"><thead><tr><th>Kalem / firma</th><th class="r">Miktar</th><th class="r">Birim fiyat</th><th>Termin</th><th>Not</th><th class="r">Tutar</th><th><span class="sr-only">Eylem</span></th></tr></thead>
       <tbody>${satirlar}</tbody></table></div>
-    <h3 class="small">Siparişler (${t.heads.length} firma)</h3>
+    <h3 class="small">Sipariş önizlemesi (${t.heads.length} firma)</h3>
     <div class="grid ${t.heads.length > 1 ? "g2" : ""}">${basliklar}</div>
     <div class="row"><span class="small">Toplam <b class="num">${oz.yeniTutar === null ? "–" : money(oz.yeniTutar, "TRY", 0)}</b></span><span class="small">Onaylı <b class="num">${oz.onayliTutar === null ? "–" : money(oz.onayliTutar, "TRY", 0)}</b></span>${onayRozeti}</div>
     <label class="f"><span>Gerekçe <small>— onaya giden siparişte zorunlu</small></span><textarea id="sp-gerekce" maxlength="500" rows="2" placeholder="Örn. ikinci firma stoktan acil kısmı veriyor">${esc(t.gerekce)}</textarea></label>
     <ul class="small" id="sp-hatalar"${t.duyur ? ' role="alert"' : ""}>${oz.hatalar.map((h) => `<li>${SIMGE_HATA} ${esc(h)}</li>`).join("")}</ul>
-    <p class="xs muted" id="sp-termin-notu">Satır termini boşsa firmanın beklenen teslimi geçer.</p>
+    <p class="xs muted" id="sp-termin-notu">Termin tekliften gelir (sipariş tarihi + teklifteki termin günü); değiştirilebilir. Firmanın beklenen teslimi en geç satır terminidir.</p>
     <p class="xs muted">Tutarlar TL, KDV hariç. Onaylı tutarı aşan ya da onaylı kararda olmayan firmaya giden sipariş onaya gider; kayıtta kesinleşir. Tutarı düşüren, termin ve not değişikliği onaysızdır.</p>
   </div>`;
 }

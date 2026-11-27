@@ -159,7 +159,7 @@ describe('Ana sayfadan talep (#375)', () => {
       k('Deneme burç', {}),
     ] })], toplam: 1 } satisfies TaleplerimCevabi)));
     sar(<Taleplerim tam />);
-    fireEvent.click(await screen.findByRole('button', { name: /Deneme talep 1/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Aç: / }));
     const hucre = (ad: string) => within(screen.getByText(ad).closest('tr')!).getByText((_, e) => e?.getAttribute('data-baslik') === 'Termin' && e.tagName === 'TD').textContent;
     expect(hucre('Deneme çubuk')).toBe(`${g('2026-12-20')}sipariş · istenen ${g('2026-12-10')} · 10 gün geç`);
     expect(hucre('Deneme levha')).toBe(`${g('2026-12-10')}sipariş`);
@@ -243,8 +243,9 @@ describe('Ana sayfadan talep (#375)', () => {
       return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
     }));
     sar(<TaleplerimSayfasi />, '/taleplerim?bolum=liste');
+    // 3797: grup notu ve düzenleme düğmeleri satır açılınca görünür; satıra basmak açar.
+    fireEvent.click(await screen.findByText('Deneme talep 1'));
     expect((await screen.findByText(/Güncellemeleri:/)).textContent).toContain('ST-2026-009 satın almada');
-    fireEvent.click(screen.getByText('Deneme talep 1'));
     expect(screen.queryByRole('button', { name: 'Düzenle' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Güncelleme talebi aç' }));
     expect(await screen.findByText(`Güncelleme talebi: ${kok.no}`)).toBeTruthy();
@@ -644,15 +645,15 @@ describe('Planlama menüsünde Taleplerim sayfası (12.10.2026)', () => {
     sar(<TaleplerimSayfasi />);
     fireEvent.click(screen.getByRole('tab', { name: /^Taleplerim/ }));
     await screen.findByText('ST-2026-012');
-    fireEvent.click(screen.getByRole('button', { name: 'Onayda', pressed: false }));
+    fireEvent.click(screen.getByRole('button', { name: /^Onayda/, pressed: false }));
     await waitFor(() => expect(screen.queryByText('ST-2026-012')).toBeNull());
-    const satir = screen.getByRole('button', { name: /ST-2026-001/ });
+    const satir = screen.getByRole('button', { name: 'Aç: ST-2026-001' });
     expect(screen.getByText('Fason adım')).toBeTruthy();
     fireEvent.click(satir);
     // 3712: işlenen malzeme çerçeveli blokta: parça, Rev, adet ve rota adımı.
     expect(document.querySelector('.sa-islenen')?.textContent).toBe('İşlenen malzemeDeneme flanşMM-00009Rev B2 adetUE-000031 · Op 30');
-    fireEvent.click(screen.getByRole('button', { name: 'Hepsi' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Hepsi/ }));
     fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'talep 12' } });
-    await waitFor(() => expect(screen.getAllByRole('button', { name: /ST-2026-0/ })).toHaveLength(1));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /^(Aç|Kapat): ST-2026-0/ })).toHaveLength(1));
   });
 });
