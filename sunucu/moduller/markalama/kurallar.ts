@@ -177,3 +177,19 @@ export function emreOzelRevizyonHatasi(govdedeki: string | null, emrinki: string
     ? 'Bu emre teknik resim revizyonu sabitlenmemiş; emre özel tanım revizyonsuz yazılır.'
     : `Emrin teknik resim revizyonu ${emrinki}; emre özel tanım başka revizyonla yazılamaz.`;
 }
+
+export interface SablonAdayi { id: number | null; opNo: number; operasyonId: number | null; seriSablonu: string; sayacKapsami: SayacKapsami }
+export type SablonCakismasi = { tur: 'baska-operasyon' | 'baska-sayac'; onceki: SablonAdayi } | null;
+
+// MRK-2 (karar a, 3788 "Daralt"): aynı malzemede aynı şablonlu iki tanım farklı sayaçla aynı numarayı üretir. Aynı operasyonun revizyon
+// ya da emir varyantı aynı şablonu ancak aynı sayaç kapsamıyla kullanır: sayaç malzeme ve kapsamla tutulduğundan paylaşılır, numara
+// tekrar etmez. Başka operasyonda aynı şablon reddedilir. Operasyon kimliği varsa numaradan önce o karşılaştırılır.
+export function sablonCakismasi(mevcut: readonly SablonAdayi[], yeni: SablonAdayi): SablonCakismasi {
+  const ayniOp = (a: SablonAdayi) => (a.operasyonId !== null && yeni.operasyonId !== null ? a.operasyonId === yeni.operasyonId : a.opNo === yeni.opNo);
+  for (const a of mevcut) {
+    if (a.id === yeni.id || a.seriSablonu !== yeni.seriSablonu) continue;
+    if (!ayniOp(a)) return { tur: 'baska-operasyon', onceki: a };
+    if (a.sayacKapsami !== yeni.sayacKapsami) return { tur: 'baska-sayac', onceki: a };
+  }
+  return null;
+}

@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { AlanGovdesi } from '#paylasilan/sozlesme/markalama.ts';
 import {
-  alanHatasi, baslangicHatasi, durumGecisi, emreOzelRevizyonHatasi, hurdaNedeniHatasi, revizyonAnahtari, isoHafta, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi, tanimSec,
+  alanHatasi, baslangicHatasi, durumGecisi, emreOzelRevizyonHatasi, hurdaNedeniHatasi, revizyonAnahtari, isoHafta, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, sablonCakismasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi, tanimSec,
 } from './kurallar.ts';
-import type { TanimAdayi } from './kurallar.ts';
+import type { SablonAdayi, TanimAdayi } from './kurallar.ts';
 
 const alan = (a: Partial<AlanGovdesi> = {}): AlanGovdesi => ({
   ad: 'Seri', icerik: 'seri', sabitMetin: null, kodTuru: 'yok', yontem: 'lazer', yaziYuksekligiMm: null, yaziDerinligiMm: null, yaziTipi: null, program: null, yuzey: null, yer: null, ...a,
@@ -119,6 +119,18 @@ describe('markalama kuralları', () => {
     assert.equal(revizyonAnahtari(' i '), 'I');
     assert.equal(revizyonAnahtari('b2'), 'B2');
     assert.equal(revizyonAnahtari(null), null);
+  });
+
+  test('MRK-2 (3788 Daralt): aynı operasyonun varyantı aynı sayaçla aynı şablonu kullanır; başka operasyon ya da başka sayaç reddedilir', () => {
+    const a = (id: number | null, b: Partial<SablonAdayi> = {}): SablonAdayi => ({ id, opNo: 40, operasyonId: 7, seriSablonu: '{PARCA}-{SEQ:5}', sayacKapsami: 'malzeme', ...b });
+    const genel = a(1);
+    assert.equal(sablonCakismasi([genel], a(null)), null, 'aynı operasyon, aynı sayaç');
+    assert.equal(sablonCakismasi([genel], a(null, { opNo: 70, operasyonId: 8 }))?.tur, 'baska-operasyon');
+    assert.equal(sablonCakismasi([genel], a(null, { sayacKapsami: 'yil' }))?.tur, 'baska-sayac');
+    assert.equal(sablonCakismasi([genel], a(null, { opNo: 10 })), null, 'numara değişse de operasyon kimliği aynıysa aynı adım');
+    assert.equal(sablonCakismasi([a(1, { operasyonId: null })], a(null, { operasyonId: null, opNo: 70 }))?.tur, 'baska-operasyon', 'kimliksizde numara karşılaştırılır');
+    assert.equal(sablonCakismasi([genel], a(1, { sayacKapsami: 'yil' })), null, 'kendisiyle çakışmaz');
+    assert.equal(sablonCakismasi([genel], a(null, { seriSablonu: 'B{PARCA}-{SEQ:5}', opNo: 70, operasyonId: 8 })), null, 'başka şablon serbest');
   });
 
   test('MRK-15: emre özel tanımın revizyonu emrinkidir', () => {

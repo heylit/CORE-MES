@@ -649,6 +649,36 @@ describe('markalama (gerçek PostgreSQL)', () => {
     await assert.rejects(o().sahip.sorgu("UPDATE markalama_tanimi SET cizim_revizyon_kodu = '  ' WHERE id = $1", [genel.id]), /markalama_tanimi_cizim_revizyon_bicimi/);
   });
 
+  test('MRK-U19 (3788 Daralt): aynı operasyonun revizyon ve emir varyantı aynı şablonu aynı sayaçla kullanır; numara kesintisiz', async () => {
+    const m = await malzemeAc();
+    const e1 = await emirAc(m);
+    await emreRevizyonSabitle(e1, m, 'C');
+    const sablon = '{PARCA}-{YY}-{SEQ:5}';
+    const genel = await tanimAc(m, {}, { seriSablonu: sablon });
+    const revC = await tanimAc(m, {}, { seriSablonu: sablon, cizimRevizyonKodu: 'C' });
+    assert.equal(revC.seriSablonu, genel.seriSablonu);
+    const ozel = await tanimAc(m, {}, { seriSablonu: sablon, uretimEmriId: e1 });
+    assert.equal(ozel.seriSablonu, genel.seriSablonu);
+    const yil = await istek<{ alan?: string; mesaj?: string }>('yonetici', 'POST', '/markalama/tanimlar/ekle', {
+      malzemeId: m, opNo: 40, seriSablonu: sablon, sayacKapsami: 'yil', cizimRevizyonKodu: 'D', alanlar: [seriAlani],
+    });
+    assert.equal(yil.durum, 400, 'aynı şablon başka sayaçla');
+    assert.equal(yil.govde.alan, 'seriSablonu');
+    assert.match(yil.govde.mesaj ?? '', /aynı sayacı/);
+    const kapsamCevir = await istek('yonetici', 'POST', `/markalama/tanimlar/${revC.id}/kaydet`, {
+      seriSablonu: revC.seriSablonu, sayacKapsami: 'yil', alanlar: [seriAlani], surum: revC.surum,
+    });
+    assert.equal(kapsamCevir.durum, 400, 'kayıtta sayacı ayırmak da reddedilir');
+    const ilk = await markala('operator', ozel.id, e1);
+    assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
+    const pasif = await istek('yonetici', 'POST', `/markalama/tanimlar/${ozel.id}/aktiflik`, { aktif: false, surum: ozel.surum });
+    assert.equal(pasif.durum, 200);
+    const ikinci = await markala('operator', revC.id, e1);
+    assert.equal(ikinci.durum, 200, JSON.stringify(ikinci.govde));
+    assert.notEqual(ikinci.govde.seriNo, ilk.govde.seriNo, 'paylaşılan sayaç numarayı tekrar etmez');
+    assert.ok(ikinci.govde.seriNo.endsWith('00002'), ikinci.govde.seriNo);
+  });
+
   test('MRK-U18 (3788): pasif emre özel tanım genele düşer; tanımsız operasyon tanim-yok, olmayan emir 404', async () => {
     const m = await malzemeAc();
     const e = await emirAc(m);

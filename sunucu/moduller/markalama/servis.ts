@@ -19,9 +19,9 @@ import { malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { acikEmirler, emirAdimlari, emirNolari, parcaRevizyonuMetni, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
   alanHatasi, baslangicHatasi, durumGecisi, emreOzelRevizyonHatasi, hurdaNedeniHatasi, kapsamAnahtari, normalHatasi, olcuHatasi, revizyonAnahtari,
-  sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi, tanimSec,
+  sablonCakismasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi, tanimSec,
 } from './kurallar.ts';
-import type { TanimSecimi } from './kurallar.ts';
+import type { SablonAdayi, TanimSecimi } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 const TANIM_YOK = 'Markalama tanımı bulunamadı.';
@@ -112,11 +112,13 @@ async function seriUzunluguDenetle(db: Db, malzemeId: number, g: TanimKaydetGovd
   if (hata !== null) throw dogrulama(hata, 'seriSablonu');
 }
 
-// MRK-2 (karar a): aynı malzemede aynı şablonlu iki tanım farklı sayaçla aynı numarayı üretir ve markalama 409'da takılır;
-// ikinci tanım kayıtta reddedilir, kullanıcı var olanı düzenler. Pasif tanım da sayılır: verdiği numaralar duruyor.
-async function ayniSablonDenetle(db: Db, malzemeId: number, seriSablonu: string, haricId: number | null): Promise<void> {
-  const onceki = (await s.tanimlariOku(db, malzemeId)).find((t) => t.id !== haricId && t.seriSablonu === seriSablonu);
-  if (onceki !== undefined) throw dogrulama(`Bu malzemede bu seri şablonuyla tanım var (op ${onceki.opNo}); onu düzenleyin.`, 'seriSablonu');
+// MRK-2: kural kurallar.ts sablonCakismasi'nda. Pasif tanım da sayılır: verdiği numaralar duruyor.
+async function ayniSablonDenetle(db: Db, malzemeId: number, yeni: SablonAdayi): Promise<void> {
+  const c = sablonCakismasi(await s.tanimlariOku(db, malzemeId), yeni);
+  if (c === null) return;
+  throw dogrulama(c.tur === 'baska-operasyon'
+    ? `Bu malzemede bu seri şablonuyla tanım var (op ${c.onceki.opNo}); onu düzenleyin.`
+    : `Aynı şablonlu tanımlar aynı sayacı kullanır (op ${c.onceki.opNo} tanımının sayacı: ${c.onceki.sayacKapsami}); sayacı aynı yapın.`, 'seriSablonu');
 }
 
 // MRK-15 (3788): emre özel tanım açık, aynı malzemenin emrine açılır; revizyonu emrin sabitlenmiş revizyonudur. Emirsiz tanımın
@@ -138,12 +140,14 @@ export async function tanimEkle(db: Db, kullanici: Kullanici, g: TanimEkleGovdes
   const yazim = tanimYazimi(g);
   // MRK-08: tanım var olan malzemeye açılır (rota adımı bağı Aşama 2'de yabancı anahtarla gelir).
   if ((await malzemeOzeti(db, g.malzemeId)) === null) throw dogrulama('Malzeme bulunamadı.', 'malzemeId');
-  await ayniSablonDenetle(db, g.malzemeId, g.seriSablonu, null);
+  const o = (await yazmaCozucusu()(db, [g.malzemeId])).find((x) => x.opNo === g.opNo);
+  const operasyon = o ? { id: o.operasyonId, kayitliOpNo: o.kayitliOpNo } : null;
+  await ayniSablonDenetle(db, g.malzemeId, {
+    id: null, opNo: operasyon?.kayitliOpNo ?? g.opNo, operasyonId: operasyon?.id ?? null, seriSablonu: g.seriSablonu, sayacKapsami: g.sayacKapsami,
+  });
   await modelDenetle(db, g.malzemeId, g.model);
   await seriUzunluguDenetle(db, g.malzemeId, g);
   const anahtar = await tanimAnahtari(db, g);
-  const o = (await yazmaCozucusu()(db, [g.malzemeId])).find((x) => x.opNo === g.opNo);
-  const operasyon = o ? { id: o.operasyonId, kayitliOpNo: o.kayitliOpNo } : null;
   const ADIM_TANIMLI = anahtar.uretimEmriId !== null ? 'Bu emir ve operasyon için markalama tanımı zaten var.'
     : anahtar.cizimRevizyonKodu !== null ? `Bu operasyonun ${anahtar.cizimRevizyonKodu} revizyonu için markalama tanımı zaten var.`
       : 'Bu rota adımının revizyonsuz markalama tanımı zaten var.';
@@ -175,7 +179,9 @@ export async function tanimKaydet(db: Db, kullanici: Kullanici, id: number, g: T
   if (g.model !== null && (g.model.belgeId !== eski.modelBelgeId || g.model.revizyon !== eski.modelRevizyon)) {
     await modelDenetle(db, eski.malzemeId, g.model);
   }
-  if (g.seriSablonu !== eski.seriSablonu) await ayniSablonDenetle(db, eski.malzemeId, g.seriSablonu, id);
+  if (g.seriSablonu !== eski.seriSablonu || g.sayacKapsami !== eski.sayacKapsami) {
+    await ayniSablonDenetle(db, eski.malzemeId, { id, opNo: eski.opNo, operasyonId: eski.operasyonId, seriSablonu: g.seriSablonu, sayacKapsami: g.sayacKapsami });
+  }
   await seriUzunluguDenetle(db, eski.malzemeId, g);
   if (g.baslangicSirasi !== eski.baslangicSirasi) await baslangiciUygula(db, eski.malzemeId, g);
   await surumluGuncelle({
