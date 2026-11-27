@@ -1055,3 +1055,14 @@
 .sa-kart-ic-baslik { grid-column: 1 / -1; margin-top: var(--b-2); padding-top: var(--b-1); border-top: 1px solid var(--line, currentColor); font-size: var(--yazi-xs); font-weight: 600; color: var(--muted); }
 .sa-kok #rfq-due-ozet.bad{ color:var(--sa-bad); font-weight:600; }
 .sa-kok #rfq-gun[aria-invalid="true"]{ border-color:var(--sa-bad); }
+/* 3798: firma başına salt okunur sipariş önizlemesi; dar panelde (telefon, iki firmalı orta ekran) kalem başına iki sütunlu kart. */
+.sa-kok table.sp-onizleme td.num, .sa-kok table.sp-onizleme th.r { white-space: nowrap; }
+@container panel (max-width: 440px) {
+  .sa-kok table.sp-onizleme thead { display: none; }
+  .sa-kok table.sp-onizleme, .sa-kok table.sp-onizleme tbody { display: block; }
+  .sa-kok table.sp-onizleme tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-1) var(--b-3); padding: var(--b-2) 0; border-bottom: 1px solid var(--sa-line-2); }
+  .sa-kok table.sp-onizleme td { display: block; border: 0; padding: 0; text-align: left; white-space: normal; }
+  .sa-kok table.sp-onizleme td[data-l]::before { content: attr(data-l); display: block; font-size: var(--yazi-xs); color: var(--sa-faint); }
+  .sa-kok table.sp-onizleme td.lead { grid-column: 1 / -1; font-weight: 600; }
+  .sa-kok table.sp-onizleme td.lead::before { display: none; }
+}
