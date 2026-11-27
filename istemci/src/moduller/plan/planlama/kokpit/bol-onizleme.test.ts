@@ -47,6 +47,9 @@ describe('bolOnizlemesiKur (3792)', () => {
     expect(sag.uc.startsWith('M30,5 ')).toBe(true);
     const alt = bolOkYolu({ x1: 0, x2: 40, y1: 40, y2: 44 }, { x1: 10, x2: 30, y1: 0, y2: 20 });
     expect(alt.yol).toBe('M20,40 L20,26');
+    // Bitişik kutularda ok görünmez kalmaz: en az 14 px uzar.
+    const bitisik = bolOkYolu({ x1: 0, x2: 40, y1: 21, y2: 25 }, { x1: 10, x2: 30, y1: 0, y2: 20 });
+    expect(bitisik.yol).toBe('M20,34 L20,26');
     const bos = bolOkYolu({ x1: 5, x2: 5, y1: 5, y2: 5 }, { x1: 5, x2: 5, y1: 5, y2: 5 });
     expect(bos.yol).not.toContain('NaN');
     expect(bos.uc).not.toContain('NaN');

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { BOL_UYGULA_KISA, type BolOnizlemesi } from './bol-onizleme.ts';
@@ -14,10 +15,22 @@ export function MakasSimgesi() {
 }
 
 export function BolOnayi({ o, duzenle, vazgec, uygula, bekle }: { o: BolOnizlemesi; duzenle: () => void; vazgec: () => void; uygula: () => void; bekle: boolean }) {
+  const kutu = useRef<HTMLDivElement | null>(null);
+  // Çubuk sabit durur ve yazı büyüdükçe uzar: kaydırma alanının alt boşluğu ve kaydırma payı çubuğun kapladığı yüksekliğe eşitlenir (--bol-onay-yuk).
+  useEffect(() => {
+    const el = kutu.current, kok = document.querySelector<HTMLElement>('.tc-pyq');
+    if (!el || !kok) return undefined;
+    const olc = (): void => { kok.style.setProperty('--bol-onay-yuk', `${String(Math.ceil(window.innerHeight - el.getBoundingClientRect().top))}px`); };
+    olc();
+    const izleyen = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(olc);
+    izleyen?.observe(el);
+    window.addEventListener('resize', olc);
+    return () => { izleyen?.disconnect(); window.removeEventListener('resize', olc); kok.style.removeProperty('--bol-onay-yuk'); };
+  }, []);
   return (
     <>
       {createPortal(
-        <div className="tc-pyq-ipucu tc-pyq-tasima-onayi tc-pyq-alt-panel tc-pyq-bol-onayi" role="group" aria-label="Bölmeyi onayla" data-bol-onayi="">
+        <div ref={kutu} className="tc-pyq-ipucu tc-pyq-tasima-onayi tc-pyq-alt-panel tc-pyq-bol-onayi" role="group" aria-label="Bölmeyi onayla" data-bol-onayi="">
           <b className="tc-pyq-onay-tur" data-onay-tur="bol"><MakasSimgesi /> Böl</b>
           <span role="status">
             <span className="tc-pyq-bol-uzun" data-bol-cumle="uzun">{o.cumle}</span>

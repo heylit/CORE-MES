@@ -108,6 +108,9 @@ describe('Kokpit: bölmenin etkisi tahtada taslak olarak görünür (3792)', () 
     expect(serit.textContent).toContain('Önizleme: bölmenin taslağı · plan değişmedi');
     expect(serit.textContent).toContain('Canlıya al, bölme uygulanınca ya da vazgeçilince açılır');
     expect((within(serit).getByRole('button', { name: 'Onaya gönder' }) as HTMLButtonElement).disabled).toBe(true);
+    // Taslak varken üst çubukta ikinci Canlıya al durmaz; durursa kapalıdır (salt).
+    const gonderler = [...document.querySelectorAll<HTMLButtonElement>('.tc-pyq-gonder')];
+    for (const g of gonderler) expect(g.disabled).toBe(true);
     const onay = screen.getByRole('group', { name: 'Bölmeyi onayla' });
     expect(onay.querySelector('[data-onay-tur]')?.textContent).toMatch(/Böl$/);
     expect(onay.querySelector('[data-bol-cumle="uzun"]')?.textContent).toMatch(/iki|2 paya bölünür/);
@@ -129,6 +132,15 @@ describe('Kokpit: bölmenin etkisi tahtada taslak olarak görünür (3792)', () 
     expect(screen.queryByText(/Bırakmak için tıklayın/)).toBeNull();
     fireEvent.contextMenu(is);
     expect(screen.queryByRole('menu')).toBeNull();
+    // 3791: pay normalde taşınır ve kardeşiyle birleşir; önizlemede taslak pay da tutulmaz, birleştirme ipucu çıkmaz.
+    const pay = taslakCubuklari()[0]!;
+    fireEvent.doubleClick(pay);
+    fireEvent.pointerDown(pay, { button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(pay, { clientX: 80, clientY: 40 });
+    fireEvent.contextMenu(pay);
+    expect(screen.queryByText(/Bırakmak için tıklayın|Bırakın: iş taşınır|kardeş payın üstüne bırakın/i)).toBeNull();
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.querySelector('.tc-pyq-tahta[data-tasima], .tc-pyq-tahta[data-birlesme]')).toBeNull();
     // Bir işe basmak seçer; önizleme sürer.
     fireEvent.click(is);
     await new Promise((t) => { setTimeout(t, 300); });
@@ -143,9 +155,17 @@ describe('Kokpit: bölmenin etkisi tahtada taslak olarak görünür (3792)', () 
   it('Vazgeç bölmeyi taslaktan geri alır, önizleme kalkar ve panel girilen değerlerle yeniden açılır; Esc de aynısını yapar', async () => {
     const post = ac();
     await waitFor(() => { expect(api.get).toHaveBeenCalledWith('/plan/taslagim'); });
+    // Önizleme ölçeği, yakınlaştırmayı ve görünümü değiştirir; kapanınca üçü de eski haline döner.
+    const durum = () => ({
+      olcek: document.querySelector('.tc-pyq-tahta')?.getAttribute('data-olcek'),
+      yakin: document.querySelector<HTMLInputElement>('.tc-pyq-yakin')?.value,
+      gorunum: [...document.querySelectorAll('[data-ld-gorunum]')].map((b) => `${b.getAttribute('data-ld-gorunum')}:${b.getAttribute('aria-pressed')}`),
+    });
+    const once = durum();
     const girilen = await etkisiniGor();
     fireEvent.click(within(screen.getByRole('group', { name: 'Bölmeyi onayla' })).getByRole('button', { name: 'Vazgeç' }));
     await waitFor(() => { expect(screen.queryByRole('group', { name: 'Bölmeyi onayla' })).toBeNull(); });
+    await waitFor(() => { expect(durum()).toEqual(once); });
     expect(yollar(post, '/taslagim/geri-al')).toHaveLength(1);
     expect(taslakCubuklari()).toEqual([]);
     await waitFor(() => { expect(document.querySelectorAll('[data-bol-ok]')).toHaveLength(0); });

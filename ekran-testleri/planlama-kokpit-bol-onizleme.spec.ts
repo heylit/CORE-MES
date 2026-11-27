@@ -61,10 +61,13 @@ async function sunucu(page: Page, ilk: Bolme) {
   return s;
 }
 
-test('Kokpit 3792: Etkisini gör bölünmüş planı tahtada taslak olarak gösterir; Vazgeç geri alır ve değerler durur, Uygula taslağa yazar; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
-  const proje = bilgi.project.name, telefon = proje === 'g360';
+// Büyük yazı (%130) yalnız telefonda sınanır: onay çubuğu uzar, kaydırma payı çubuğa eşitlenmelidir.
+for (const buyuk of [false, true]) test(`Kokpit 3792${buyuk ? ' (%130 yazı)' : ''}: Etkisini gör bölünmüş planı tahtada taslak olarak gösterir; Vazgeç geri alır ve değerler durur, Uygula taslağa yazar; yatay taşma yok`, async ({ page, ac, ag }, bilgi) => {
+  const proje = bilgi.project.name + (buyuk ? 'y' : ''), telefon = bilgi.project.name === 'g360';
+  test.skip(buyuk && !telefon, 'büyük yazı yalnız 360');
   const ilk: Bolme = telefon ? [{ adet: 20, m: 'M1' }, { adet: 20, m: 'M2' }] : null;
   const s = await sunucu(page, ilk);
+  if (buyuk) await page.addInitScript(() => { document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = ':root{--yazi-xs:15.6px;--yazi-s:18.2px;--yazi-m:20.8px;--yazi-l:23.4px}'; document.head.append(st); }); });
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
   await ac('/plan/kokpit');
   const kokpit = page.locator('.tc-pyq');
@@ -91,6 +94,14 @@ test('Kokpit 3792: Etkisini gör bölünmüş planı tahtada taslak olarak göst
   const girilen = await adetler.evaluateAll((l) => l.map((x) => (x as HTMLInputElement).value));
   await tasma();
   await cek('1-panel');
+  // Önizleme ölçeği ve odağı değiştirir; Vazgeç sonrası ölçek, yakınlaştırma, görünüm ve kaydırma eski haline döner.
+  const durum = () => page.evaluate(() => ({
+    olcek: document.querySelector('.tc-pyq-tahta')?.getAttribute('data-olcek') ?? null,
+    yakin: document.querySelector<HTMLInputElement>('.tc-pyq-yakin')?.value ?? null,
+    gorunum: [...document.querySelectorAll('[data-ld-gorunum]')].map((b) => `${b.getAttribute('data-ld-gorunum')}:${b.getAttribute('aria-pressed')}`),
+    kaydirma: document.querySelector('.tc-pyq-tahta')?.scrollLeft ?? 0,
+  }));
+  const eskiDurum = await durum();
   await panel.getByRole('button', { name: 'Etkisini gör' }).click();
 
   // Önizleme: panel gizli, tahtada taslak paylar ve eski yer, üstte tek şerit, altta onay çubuğu.
@@ -110,11 +121,33 @@ test('Kokpit 3792: Etkisini gör bölünmüş planı tahtada taslak olarak göst
   await expect(serit).toContainText('Önizleme: bölmenin taslağı · plan değişmedi');
   await expect(serit).toContainText('Canlıya al, bölme uygulanınca ya da vazgeçilince açılır');
   await expect(serit.getByRole('button', { name: /Canlıya al|Onaya gönder/ })).toBeDisabled();
+  // Üst çubuktaki Canlıya al / Onaya gönder de kapalıdır.
+  for (const g of await kokpit.locator('.tc-pyq-gonder').all()) await expect(g).toBeDisabled();
   await expect(onay.getByRole('button')).toHaveText(['Düzenle', 'Vazgeç', 'Uygula']);
   await expect(onay.locator('[data-bol-not]')).toHaveText('Uygula taslağa yazar; plan Canlıya al ile değişir.');
   expect(s.dizilen).toBe(0);
   await cek('2-onizleme');
   await tasma();
+  // Paylar ve kayan iş (Taşlama) açılışta birlikte tam görünür: tahtanın zaman alanında (sol sütunların sağında) ve onay çubuğunun üstünde; kirpik ya da örtülü olamaz.
+  await page.waitForTimeout(1200);
+  const alan = (await kokpit.locator('.tc-pyq-tahta').boundingBox())!, solSutun = (await kokpit.locator('.tc-pyq-tahta .tc-pyq-bas').first().boundingBox())!;
+  const cubuk = (await onay.boundingBox())!, ustSinir = (await page.getByRole('banner').first().boundingBox())?.height ?? 0;
+  for (const sec of ['[data-taslak]', '.tc-pyq-is[data-is="S1.a2"]']) {
+    for (const el of await kokpit.locator(`.tc-pyq-tahta ${sec}`).all()) {
+      const b = (await el.boundingBox())!;
+      expect(b.x, `${sec} sol`).toBeGreaterThanOrEqual(alan.x + solSutun.width - 1);
+      expect(b.x + b.width, `${sec} sağ`).toBeLessThanOrEqual(alan.x + alan.width + 1);
+      expect(b.y, `${sec} üst`).toBeGreaterThanOrEqual(ustSinir - 1);
+      expect(b.y + b.height, `${sec} alt`).toBeLessThanOrEqual(cubuk.y + 1);
+    }
+  }
+  // Eski yer etiketi taslak paya binmez.
+  const eskiK = (await eski.first().boundingBox())!;
+  for (const el of await taslak.all()) {
+    const b = (await el.boundingBox())!;
+    const kesisim = Math.min(eskiK.y + eskiK.height, b.y + b.height) - Math.max(eskiK.y, b.y);
+    if (Math.min(eskiK.x + eskiK.width, b.x + b.width) - Math.max(eskiK.x, b.x) > 0) expect(kesisim, 'eski yer şeridi taslak paya biner').toBeLessThanOrEqual(1);
+  }
   // Onay çubuğu yan menünün üstüne binmez; dokunma hedefleri en az 44 px.
   const anaMenu = page.getByRole('navigation', { name: 'Ana menü' });
   const menu = (await anaMenu.count()) > 0 ? await anaMenu.first().boundingBox() : null, kutu = await onay.boundingBox();
@@ -122,13 +155,6 @@ test('Kokpit 3792: Etkisini gör bölünmüş planı tahtada taslak olarak göst
   if (telefon) {
     for (const d of await onay.getByRole('button').all()) expect((await d.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
     await expect(onay.locator('[data-bol-cumle="kisa"]')).toBeVisible();
-    // Açılışta paylar ve kayan iş (Taşlama) birlikte görünür: tahtanın yatay görünümü içindedir.
-    const alan = await kokpit.locator('.tc-pyq-tahta').boundingBox();
-    for (const sec of ['[data-taslak]', `.tc-pyq-is[data-is="S1.a2"]`]) {
-      const b = await kokpit.locator(`.tc-pyq-tahta ${sec}`).first().boundingBox();
-      expect(b!.x + b!.width).toBeGreaterThan(alan!.x);
-      expect(b!.x).toBeLessThan(alan!.x + alan!.width);
-    }
     await expect(page.getByRole('button', { name: /Yalnız etkilenen \d+ tezgâh/ })).toBeVisible();
   }
   // Önizlemede sürükleme kapalı: çift tık işi tutmaz.
@@ -141,6 +167,7 @@ test('Kokpit 3792: Etkisini gör bölünmüş planı tahtada taslak olarak göst
   await expect(taslak).toHaveCount(0);
   await expect(panel).toBeVisible();
   expect(s.geriAlinan).toBe(1);
+  await expect.poll(async () => { const d = await durum(); return { ...d, kaydirma: Math.abs(d.kaydirma - eskiDurum.kaydirma) <= 2 }; }, { timeout: 5000 }).toEqual({ ...eskiDurum, kaydirma: true });
   expect(await adetler.evaluateAll((l) => l.map((x) => (x as HTMLInputElement).value))).toEqual(girilen);
 
   // Esc de aynısını yapar.

@@ -94,7 +94,7 @@ const YON_ADI = { ileri: 'İleriye', geri: 'Teslimden geriye' } as const;
 const TUR_ACIK = false as boolean;
 // Ctrl + tekerleğin bir adımı saat enini bu oranda büyütür ya da küçültür; sığdırmada tahta ölçülemezse (ilk çizim) bu genişlik alınır.
 // Telefonda tezgâh adı sütunu dar alanı yer; önizleme aralığı en az bu enle sığdırılır (yatay kaydırılır) ki paylar hücre kipine düşmesin.
-const TEKER_ORANI = 1.25, SIGDIRMA_ENI = 1000, ONIZLEME_EN_AZ = 120;
+const TEKER_ORANI = 1.25, SIGDIRMA_ENI = 1000, ONIZLEME_EN_AZ = 40, ONIZLEME_PAYI = 44;
 const YON_ACIKLAMASI = { ileri: 'Bütün planı ileriye diz: iş ilk boş saatte başlar', geri: 'Bütün planı teslimden geriye diz: iş termine yetişecek en geç saatte başlar' } as const;
 
 // Menü düğmenin sağ kenarına yaslı açılır; düğme şeridin solundaysa menü sola taşıp kesilir. O zaman düğmenin sol kenarına yaslanır.
@@ -907,6 +907,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const bolOncesi = useRef<{ saatEni: number | null; olcek: KokpitOlcegi; odak: number | null; gorunum: 'emir' | 'tezgah' | 'siparis' } | null>(null);
   const bolAcik = bolOn !== null;
   const bolIlk = bolOn?.isId ?? null, bolBas = bolOn?.aralik.bas ?? 0, bolSon = bolOn?.aralik.son ?? 0;
+  const bolKayanlar = Object.keys(bolOn?.kayanEski ?? {}).join('|');
   useEffect(() => {
     if (!bolAcik) {
       const o = bolOncesi.current;
@@ -917,20 +918,39 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     // Paylar tezgâh satırlarında görünür: Emirler ağacında adım satırı kapalı olabilir.
     setLdGorunum('tezgah');
     setBolSuz(darEkran());
-    // Üst şerit ve tahta birlikte görünsün: önizleme sayfanın aşağısında kalmasın.
-    requestAnimationFrame(() => {
-      const s = document.querySelector<HTMLElement>('[data-onizleme]');
-      if (s !== null && typeof s.scrollIntoView === 'function') s.scrollIntoView({ block: 'start' });
-    });
-    const k = document.querySelector<HTMLElement>('.tc-pyq-tahta'), ad = k?.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0;
-    const gorunen = Math.max((k?.clientWidth ?? 0) - ad, ONIZLEME_EN_AZ);
-    const r = sigdirma(bolBas, bolSon, gorunen);
-    // Hafta ölçeği tahtayı hücre kipine çevirir; paylar çubuk olarak görünmeli.
-    const o = yakinOlcegi(r.px);
-    setSaatEni(r.px); setOlcek(o === 'H' ? '3' : o);
-    // Telefonda görünen alan birkaç yüz px: tahtanın odak payı (ODAK_PAYI) paylara ayrılan yeri yemesin.
-    setOdak(darEkran() ? r.odak + ODAK_PAYI / r.px : r.odak);
-  }, [bolAcik, bolIlk, bolBas, bolSon]);
+    // Ölçüm yerleşimden sonra yapılır (tahta telefonda ancak şimdi açılır, görünüm Tezgâhlar'a döner); sonra paylar ve kayan iş birlikte görünür.
+    const kayanlar = bolKayanlar === '' ? [] : bolKayanlar.split('|');
+    let iptal = false;
+    const sigdir = (): void => {
+      const k = document.querySelector<HTMLElement>('.tc-pyq-tahta'), ad = k?.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0;
+      const gorunen = Math.max((k?.clientWidth ?? 0) - ad - ONIZLEME_PAYI, ONIZLEME_EN_AZ);
+      const r = sigdirma(bolBas, bolSon, gorunen);
+      // Hafta ölçeği tahtayı hücre kipine çevirir; paylar çubuk olarak görünmeli.
+      const o = yakinOlcegi(r.px);
+      setSaatEni(r.px); setOlcek(o === 'H' ? '3' : o);
+      // Tahtanın odak payı (ODAK_PAYI) paylara ayrılan yeri yemesin: sığdırılan aralık görünen alanın tamamını kullanır.
+      setOdak(r.odak + ODAK_PAYI / r.px);
+    };
+    // Paylar ve kayan iş dikeyde de görünür: alttaki onay çubuğunun üstünde kalacak biçimde kaydırılır (kaydırma payı çubuk yüksekliğidir).
+    const gorunumeGetir = (): void => {
+      const k = document.querySelector<HTMLElement>('.tc-pyq-tahta');
+      if (k === null) return;
+      const hedefler = [...k.querySelectorAll<HTMLElement>('[data-taslak]'), ...kayanlar.flatMap((id) => [...k.querySelectorAll<HTMLElement>(`[data-is="${id.replace(/["\\]/g, '\\$&')}"]`)])];
+      if (hedefler.length === 0) return;
+      // Yalnız dikey kaydırılır (scrollIntoView sol sütunların altına yatay kaydırırdı): paylar ve kayan iş, kaydırıcının üstü ile onay çubuğu arasına sığar.
+      let kab: HTMLElement | null = k.parentElement;
+      while (kab !== null && !(kab.scrollHeight > kab.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(kab).overflowY))) kab = kab.parentElement;
+      if (kab === null) return;
+      const cubuk = document.querySelector<HTMLElement>('[data-bol-onayi]'), alt = cubuk ? cubuk.getBoundingClientRect().top : window.innerHeight, ust = kab.getBoundingClientRect().top;
+      const bas = Math.min(...hedefler.map((h) => h.getBoundingClientRect().top)), son = Math.max(...hedefler.map((h) => h.getBoundingClientRect().bottom));
+      const pay = 8;
+      let dy = son + pay - alt;
+      if (bas - dy < ust + pay) dy = bas - ust - pay;
+      if (Math.abs(dy) > 1) kab.scrollBy({ top: dy });
+    };
+    const t1 = window.setTimeout(() => { if (!iptal) sigdir(); }, 60), t2 = window.setTimeout(() => { if (!iptal) sigdir(); }, 300), t3 = window.setTimeout(() => { if (!iptal) gorunumeGetir(); }, 600);
+    return () => { iptal = true; window.clearTimeout(t1); window.clearTimeout(t2); window.clearTimeout(t3); };
+  }, [bolAcik, bolIlk, bolBas, bolSon, bolKayanlar]);
   const bolVazgec = bolIstegi?.vazgec;
   useEffect(() => {
     if (bolVazgec === undefined || !bolAcik) return;

@@ -69,6 +69,7 @@ export function bolOnizlemesiKur(once: Model, sonra: Model, isId: string, zaman:
 // Önizleme okları: eski yerden yeni yere kesik ok (bölünen adımın eski yerinden paylara, kayan işin eski yerinden yeni yerine).
 // Kutular tahta içi px'tir; hedef yatayda ayrışıksa ok kenar ortasından, üst üste biniyorsa dikey kenardan çıkar. Saf.
 export interface OkKutu { x1: number; x2: number; y1: number; y2: number }
+const OK_EN_AZ = 14;
 const yuvarla = (n: number): string => String(Math.round(n * 10) / 10);
 export function bolOkYolu(a: OkKutu, b: OkKutu): { yol: string; uc: string } {
   const ay = (a.y1 + a.y2) / 2, by = (b.y1 + b.y2) / 2;
@@ -81,7 +82,10 @@ export function bolOkYolu(a: OkKutu, b: OkKutu): { yol: string; uc: string } {
     const x = (Math.max(a.x1, b.x1) + Math.min(a.x2, b.x2)) / 2;
     if (by >= ay) { p = [x, a.y2]; q = [x, b.y1]; } else { p = [x, a.y1]; q = [x, b.y2]; }
   }
-  const dx = q[0] - p[0], dy = q[1] - p[1], uz = Math.hypot(dx, dy), ux = uz < 1 ? 1 : dx / uz, uy = uz < 1 ? 0 : dy / uz;
+  const dx = q[0] - p[0], dy = q[1] - p[1], uz = Math.hypot(dx, dy);
+  const ux = uz < 1 ? 1 : dx / uz, uy = uz < 1 ? 0 : dy / uz;
+  // Kutular birbirine bitişikse ok görünmez kalır: en az görünür uzunluk verilir (başlangıç yönün tersine uzar).
+  if (uz < OK_EN_AZ) { p = [q[0] - ux * OK_EN_AZ, q[1] - uy * OK_EN_AZ]; }
   const tx = q[0] - ux * 6, ty = q[1] - uy * 6;
   return {
     yol: `M${yuvarla(p[0])},${yuvarla(p[1])} L${yuvarla(tx)},${yuvarla(ty)}`,

@@ -1449,10 +1449,11 @@
    (satır o kadar uzar), ikisi üst üste binmez. Renk tek ayırt edici değildir: çerçeve biçimi, simge ve yazı da ayırır. */
 .tc-pyq-is[data-taslak] { outline: var(--cizgi) dashed var(--hazard); outline-offset: calc(var(--pay-ince) * -1); background: color-mix(in oklab, var(--hazard) 14%, var(--panel-solid)); }
 .tc-pyq-taslak-rozet { flex: none; margin-left: auto; padding: 0 var(--b-1); border: var(--cizgi-ince) solid var(--hazard); border-radius: var(--yari-tam); color: var(--ink); font-size: var(--yazi-xs); font-weight: 700; }
-.tc-pyq-satir:has(> .tc-pyq-eski-alt) { min-height: calc(var(--satir) + var(--b-4)); }
-.tc-pyq-satir:has(> .tc-pyq-eski-alt) .tc-pyq-is[data-taslak] { bottom: calc(var(--b-1) + var(--b-4)); }
-.tc-pyq-eski-alt {
+.tc-pyq-satir:has(.tc-pyq-eski-alt) { min-height: calc(var(--satir) + var(--b-4)); }
+.tc-pyq-satir:has(.tc-pyq-eski-alt) .tc-pyq-is[data-taslak] { bottom: calc(var(--b-1) + var(--b-4)); }
+.tc-pyq-satir .tc-pyq-hayalet.tc-pyq-eski.tc-pyq-eski-alt {
   top: auto; bottom: var(--pay-ince); height: calc(var(--b-4) - var(--pay-ince)); z-index: 1; padding: 0 var(--b-1); border-color: var(--ink); color: var(--ink); font-weight: 400;
+  display: flex; align-items: center; overflow: hidden; white-space: nowrap; line-height: 1;
   background: repeating-linear-gradient(135deg, var(--edge) 0 var(--pay-ince), transparent var(--pay-ince) var(--b-1));
 }
 .tc-pyq-taslak[data-onizleme] { border-left-color: var(--hazard); background: repeating-linear-gradient(135deg, var(--panel2) 0 var(--b-3), color-mix(in oklab, var(--hazard) 12%, var(--panel2)) var(--b-3) var(--b-5)); }
@@ -1481,11 +1482,13 @@
 .tc-pyq-elle-bol[hidden] { display: none; }
 /* 3792: telefonda önizleme şeridi kısalır (sayaç özeti gizlenir); tahta onay çubuğunun üstünde görünür kalsın. */
 @media (max-width: 767px) {
+  .tc-pyq-eski-ayrinti { display: none; }
+  .tc-pyq-taslak-rozet { position: absolute; width: var(--pay-ince); height: var(--pay-ince); margin: 0; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .tc-pyq-taslak[data-onizleme] > :not(b, [data-onizleme-neden], .tc-pyq-taslak-dugmeler, .tc-pyq-taslak-hata) { display: none; }
   .tc-pyq-taslak[data-onizleme] .tc-pyq-taslak-dugmeler { margin-left: 0; }
   .tc-pyq-taslak[data-onizleme] .tc-pyq-taslak-dugmeler button:not(:last-child) { display: none; }
   .tc-pyq-bol-suzgec button { padding-inline: var(--b-2); font-size: var(--yazi-s); }
 }
 /* 3792: onay çubuğu sabit durur; gövdenin son satırları çubuğun altında kalmasın. */
-.tc-pyq[data-bol-onizleme] .tc-pyq-govde { padding-bottom: calc(var(--b-6) * 3); }
-@media (max-width: 767px) { .tc-pyq[data-bol-onizleme] .tc-pyq-govde { padding-bottom: calc(var(--b-6) * 4); } }
+.tc-pyq[data-bol-onizleme] .tc-pyq-govde { padding-bottom: var(--bol-onay-yuk, calc(var(--b-6) * 4)); }
+.tc-pyq[data-bol-onizleme] .tc-pyq-tahta [data-is] { scroll-margin-block: var(--b-5) var(--bol-onay-yuk, calc(var(--b-6) * 4)); }

@@ -1328,8 +1328,8 @@ export function Tahta(o: TahtaOzellikleri) {
     const kok = m.isler[bolOn.isId];
     return bolOn.eski.flatMap((y) => {
       if (goz === 'T' ? !kok || satirKimligi({ ...kok, m: y.m }) !== r.kimlik : !r.isler.some((x) => adimKimligi(x) === bolOn.isId)) return [];
-      const yazi = `eski yer · ${tezgahKodu.get(y.m) ?? y.m} ${zaman(y.S).slice(6)}–${zaman(y.C).slice(-5)}`;
-      return [<span className="tc-pyq-hayalet tc-pyq-eski tc-pyq-eski-alt" key={`bol-eski-${y.id}`} data-bol-eski={y.id} title={yazi} ref={(el) => { yerYaz(el, (y.S - m.bas) * px, Math.max((y.C - y.S) * px, OKUNUR_EN)); }}>{yazi}</span>];
+      const ayrinti = ` · ${tezgahKodu.get(y.m) ?? y.m} ${zaman(y.S).slice(6)}–${zaman(y.C).slice(-5)}`, yazi = `eski yer${ayrinti}`;
+      return [<span className="tc-pyq-hayalet tc-pyq-eski tc-pyq-eski-alt" key={`bol-eski-${y.id}`} data-bol-eski={y.id} title={yazi} ref={(el) => { yerYaz(el, (y.S - m.bas) * px, Math.max((y.C - y.S) * px, OKUNUR_EN)); }}>eski yer<span className="tc-pyq-eski-ayrinti">{ayrinti}</span></span>];
     });
   };
 
