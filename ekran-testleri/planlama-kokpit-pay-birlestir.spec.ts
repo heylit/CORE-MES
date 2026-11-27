@@ -173,7 +173,7 @@ for (const buyukYazi of [false, true]) {
     // 3791: tutulan pay hayalet çubuk olarak imleci izler; ipucu hem birleştirmeyi hem taşımayı söyler.
     await expect(kokpit.locator('.tc-pyq-tahta[data-tasima]')).toHaveCount(1);
     await expect(p3).toHaveAttribute('data-tasinan', '');
-    await expect(kokpit.getByRole('status').filter({ hasText: 'Kardeş payın üstüne bırakın: birleşir · başka yere: Bırakın: iş taşınır' })).toBeVisible();
+    await expect(kokpit.getByRole('status').filter({ hasText: 'Kardeş payın üstüne bırakın: birleşir · başka yere bırakın: iş taşınır' })).toBeVisible();
     await expect(bolum.locator('.tc-pyq-is[data-birles-aday]')).toHaveCount(2);
     const satir2 = bolum.locator(`[data-pay-satir="${ADIM}~2"]`);
     const bas = await satir2.locator('.tc-pyq-bas').boundingBox();

@@ -173,7 +173,7 @@ describe('Kokpit: pay birleştirme (3751)', () => {
       // 3791: tutulan pay hayalet çubuk olarak imleci izler (taşıma kipi açık) ve ipucu hem birleştirmeyi hem taşımayı söyler.
       expect(bolum.querySelector('.tc-pyq-tahta[data-tasima]')).not.toBeNull();
       expect(kaynak.hasAttribute('data-tasinan')).toBe(true);
-      expect(screen.getByText(/Kardeş payın üstüne bırakın: birleşir · başka yere: Bırakın: iş taşınır/)).toBeTruthy();
+      expect(screen.getByText(/Kardeş payın üstüne bırakın: birleşir · başka yere bırakın: iş taşınır/)).toBeTruthy();
       expect([...bolum.querySelectorAll<HTMLElement>('.tc-pyq-is[data-birles-aday]')].map((x) => x.dataset['is'])).toEqual(['2.20', '2.20~2']);
       // Hedef sol listedeki pay satırının tamamıdır: satırın başlık hücresinin üstüne gelinir.
       const satir = bolum.querySelector<HTMLElement>('[data-pay-satir="2.20~2"]')!;
