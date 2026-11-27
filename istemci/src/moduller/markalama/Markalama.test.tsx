@@ -154,8 +154,10 @@ describe('Markalama tanımları', () => {
     await emirOkut('Üretim emri ara');
     expect(await screen.findByText('Rev B · emrin çizimi')).toBeTruthy();
     expect(screen.queryByLabelText('Teknik resim revizyonu')).toBeNull();
+    fireEvent.click(await screen.findByRole('option', { name: /OP40/ }));
     fireEvent.click(screen.getByRole('radio', { name: 'Yalnız UE-DNM-1' }));
     const op = await screen.findByRole('option', { name: /OP40/ });
+    expect(op.getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByRole('option', { name: /OP30/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Tümünü göster/ }));
     expect(await screen.findByRole('option', { name: /OP30/ })).toBeTruthy();
@@ -360,6 +362,7 @@ describe('Markalama terminali, emirden iş', () => {
     expect(screen.getByRole('option', { name: /OP60/ })).toBeTruthy();
     expect(screen.queryByRole('option', { name: /OP30/ })).toBeNull();
     expect(cagrilar.some((c) => c.yol.startsWith('/markalama/emirler/5/tanim'))).toBe(false);
+    expect(screen.queryByText('Tanım yok')).toBeNull();
     fireEvent.click(secenek);
     expect(await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' })).toBeTruthy();
   });
@@ -370,6 +373,7 @@ describe('Markalama terminali, emirden iş', () => {
     await emirOkut();
     expect(await screen.findByText(/markalama istasyonuna giden adım yok\. Doğru emri/)).toBeTruthy();
     expect(await screen.findByRole('option', { name: /OP30/ })).toBeTruthy();
+    expect(screen.getAllByText(/markalama istasyonuna giden adım yok/)).toHaveLength(1);
   });
 });
 

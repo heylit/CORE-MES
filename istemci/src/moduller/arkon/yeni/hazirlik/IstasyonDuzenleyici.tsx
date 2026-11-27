@@ -50,7 +50,7 @@ function MarkalamaTanimiOzeti({ paket }: { paket: Pkg }) {
                     <dt>Tanım</dt><dd>{'OP' + is.opNo}{oz.revizyon !== null ? ' · Rev ' + oz.revizyon : ' · bütün revizyonlar'}{oz.emreOzel ? ' · bu emre özel' : ''}</dd>
                     <dt>Şablon</dt><dd className="tc-ay2-mono">{oz.sablon}</dd>
                     <dt>Yöntem</dt><dd>{oz.yontem ?? YOK}</dd>
-                    <dt>Yer</dt><dd>{oz.yer ?? YOK}</dd>
+                    <dt>Yer</dt><dd>{oz.yer ?? 'Tanımda yer yok'}</dd>
                   </dl>
                 )}
         <Link className="tc-ay2-baglanti" to="/markalama"><Simge ad="chev-right" boyut="k" />Tanımı aç</Link>

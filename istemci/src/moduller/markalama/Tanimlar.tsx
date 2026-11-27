@@ -235,7 +235,7 @@ function YeniTanimSecimi({ t, degistir, tanimlar }: { t: Taslak; degistir: (d: P
             {([false, true] as const).map((ozel) => (
               <button key={String(ozel)} type="button" role="radio" aria-checked={t.emreOzel === ozel}
                 className={`tc-mrk-yontem${t.emreOzel === ozel ? ' tc-mrk-yontem-secili' : ''}`}
-                onClick={() => degistir({ emreOzel: ozel, opNo: '' })}
+                onClick={() => degistir({ emreOzel: ozel })}
               >
                 {ozel ? `Yalnız ${emir.emirNo}` : 'Bütün emirler'}
               </button>

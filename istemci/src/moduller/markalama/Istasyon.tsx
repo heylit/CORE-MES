@@ -193,7 +193,7 @@ function EmirIsi({ emir, istasyonId, yazabilir, tanimYazabilir }: { emir: EmirSe
           <p className="tc-mrk-uyari" role="alert">Bu emirde markalama istasyonuna giden adım yok. Doğru emri okuttuğunuzu denetleyin ya da adımı aşağıdan seçin.</p>
         )}
         {ops.data && (markalamadakiler.length !== 1 || opNo !== null) && (
-          <OperasyonListesi kaynak={{ emirId: emir.id }} secili={seciliOp} sec={(o) => opNoYaz(o.opNo)} tanimli={new Set()} />
+          <OperasyonListesi kaynak={{ emirId: emir.id }} secili={seciliOp} sec={(o) => opNoYaz(o.opNo)} adimsizNotu={false} />
         )}
         {op !== undefined && <p className="tc-mrk-ipucu"><b className="mono">OP{op.opNo}</b> {op.ad}{op.istasyonKodu === null ? '' : ` · ${op.istasyonKodu}`}</p>}
         {is.isError && <p className="tc-mrk-hata" role="alert">{hataIletisi(is.error, 'Markalama tanımı okunamadı')}</p>}
@@ -228,7 +228,7 @@ export function Istasyon() {
       <Kart baslik="Markalama terminali" simge="scan">
         {emir === null
           ? <EmirArama etiket="Emri ya da refakat kartını okut" sec={emirYaz} />
-          : <Dugme simge="x" onClick={() => emirYaz(null)}>Başka emir</Dugme>}
+          : <Dugme simge="x" boyut="ana" onClick={() => emirYaz(null)}>Başka emir</Dugme>}
         <div className="tc-mrk-satir">
           <Secim
             etiket="Bu cihazın istasyonu"

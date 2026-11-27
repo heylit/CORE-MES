@@ -48,8 +48,10 @@ export function EmirArama({ sec, etiket = 'Üretim emri ara' }: { sec: (e: EmirS
 export type OperasyonKaynagi = { emirId: number } | { malzemeId: number };
 
 // Varsayılan olarak yalnız markalama istasyonundaki adımlar görünür; istasyonu bilinmeyen (malzemeden okunan) listede hepsi görünür.
-export function OperasyonListesi({ kaynak, secili, sec, tanimli }: {
-  kaynak: OperasyonKaynagi; secili: number | null; sec: (op: MarkalamaOperasyonSecimi) => void; tanimli: ReadonlySet<number>;
+// Tanım rozeti yalnız tanımlı adımlar bilindiğinde basılır (terminalde tanımı sunucu seçer; adım başına bilinmez).
+// Adımsızlık uyarısını kendisi yazan ekran (terminal) liste notunu kapatır: aynı anlam iki kez yazılmasın.
+export function OperasyonListesi({ kaynak, secili, sec, tanimli, adimsizNotu = true }: {
+  kaynak: OperasyonKaynagi; secili: number | null; sec: (op: MarkalamaOperasyonSecimi) => void; tanimli?: ReadonlySet<number>; adimsizNotu?: boolean;
 }) {
   const [hepsi, hepsiYaz] = useState(false);
   const emirden = 'emirId' in kaynak;
@@ -80,7 +82,7 @@ export function OperasyonListesi({ kaynak, secili, sec, tanimli }: {
           >
             <span className="mono tc-mrk-op-no">OP{o.opNo}</span>
             <span className="tc-mrk-op-ad">{o.ad}{o.istasyonKodu !== null && <small className="tc-mrk-ipucu"> · {o.istasyonKodu}</small>}</span>
-            {tanimli.has(o.opNo) ? <Rozet ton="tamam">Tanımlı</Rozet> : <Rozet ton="pasif">Tanım yok</Rozet>}
+            {tanimli !== undefined && (tanimli.has(o.opNo) ? <Rozet ton="tamam">Tanımlı</Rozet> : <Rozet ton="pasif">Tanım yok</Rozet>)}
           </button>
         ))}
       </div>
@@ -89,7 +91,7 @@ export function OperasyonListesi({ kaynak, secili, sec, tanimli }: {
           {hepsi ? 'Yalnız markalama istasyonundakiler' : `Tümünü göster (${tum.length})`}
         </Dugme>
       )}
-      {emirden && markalamadakiler.length === 0 && <p className="tc-mrk-ipucu">Bu emrin rotasında markalama istasyonuna giden adım yok; bütün adımlar listede.</p>}
+      {emirden && adimsizNotu && markalamadakiler.length === 0 && <p className="tc-mrk-ipucu">Bu emrin rotasında markalama istasyonuna giden adım yok; bütün adımlar listede.</p>}
     </div>
   );
 }
