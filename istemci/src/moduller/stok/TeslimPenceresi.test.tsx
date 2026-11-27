@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { cleanup, configure, fireEvent, getConfig, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { MalzemeIstegi, TeslimLotlariCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -8,6 +8,10 @@ import { cihazTercihleriniSifirla } from '../../ortak/veri/cihaz-tercihi.ts';
 import { DEPOCU, json, sunucuKur } from './test-ortak.tsx';
 import { TeslimPenceresi } from './TeslimPenceresi.tsx';
 
+// Yüklü CI kabuğunda bu pencerenin ağ yığını (lot listesi, iki sıralı sepet isteği) 1 sn'lik varsayılanı aşabiliyor; beklemeler gerçek koşula bağlı, yalnız üst sınır geniş.
+const ESKI_BEKLEME = getConfig().asyncUtilTimeout;
+beforeAll(() => { configure({ asyncUtilTimeout: 8_000 }); });
+afterAll(() => { configure({ asyncUtilTimeout: ESKI_BEKLEME }); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); cihazTercihleriniSifirla(); try { localStorage.clear(); } catch { /* yok */ } });
 
 const ISTEK: MalzemeIstegi = {
@@ -98,6 +102,7 @@ describe('teslim penceresi (3187 a, 3191 a)', () => {
     await waitFor(() => expect(within(screen.getByRole('list', { name: 'Teslim önerisi' })).getAllByRole('listitem')).toHaveLength(2));
     fireEvent.click(screen.getByRole('button', { name: 'Sepete at' }));
     expect(await screen.findByText('Sepetinize eklendi')).toBeTruthy();
+    await waitFor(() => expect(istekler.filter((i) => i.yol === '/stok/sepet/satir-ekle')).toHaveLength(2));
     expect(istekler.filter((i) => i.yol === '/stok/sepet/satir-ekle').map((i) => i.govde)).toEqual([
       { malzemeId: 12, miktar: '4.000', kaynakKonumId: 101, partiId: 501, hedef: { istasyonId: 4 } },
       { malzemeId: 12, miktar: '2.000', kaynakKonumId: 102, partiId: 502, hedef: { istasyonId: 4 } },
