@@ -270,4 +270,23 @@ describe('Kokpit: pay birleştirme (3751)', () => {
       expect(bolum.querySelector('.tc-pyq-tahta[data-tasima]')).toBeNull();
     } finally { geri(); }
   });
+
+  // Test1 C1: Tezgâhlar görünümünde pay 2+ (~3) için aday tezgâhlar adımın kimliğinden okunur; payın kendi kimliğiyle aranırsa bulunamaz ve
+  // bırakma "bu adım bu tezgâhta yapılamaz" diye geri çevrilirdi.
+  it('Tezgâhlar görünümünde ~3 payı başka bir aday tezgâh satırına bırakılınca taşıma onayı açılır (aday tezgâhlar adımdan)', () => {
+    const geri = imlecOlayiKur();
+    try {
+      const post = ac(3);
+      fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Tezgâhlar' }));
+      const kaynak = document.body.querySelector<HTMLElement>('.tc-pyq-tahta [data-is="2.20~3"]')!;
+      // Hedef: adımın ilk payının tezgâh satırı (adımın aday tezgâhı).
+      const alan = document.body.querySelector<HTMLElement>('.tc-pyq-tahta [data-is="2.20"]')!.closest<HTMLElement>('[data-satir]')!.querySelector<HTMLElement>('.tc-pyq-alan')!;
+      fireEvent.pointerDown(kaynak, { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
+      fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 40, clientY: 0 });
+      fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 400, clientY: 0 });
+      fireEvent.pointerUp(document, { pointerType: 'mouse' });
+      expect(screen.getByRole('group', { name: 'Taşımayı onayla' }).querySelector('[data-onay-tur]')?.textContent).toBe('Taşı');
+      expect(komutlar(post)).toEqual([]);
+    } finally { geri(); }
+  });
 });

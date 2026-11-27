@@ -8,7 +8,7 @@ import {
   ElleBol, bolunemezNedeni, esitParcalar, ilkParcalar, kalaniBirlestir, kalaniYenidenBol, kilitliPay, parcaDenetimi, secilenleriBirlestir, type Parca,
 } from './ElleBol.tsx';
 import {
-  onizlemeBitisi, adimBaglari, adimKimligi, adimPaylari, adimSonu, modelKur, payIlerlemeYazisi, payNedeni, payYazisi, payYonleri, tasinabilir, type KokpitModeli,
+  onizlemeBitisi, turAdaylari, adimBaglari, adimKimligi, adimPaylari, adimSonu, modelKur, payIlerlemeYazisi, payNedeni, payYazisi, payYonleri, tasinabilir, type KokpitModeli,
 } from './kurallar.ts';
 import { sahteTaslak } from './taslak-test-yardim.ts';
 
@@ -75,6 +75,17 @@ describe('Kokpit modeli: bölünmüş adımın payları (3681 A)', () => {
     const taban = onizlemeBitisi(m, e, [])!;
     const p2 = m.isler['2.20~2']!;
     expect(onizlemeBitisi(m, e, [{ isId: '2.20~2', C: p2.C + 100 }])).toBeGreaterThan(taban + 50);
+  });
+
+  // Test1 C4: hamle önerileri bölünmüş adımın paylarını önermez (pay yerleşimi bölme penceresinden ve elle taşımadan yönetilir).
+  it('hamle önerileri (turAdaylari) payları önermez; aynı adım bölünmemişken öneri üretilir', () => {
+    const { m } = bolunmusKur();
+    const e = m.emirler.find((y) => y.adimlar.some((a) => a.id === '2.20'))!;
+    expect(turAdaylari(m, e, '2.20').filter((t) => t.isId.startsWith('2.20'))).toEqual([]);
+    const bolunmemis = structuredClone(m);
+    delete bolunmemis.isler['2.20']!.pay;
+    delete bolunmemis.isler['2.20~2'];
+    expect(turAdaylari(bolunmemis, e, '2.20').length).toBeGreaterThan(0);
   });
 
   it('seçili adımın payları başka satırdaysa "N pay aşağıda / yukarıda" sayılır', () => {
