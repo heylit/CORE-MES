@@ -764,7 +764,7 @@ export function takimTablosunuCoz(metin: string): Lsv2TakimSatiri[] | null {
   return sonuc;
 }
 
-// Geçmişe yalnız ömür (ömür sınırı ya da kullanılan süre) ya da kilit değişen takım yazılır. İlk okumada ve yeni görülen takımda
+// Geçmişe yalnız ömür sınırı (TIME1) ya da kilidi değişen takım yazılır. İlk okumada ve yeni görülen takımda
 // geçmiş satırı yazılmaz: değişiklik değil, başlangıç durumudur.
 // Kullanılan süre her kesimde artar; geçmişe yazılsa her seyrek okumada satır olurdu. Son durumda zaten vardır.
 export function takimDegisenleri(onceki: ReadonlyMap<number, Lsv2TakimSatiri> | null, yeni: readonly Lsv2TakimSatiri[]): Lsv2TakimSatiri[] {

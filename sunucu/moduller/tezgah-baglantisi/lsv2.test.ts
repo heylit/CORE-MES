@@ -374,6 +374,29 @@ describe('Kart 3790 giriş düzeyleri: FILE ve PLCDEBUG her yolda kapanır', () 
     }
   });
 
+  test('aktarım ortasında beklenmeyen cevap: okuma düşer ama önce FILE düzeyinden çıkılır', async () => {
+    const s = await ac({ ...tamOkuma(), aktarimHatasi: 'beklenmeyen' });
+    const i = istemci(s);
+    const r = await i.oku({ takimTablosu: true });
+    i.kapat();
+    assert.equal(r.tur, 'bozuk');
+    const m = metinler(s);
+    assert.ok(m.indexOf('A_LO FILE|') > m.findIndex((x) => x.startsWith('R_FL')), m.join(' / '));
+  });
+
+  test('PLCDEBUG girişinden sonra R_MB T_ER verirse sayaç null, tanı yazılır, PLCDEBUG çıkışı yapılır', async () => {
+    const s = await ac({ ...tamOkuma(), plc: new Map() });
+    const i = istemci(s);
+    const r = await i.oku({ plcSayaci: true });
+    i.kapat();
+    assert.equal(r.tur, 'basarili');
+    if (r.tur !== 'basarili') return;
+    assert.equal(r.okuma.sayac, null);
+    assert.deepEqual(r.okuma.tani.find((t) => t.alan === 'sayac'), { alan: 'sayac', kod: 52 });
+    const m = metinler(s);
+    assert.ok(m.indexOf('A_LO PLCDEBUG|') > m.findIndex((x) => x.startsWith('R_MB')), m.join(' / '));
+  });
+
   test('zaman aşımı aktarım ortasında: bağlantı kapatılır, oturum FILE düzeyinde kalmaz', async () => {
     const s = await ac({ ...tamOkuma(), aktarimHatasi: 'cevapsiz' });
     const i = istemci(s, D10000, 200);

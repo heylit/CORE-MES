@@ -32,7 +32,7 @@ export interface SahteMakine {
   blokBoyu?: number;
   fileYetkiYok?: boolean;
   // Aktarımın ortasında (ikinci blokta) verilecek cevap: T_ER ya da hiç cevap.
-  aktarimHatasi?: 'hata' | 'cevapsiz';
+  aktarimHatasi?: 'hata' | 'cevapsiz' | 'beklenmeyen';
   // Bu düzeyden çıkış reddedilir (T_ER).
   cikisReddi?: 'PLCDEBUG' | 'FILE';
   // R_VR alt kodlarını tanımayan eski kumanda.
@@ -172,6 +172,10 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
         if (aktarim.kalan === null) return hata(21);
         aktarim.blok += 1;
         if (m.aktarimHatasi === 'cevapsiz') return null;
+        if (m.aktarimHatasi === 'beklenmeyen') {
+          aktarim.kalan = null;
+          return cerceve('T_OK', Buffer.alloc(0));
+        }
         if (m.aktarimHatasi === 'hata') {
           aktarim.kalan = null;
           return hata(33);
