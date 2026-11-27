@@ -27,7 +27,8 @@ test.describe('3702 Depo paketi rotadan', () => {
     await duzen.getByRole('button', { name: /Toplama listesi/ }).click({ timeout: 20_000 });
     await expect(duzen.getByText('Rotadan: girenler (toplama)')).toBeVisible();
     await expect(duzen.getByLabel('Kod').first()).toHaveValue('ORN-HAM-01');
-    expect(yazilanlar.length).toBeGreaterThan(0);
+    // Doldurma ekranda hemen görünür, yazı 500 ms gecikmeli kayıtla gider: beklenir, anında sayılmaz.
+    await expect.poll(() => yazilanlar.length).toBeGreaterThan(0);
     expect(await tasma(page)).toBeLessThanOrEqual(0);
     const klasor = process.env['TMIV2_EKRAN_GORUNTU']?.trim();
     const resim = async (ad: string) => { if (klasor) await page.screenshot({ path: `${klasor}/${ad}-${bilgi.project.name}.png`, fullPage: true }); };
