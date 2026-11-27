@@ -77,7 +77,7 @@ export const bekleyenSiralar = (db: Db, isEmriIdleri: readonly number[]): Promis
 // işlerin `emirNo|opNo` anahtarı; önizlemedeki saatine konur ve kilitlenir.
 export async function calismaTaslagiYaz(db: Db, k: Kullanici, g: {
   ad: string; kuyruklar: unknown; planSurumu?: number; ekMesai?: readonly { makineId: number; gun: string; vardiyaId: number; personelId: number | null }[]; sabitler?: ReadonlySet<string>;
-}): Promise<{ taslak: { id: number; surum: number }; yazilan: number; atlanan: number; ekMesai: { yazilan: number; atlanan: number }; itilen?: KuyrukYazCevabi['itilen'] }> {
+}): Promise<{ taslak: { id: number; surum: number }; yazilan: number; atlanan: number; ekMesai: { yazilan: number; atlanan: number }; itilen?: KuyrukYazCevabi['itilen']; yakinsamadi?: true }> {
   if (!islemVarMi(k, 'plan.studyo') || !islemVarMi(k, 'plan.yaz')) throw yetkiYok('Plan taslağı yazmak plan stüdyosu ve plan yazma yetkisi ister.');
   const ad = senaryoGovdesi.safeParse({ ad: g.ad });
   if (!ad.success) throw dogrulama(ad.error.issues[0]?.message ?? 'Geçersiz taslak adı.', 'ad');
@@ -85,7 +85,7 @@ export async function calismaTaslagiYaz(db: Db, k: Kullanici, g: {
   if (!govde.success) throw dogrulama(govde.error.issues[0]?.message ?? 'Geçersiz kuyruk.', 'kuyruklar');
   const id = await taslakAc(db, ad.data.ad, null, k.id);
   const { cevap: y, ekMesai } = await kuyruklariYazIc(db, k, { ...govde.data, taslak: { id, surum: (await senaryo(db, id))!.surum }, ekMesai: [...(g.ekMesai ?? [])] }, true, g.sabitler);
-  return { taslak: { id: y.taslak, surum: (await senaryo(db, y.taslak))!.surum }, yazilan: y.yazilan, atlanan: y.atlanan, ekMesai, ...(y.itilen ? { itilen: y.itilen } : {}) };
+  return { taslak: { id: y.taslak, surum: (await senaryo(db, y.taslak))!.surum }, yazilan: y.yazilan, atlanan: y.atlanan, ekMesai, ...(y.itilen ? { itilen: y.itilen } : {}), ...(y.yakinsamadi ? { yakinsamadi: true as const } : {}) };
 }
 
 // 507 3 a: taslağın yerleşimleri ve kilitleri, Reçete ve Rota çalışmaya yazar. Taslağı okumak planı okuma yetkisi ister (GET /plan?taslak=

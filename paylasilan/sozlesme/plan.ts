@@ -361,6 +361,14 @@ export interface SonradanBaslayanAyrintisi { neden: typeof SONRADAN_BASLAYAN; is
 // taslağın taban sürümü ve canlı sürüm). Ekran kişiye sorar, onaylarsa cakismalariKabul true ile yeniden gönderir.
 export const CANLI_DEGISTI = 'canli-degisti';
 export interface CanliDegistiAyrintisi { neden: typeof CANLI_DEGISTI; tabanSurumu: number; canliSurumu: number }
+// 3805: kilitli adım canlıda yerinde kalan işle üst üste gelince taslak yazımı 409 döner; ayrıntının kilitCakismasi alanı çakışmayı yapılı
+// verir (saatler tesis saatiyle "YYYY-MM-DD HH:MM", iletideki gibi). İstemci çareyi bundan kurar; iletinin metni yalnız okunur.
+export const kilitCakismasiAyrintisi = z.object({
+  emirNo: z.string(), opNo: z.number().int(), kaynak: z.string(), engelEmirNo: z.string(), engelOpNo: z.number().int(),
+  neden: z.enum(['sahada çalışıyor', 'kilitli', 'dondurulmuş', 'bu yazımda taşınmıyor']),
+  baslangic: z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/), bitis: z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/),
+});
+export type KilitCakismasiAyrintisi = z.infer<typeof kilitCakismasiAyrintisi>;
 export const canliyaAlGovdesi = z.object({
   surum: KIMLIK, cakismalariKabul: z.boolean().prefault(false),
   acilMusteriler: z.array(z.object({ degisiklikId: KIMLIK, firmaId: KIMLIK })).max(50).prefault([]),
@@ -415,6 +423,8 @@ export const kuyrukYazCevabi = z.object({
   yerlesmeyen: z.array(z.object({ emirNo: z.string(), opNo: z.number().int(), ...planlanamama })).optional(),
   // 3793: öncülünün arkasına itilen paylar. Yoksa alan yok.
   itilen: z.array(itilenPay).optional(),
+  // 3803 N2: motorsuz yazılan işin (parça, kişi tezgâhı) yeri üç yazımda oturmadı; son yazım kaldı. Oturduysa alan yok.
+  yakinsamadi: z.literal(true).optional(),
 });
 export const canliyaAlCevabi = senaryolarCevabi.extend({ motorFarki: motorFarki.optional() });
 // Canlı planın özeti: son canlıya alma ve makine kuyrukları. Reçete ve Rota bunu kendi hesapladığı kuyrukla karşılaştırıp canlıya
@@ -502,6 +512,8 @@ export const canliyaAlOnizlemesiCevabi = z.object({
   })),
   // 3793: yazımda öncülünün arkasına itilen paylar (k: Kokpit'teki iş); yoksa alan yok.
   itilen: z.array(itilenPay.extend({ k: z.string().nullable() })).optional(),
+  // 3803 N2, N3: taslak yazımının uyarıları (gönderme sonucunda da çıkar); planlamacı canlıya almadan görür. Yoksa alan yok.
+  uyarilar: z.array(z.string()).optional(),
 });
 export const kilitliKaydirGovdesi = taslakGovdesi.extend({
   adimlar: z.array(z.object({ isEmriId: KIMLIK, baslangic: tarihZaman })).min(1).max(50),

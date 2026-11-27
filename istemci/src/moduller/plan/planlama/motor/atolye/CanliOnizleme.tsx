@@ -6,7 +6,7 @@ import { useEmirNo } from '../../ortak/emir-no.ts';
 import { altEkranAdresi, type PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { kisitAdi, saatYaz, simdiSaati, type OkunanPlan } from '../kurallar.ts';
-import { adimAdi, careCumlesi, gunSaat, itilenSatiri, kaydirmaDugmesi, kaydirmaIsleri, kapaliListeFarkli, KaydirmaHatasi, kilidiKaldir, kilitCakismasiAyir, kilitCakismasiIsi, kilitCakismasiNedeni, oneriYokMetni, kilitleriKaydir, komsuAdi, komsuKilitKaymalari, nedenCumlesi, yazilanOneri, type Ihlal, type OnizlemeDurumu } from './canli-onizleme.ts';
+import { adimAdi, careCumlesi, gunSaat, itilenSatiri, kaydirmaDugmesi, kaydirmaIsleri, kapaliListeFarkli, KaydirmaHatasi, kilidiKaldir, kilitCakismasiIsi, kilitCakismasiNedeni, oneriYokMetni, kilitleriKaydir, komsuAdi, komsuKilitKaymalari, nedenCumlesi, yazilanOneri, type Ihlal, type KilitCakismasi, type OnizlemeDurumu } from './canli-onizleme.ts';
 
 // 3669: onay sayfasında gönderme öncesi iki parça. Kalıcı satır: kapalı kısıt varken plan o kısıtları saymadan çözülür (canlıya çıkacak saatler
 // de öyle). Uyarı kartı: sunucunun yazacağı yerleşimde sıraya aykırı adım varsa gönderilmeden önce söyler; kilitli adım için kaydırma önerir
@@ -87,16 +87,14 @@ function Oneri({ oneri, yaklasik = false }: { oneri: NonNullable<CanliyaAlOnizle
 
 // 3793-2 (madde 8): kilitli adım canlıda yerinde kalan işle üst üste. Düğme kendiliğinden bir şey yapmaz; onay penceresi ne olacağını söyler.
 // Taşıma Kokpit'in taşıma komutuyla gider (kilitli kalır, ardılları gerekiyorsa itilir), kaldırma kayıtlı çalışmada tek adımdır; ikisi de Geri al ile döner.
-function KilitCakismasiKarti({ o, c, ileti, emirNo }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; ileti: string; emirNo: (id: string) => string }) {
+function KilitCakismasiKarti({ o, c, x, emirNo }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; x: KilitCakismasi; emirNo: (id: string) => string }) {
   const { bildir } = useBildirim();
   const [onay, setOnay] = useState<'tasi' | 'kaldir' | null>(null);
   const [gidiyor, setGidiyor] = useState(false);
   const [yapildi, setYapildi] = useState<string | null>(null);
-  const x = kilitCakismasiAyir(ileti);
   const komut = o.komut;
   const kilitYetkisi = o.yetki.islemVar('plan.kilitle');
-  const isi = x === null ? null : kilitCakismasiIsi(c, x, emirNo, simdiSaati(c, Date.now()));
-  if (x === null) return null;
+  const isi = kilitCakismasiIsi(c, x, emirNo, simdiSaati(c, Date.now()));
   const ad = `${x.emirNo} ${adimAdi(x)}`;
   const saat = isi === null ? '' : saatYaz(c.D, isi.S);
   const kapali = gidiyor || komut === null || isi === null || !kilitYetkisi;
@@ -207,8 +205,8 @@ export function CanliOnizleme({ o, c, p, durum, yenidenDene, etkin = true }: { o
   return (
     <section className="tc-pym-pa-bolum tc-pym-pa-onizleme" aria-label="Sıra denetimi" aria-busy={eski}>
       <KapaliKisitSatiri c={c} sunucu={veri?.kapali ?? null} />
-      {durum.tur === 'hata' && kilitCakismasiAyir(durum.ileti) !== null && <KilitCakismasiKarti key={durum.ileti} o={o} c={c} ileti={durum.ileti} emirNo={emirNo} />}
-      {durum.tur === 'hata' && kilitCakismasiAyir(durum.ileti) === null && (
+      {durum.tur === 'hata' && durum.kilit !== null && <KilitCakismasiKarti key={durum.ileti} o={o} c={c} x={durum.kilit} emirNo={emirNo} />}
+      {durum.tur === 'hata' && durum.kilit === null && (
         <p className="tc-pym-pa-kucuk" role="status">
           <Simge ad="alert" boyut="k" />{` Sıra denetimi alınamadı: ${durum.ileti}. Düğmeler denetim yapılana kadar kapalı. `}
           <button type="button" className="tc-dugme tc-pym-kucuk" onClick={yenidenDene}><Simge ad="rotate" boyut="k" />Yeniden dene</button>
@@ -220,6 +218,12 @@ export function CanliOnizleme({ o, c, p, durum, yenidenDene, etkin = true }: { o
         <div className="tc-pym-pa-kucuk" role="status">
           <Simge ad="clock" boyut="k" />{` ${String(veri!.itilen!.length)} parça Kokpit'teki saatinde öncülünden önce kalıyordu; canlıya alınınca öncülün arkasına itilir.`}
           <ul className="tc-pym-pa-oneri">{veri!.itilen!.map((x) => <li key={`${x.emirNo}|${String(x.opNo)}|${String(x.parca)}`}>{itilenSatiri(x)}</li>)}</ul>
+        </div>
+      )}
+      {(veri?.uyarilar?.length ?? 0) > 0 && (
+        <div className="tc-pym-pa-kucuk" role="status" aria-label="Yazım uyarıları">
+          <Simge ad="alert" boyut="k" />{' Canlıya alınırken:'}
+          <ul className="tc-pym-pa-oneri">{veri!.uyarilar!.map((u) => <li key={u}>{u}</li>)}</ul>
         </div>
       )}
       {ihlaller.length > 0 && p !== null && (

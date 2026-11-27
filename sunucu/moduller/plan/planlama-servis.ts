@@ -34,7 +34,7 @@ import { sureOgrenmesi } from './ogrenme.ts';
 import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts';
 import {
   acikSiparisSatirlari, adimAdetleriMotora, motorAnahtarlari, type AcikSiparisGelisi, ayarCevir, gelisleriBirlestir, bitisAkisiEkle, calisanAdimlariCevir, durusOkumaSonuYaz, gerekenTarihler, planAni, planGunu,
-  planSaati,
+  kaldirilanKilitler, planSaati,
 } from './planlama-kurallar.ts';
 import { type Gorunum, maliyetiGeriKoy, maliyetsizCalisma } from './maliyet-gizleme.ts';
 import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
@@ -97,6 +97,11 @@ export async function planlamaKayitlari(db: Db, kullanici: Kullanici): Promise<K
   };
 }
 
+// Çalışmaya giden her yazma (kayıt, sürüme dönüş) aynı denetimden geçer; yoksa kilit sürüme dönüşle yetkisiz kalkardı.
+export function kilitKaldirmaDenetimi(kullanici: Kullanici, onceki: unknown, yeni: unknown): void {
+  if (!islemVarMi(kullanici, 'plan.kilitle') && kaldirilanKilitler(onceki, yeni).length > 0) throw yetkiYok('Kilidi kaldırmak plan kilitleme yetkisi ister.');
+}
+
 export async function planlamaYaz(db: Db, kullanici: Kullanici, g: PlanlamaYazGovdesi): Promise<YazCevabi> {
   planlamaYazmaDenetimi(kullanici, g.anahtar);
   if (!degerBicimeUyarMi(g.bicim, g.deger)) throw dogrulama('Metin biçimli değer dize olmalıdır.', 'deger');
@@ -109,6 +114,7 @@ export async function planlamaYaz(db: Db, kullanici: Kullanici, g: PlanlamaYazGo
   // Bitiş tarihi akışını sunucu yazar (455/2 a); eklenen satırlarla değer yeniden boyut denetiminden geçer.
   const calisma = g.anahtar === PLANLAMA_ANAHTARI && g.bicim === 'json';
   const onceki = calisma && mevcut !== null ? (await sorgular.planlamaKaydi(db, g.anahtar))?.deger : null;
+  if (calisma && onceki != null) kilitKaldirmaDenetimi(kullanici, onceki, g.deger);
   const gor = gorunum(kullanici);
   const gelen = calisma && !hepsiniGorur(gor) ? paraAlanlariniKoru(g.deger, onceki ?? null, gor) : g.deger;
   const deger = calisma ? bitisAkisiEkle(saklanmayanAlanlariCikar(gelen), onceki, kullanici.ad, Date.now()) : g.deger;

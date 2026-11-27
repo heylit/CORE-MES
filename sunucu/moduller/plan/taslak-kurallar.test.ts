@@ -814,6 +814,14 @@ describe('3488 c: adımı elle böl', () => {
     const s = elleBolSilUygula(kilitli, { isId: 'S1.10' }, k);
     assert.ok('deger' in s && s.degisti);
     assert.deepEqual([(s.deger as Record<string, unknown>).elleBol, (s.deger as Record<string, unknown>).locks], [{}, {}]);
+    // Kalıcı pay kilidini düşürmek plan.kilitle ister (uygulamada 403 olurdu); geçici pay kilidi yetkisiz de kalkar.
+    const yetkisiz = { ...k, kilitYetkisi: false };
+    const red = elleBolSilUygula(kilitli, { isId: 'S1.10' }, yetkisiz);
+    assert.ok('hata' in red && red.hata.tur === 'yetki', JSON.stringify(red));
+    assert.ok('hata' in elleBolSilUygula(kilitli, { isId: 'S1.10' }, { kim: k.kim, sayfa: k.sayfa, t: k.t }), 'yetki bilgisi yoksa yetkisiz sayılır');
+    const gecici = elleBolSilUygula({ ...kilitli, locks: { 'S1.10~2': { m: 'T3', S: 40, gecici: 1 } } }, { isId: 'S1.10' }, yetkisiz);
+    assert.ok('deger' in gecici && gecici.degisti, JSON.stringify(gecici));
+    assert.deepEqual((gecici.deger as Record<string, unknown>).locks, {});
     assert.ok('deger' in elleBolSilUygula(c(), { isId: 'S1.10' }, k) && !(elleBolSilUygula(c(), { isId: 'S1.10' }, k) as { degisti: boolean }).degisti);
     assert.deepEqual(imza(r.deger).elleBol, { 'S1.10': '6@T2,3@T3' });
     assert.deepEqual([...digerDegisiklikleri(imza(c()), imza(r.deger)).emir], ['S1']);

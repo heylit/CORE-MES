@@ -61,7 +61,7 @@ import { BastanKur } from './BastanKur.tsx';
 import { BastanKurSonucu } from './BastanKurSonucu.tsx';
 import { ilkSecim, kilitIhlaliAyir, type BastanKurKapsami } from './bastan-kur.ts';
 import { KilitIhlali } from './KilitIhlali.tsx';
-import { kilitKaydi, KilitKaydiSatiri } from './KilitKaydi.tsx';
+import { gorunenKilitKaydi, KilitKaydiSatiri, type SonTasima } from './KilitKaydi.tsx';
 import './kokpit.css';
 
 // Kokpit (kart 3151, 3282, 3297): planın tek yeri. Gövde yukarıdan aşağı akar (3297 a): 1 sipariş kartları sırasıyla (3297-5 a), 2 seçilen kartın emirleri
@@ -267,7 +267,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Son baştan kurun kalıcı Geri al satırı (Arayüz Y9): sonraki plan değişikliğine ya da Kapat'a dek durur; kısa ömürlü bildirim yetmez.
   const [sonBastanKur, setSonBastanKur] = useState<{ ileti: string; onceki: number; genis: boolean } | null>(null);
   // 3793-2: son bırakılan işin istenen saati; Kokpit onu yerinde kalan işin arkasına aldıysa bilgi satırı çıkar (bu taşıma son değişiklikken).
-  const [sonTasima, setSonTasima] = useState<{ isId: string; istenen: number; onceki: number } | null>(null);
+  const [sonTasima, setSonTasima] = useState<SonTasima | null>(null);
   const [kilitIhlaliKapali, setKilitIhlaliKapali] = useState(false);
   const [bastanKur, setBastanKur] = useState<{ kapsam: BastanKurKapsami; secili: string[] } | null>(null);
   // Görünüm ve ölçek seçenekleri bir düğmenin ardındadır (3414); tahta dışı bir görünüm seçiliyken açık durur.
@@ -840,7 +840,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const kilitIhlali = canliHata !== null && !kilitIhlaliKapali ? kilitIhlaliAyir(canliHata) : null;
   const ihlalEmri = kilitIhlali === null ? undefined : m.emirler.find((e) => e.no === kilitIhlali.emirNo);
   const bastanKurSonucu = sonBastanKur !== null && tOzet.n === sonBastanKur.onceki + 1 && !tur;
-  const kayanKilit = sonTasima !== null && tOzet.n === sonTasima.onceki + 1 && !tur && !mesgul ? kilitKaydi(m, sonTasima.isId, sonTasima.istenen) : null;
+  const kayanKilit = gorunenKilitKaydi(m, sonTasima, tOzet.n, !!tur || !!mesgul);
   const kayanEmir = kayanKilit === null ? undefined : m.emirler.find((e) => e.id === m.isler[kayanKilit.isId]?.job);
   const sonucCubugu = (guncellemeSonucu && !tur && (
     <GuncellemeSonucu e={guncellemeSonucu} m={m} zaman={zaman} geriAl={komut ? guncellemeyiGeriAl : null} kapat={() => { setGuncelleme(null); }} />

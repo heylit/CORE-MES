@@ -6,10 +6,10 @@ import type { CalismaCanliyaAlGovdesi, CalismaGeriAlCevabi, CalismaGonderCevabi,
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { emirDilimi, isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
 import { calismaTaslagiYaz, canliSira, tabanPlani, taslakYerlesimleriOku } from './disari.ts';
-import { calismaDurdurulanlari, calismaEkMesaisi, kaymaNedeni, planAni, type KaymaAdimi, type YerindeIs, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, durdurmaBekleyenler, kimlikEmireCevir, motorAnahtarlari, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './planlama-kurallar.ts';
+import { calismaDurdurulanlari, calismaEkMesaisi, kaymaNedeni, planAni, type KaymaAdimi, type YerindeIs, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, durdurmaBekleyenler, YAKINSAMADI_UYARISI, kimlikEmireCevir, motorAnahtarlari, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './planlama-kurallar.ts';
 import { saklanmayanKayitDegeri } from './motor-ayari-kurallar.ts';
 import { calismaPlani, type CalismaPlani } from './plan-girdisi.ts';
-import { PLANLAMA_ANAHTARI, planlamaGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
+import { kilitKaldirmaDenetimi, PLANLAMA_ANAHTARI, planlamaGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
 import { canliyaAl, canliyaAlOnizlemesi, motorNumaralariOku, onayaGonder, plan as planOku, planlanacakIsler } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import type { YerlesimSatiri } from './sorgular.ts';
@@ -118,6 +118,7 @@ export async function calismaTaslagi(db: Db, kullanici: Kullanici, g: CalismaTas
   const y = await calismaTaslagiYaz(db, kullanici, {
     ad: g.ad, kuyruklar, ...(g.planSurumu === undefined ? {} : { planSurumu: g.planSurumu }), ekMesai: ek.satirlar, sabitler,
   });
+  if (y.yakinsamadi) uyarilar.push(YAKINSAMADI_UYARISI);
   return {
     taslak: y.taslak, yazilan: y.yazilan, atlanan: y.atlanan, yazilamaz, ekMesai: { yazilan: y.ekMesai.yazilan, atlanan: y.ekMesai.atlanan + ek.yazilamaz },
     ...(uyarilar.length > 0 ? { uyarilar } : {}), ...(y.itilen ? { itilen: y.itilen } : {}),
@@ -142,10 +143,11 @@ export async function calismayiCanliyaAl(db: Db, kullanici: Kullanici, g: Calism
 // 3669: çalışma planı gönderilmeden önce sunucunun yazacağı yerleşim önizlenir: komutla aynı taslak yazımı yapılır, sıra denetimi okunur ve
 // bütün yazılar ara noktaya geri alınır (taslak, onay, canlı hiçbir şey kalmaz). Yazma hatası (sürüm, yetki, yazılacak iş yok) olduğu gibi döner.
 export async function calismaOnizlemesi(db: Db, kullanici: Kullanici, g: CalismaGonderGovdesi, simdi: number = Date.now()): Promise<CanliyaAlOnizlemesiCevabi> {
-  const sonuc: { deger: CanliyaAlOnizlemesiCevabi | null; itilen: CalismaTaslagiCevabi['itilen']; yazim: Awaited<ReturnType<typeof planOku>> | null } = { deger: null, itilen: undefined, yazim: null };
+  const sonuc: { deger: CanliyaAlOnizlemesiCevabi | null; itilen: CalismaTaslagiCevabi['itilen']; uyarilar: string[]; yazim: Awaited<ReturnType<typeof planOku>> | null } = { deger: null, itilen: undefined, uyarilar: [], yazim: null };
   const r = await kayitNoktasi(db, async () => {
     const y = await calismaTaslagi(db, kullanici, g, simdi);
     sonuc.itilen = y.itilen;
+    sonuc.uyarilar = y.uyarilar ?? [];
     sonuc.deger = await canliyaAlOnizlemesi(db, kullanici, y.taslak.id);
     if (sonuc.deger.ihlaller.some((i) => !i.kilitli)) sonuc.yazim = await planOku(db, kullanici, y.taslak.id);
     throw cakisma('Önizleme yazılmaz; yazılanlar geri alınır.');
@@ -164,6 +166,7 @@ export async function calismaOnizlemesi(db: Db, kullanici: Kullanici, g: Calisma
       })),
       oneri: oneri === null ? null : { ...oneri, adimlar: oneri.adimlar.map((a) => ({ ...a, k: k(a.emirNo, a.opNo) })) },
       ...(sonuc.itilen?.length ? { itilen: sonuc.itilen.map((x) => ({ ...x, k: k(x.emirNo, x.opNo) })) } : {}),
+      ...(sonuc.uyarilar.length > 0 ? { uyarilar: sonuc.uyarilar } : {}),
     };
   }
   if (!r.tamam) throw r.hata;
@@ -238,6 +241,7 @@ export async function calismaGeriAl(db: Db, kullanici: Kullanici, calismaSurumu:
   if (mevcut !== calismaSurumu) throw eskiSurum();
   const onceki = await sorgular.planlamaSonGecmis(db, PLANLAMA_ANAHTARI);
   if (onceki === null) throw cakisma('Geri alınacak önceki sürüm yok.');
+  kilitKaldirmaDenetimi(kullanici, (await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI))?.deger, onceki.deger);
   const k = await sorgular.planlamaKaydiGuncelle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: onceki.bicim, deger: saklanmayanKayitDegeri(onceki.bicim, onceki.deger), kisiId: kullanici.id });
   return { calismaSurumu: k!.surum, donulenSurum: onceki.surum };
 }

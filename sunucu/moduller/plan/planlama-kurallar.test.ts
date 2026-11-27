@@ -229,7 +229,7 @@ describe('planlama kuralları: terminalde durdurulmayı bekleyen iş', () => {
     assert.deepEqual(calismaDurdurulanlari(null), []);
     const kimlik = { '1.10': 'ORN-1|10', '2.10': 'ORN-2|10', '3.10': 'ORN-3|10' };
     assert.deepEqual(durdurmaBekleyenler(['1.10', '2.10', '9.10'], kimlik, new Set(['ORN-1|10', 'ORN-3|10'])),
-      ['ORN-1 OP 10 terminalde durdurulmayı bekliyor: canlıda eski yerinde kaldı, operatör durdurunca kalan adet yeni yerine geçer.']);
+      ['ORN-1 OP 10 terminalde durdurulmayı bekliyor: canlıda eski yerinde kalır, operatör durdurunca kalan adet yeni yerine geçer.']);
     assert.deepEqual(durdurmaBekleyenler([], kimlik, new Set(['ORN-1|10'])), []);
   });
 });

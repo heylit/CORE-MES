@@ -330,14 +330,24 @@ export function kaymaNedeni(opNo: number, adimlar: readonly KaymaAdimi[], yerind
 // 3414-7 a: durdurulan iş sahada hâlâ sürüyorsa canlıya alınırken yeri değişmez; her biri için işi adıyla söyleyen ileti.
 export function durdurmaBekleyenler(durdurulan: readonly string[], kimlik: Readonly<Record<string, string>>, suren: ReadonlySet<string>): string[] {
   return durdurulan.map((id) => kimlik[id]).filter((a): a is string => a !== undefined && suren.has(a))
-    .map((a) => `${opMetni(a)} terminalde durdurulmayı bekliyor: canlıda eski yerinde kaldı, operatör durdurunca kalan adet yeni yerine geçer.`);
+    .map((a) => `${opMetni(a)} terminalde durdurulmayı bekliyor: canlıda eski yerinde kalır, operatör durdurunca kalan adet yeni yerine geçer.`);
 }
+
+// 3803 N2: motorsuz yazılan iş (parça, kişi tezgâhı) motorun makine yerleriyle üç yazımda oturmadı; sıra denetimi aykırı adımı gösterir.
+export const YAKINSAMADI_UYARISI = 'Parça ve kişi tezgâhı yerleri üç yazımda oturmadı, bir adım öncülünden önce kalabilir; canlıya aldıktan sonra sırayı kontrol edin.';
 
 // Kaydın kalıcı kilitleri (S.locks): planlamacının sabitlediği ya da elle taşıdığı işler. Motorun değerlendirmede koyduğu geçici kilit
 // (gecici) sayılmaz.
 export function calismaKilitleri(kayit: unknown): Set<string> {
   const l = nesne(nesne(kayit)?.['locks']);
   return new Set(Object.entries(l ?? {}).filter(([, v]) => { const x = nesne(v); return x !== null && !x['gecici']; }).map(([k]) => k));
+}
+
+// 3803 N6: çalışma yazması kayıtlı (kalıcı) bir kilidi kaldırıyorsa plan kilitleme yetkisi gerekir; kilit taşımak ya da eklemek
+// plan yazma ile kalır. Motorun geçici kilidi sayılmaz.
+export function kaldirilanKilitler(onceki: unknown, yeni: unknown): string[] {
+  const kalan = calismaKilitleri(yeni);
+  return [...calismaKilitleri(onceki)].filter((k) => !kalan.has(k));
 }
 
 // 507 2 a: çalışmanın ek vardiyaları plan modülünün diliyle (makine ve vardiya kimliği sayı, gün takvim günü). Sayı olmayan kimlik

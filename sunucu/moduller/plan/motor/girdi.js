@@ -947,7 +947,8 @@ function stKur(S, ek = [], gevset = true) {
      işaret operatör sahada durdurunca ya da duraklatınca etkilenir (sunucu motoru da işareti okumaz, emirler.js). */
   const durdurulan = S.w && S.w.durdurulan && typeof S.w.durdurulan === 'object' ? S.w.durdurulan : {};
   for (const id in durdurulan) {
-    const a = st.gercek[id]; if (!a || a.C != null || a.sunucu) continue;
+    /* sahada süren: sunucu kaydı, başlamış ve bitişsiz (tasima.ts, taslak-kurallar.ts sahadaSurer ile aynı koşul; 3803 N4) */
+    const a = st.gercek[id]; if (!a || a.C != null || (a.sunucu && a.S != null)) continue;
     const kalan = isFinite(+a.A) && isFinite(+a.n) && a.A != null && a.n != null ? Math.max(0, +a.A - +a.n) : null;
     if (kalan === 0) continue;
     delete st.gercek[id];
