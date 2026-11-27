@@ -437,3 +437,35 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - Canlıya alma (`canliyaGecisKumesi`): A4 istisnası yalnız bu satırlar için; kalan payların parçası canlıdakiyle birebir aynıysa satır
   değişebilir sayılır. Kilitli ve dondurulmuş iş, bölünmemiş çalışan iş değişmedi.
 - Test: `bolunmus-canliya-al.test.ts` 3-5 (sayımsız pay taşınır; sayımlı pay kalır; çözücü yoksa iş kalır).
+
+## Bölünmüş öncülde Kokpit ile canlıya alma aynı yerleşim (3793; 2026-11-27)
+- Sunucu motoru girdisi (`motor/emirler.js`): sabit yerli (bölünmüş, kilitli) işin yeri ilk devir anını (`lot1`) da taşır: parçaların
+  ilk devir partisi bitişlerinin en büyüğü (motorun pay kuralı, `engine.js predBound`). Motor `sabitYer` ve gerçekleşen kaydında verilen
+  `lot1`'i okur (`engine.js` iki satır; verilmezse eski davranış). Önceden saati geçmiş sabit parça gerçekleşen sayılıyor, ilk partisi
+  başladığı an okunuyordu: akışlı ardıl öncülden önce yazılıyor, canlıya alma sıra ihlaliyle kapanıyordu.
+- Sınır hesabı (`onculSinirlari`, `sinirlayanOncul`, kuyruk yazımının `tur`'u): bölünmüş öncülde sınır parça başına hesaplanır, en büyüğü
+  geçer (`onculBaslangici`). Bekleyen bağda değişmez (son bitiş); akışlı bağda her parçanın ilk devri beklenir.
+- Kuyruk yazımı: elle bölünmüş işin önizleme saati öncülün sınırından önceyse pay o saatte yazılmaz, öncülün arkasına itilir; 3734-2
+  taşımasında da aynı. Cevap `itilen` (plan `kuyrukYazCevabi`, planlama `calismaTaslagiCevabi`, `canliyaAlOnizlemesiCevabi`; isteğe bağlı).
+- Onay ekranı: kilitli adım yoksa engel metni "kilidi kaydırın" demez; ilk aykırı adım ve çaresi yazılır; ihlal satırında öneri; itilen
+  paylar listesi.
+- Test: `bolunmus-oncul-akisi.test.ts` 1-3; istemci `KokpitOnaySira.test.tsx` 3793 maddesi.
+- Otomatik bölme (istek 4, `engine.js`): bütün payları tek tezgâha ya da kişiye düşen otomatik bölme bölünmez; motor adımı bölmeden bir
+  kez daha dizer (`st.tekPay`, `schedule`). Otomatik bölmenin payları pay numarası sırasıyla başlar (`oncekiPay`: hazır olma ve `predBound`).
+  Elle bölme değişmedi.
+- "Başlamış işler dahil" baştan dizme (istek 5, `taslak-kurallar.ts baslamisIsler`): sahada süren adım (sunucunun çalışıyor dediği,
+  bitişsiz gerçekleşen) `w.durdurulan`'a yazılmaz; Kokpit onu sürdüğü yerde son sayımdan kalan süreyle bırakır, canlı da yerini değiştirmez.
+- Test: `paralel-bolme.test.ts` 3793 maddeleri; `taslak-kurallar.test.ts` 3600 maddesine sahada süren adım.
+- Sahada süren adım (ek 5a, `motor/girdi.js`): `w.durdurulan`'da olsa da sahada çalışıyorsa (sunucunun çalışan adımı) Kokpit onu
+  sunucudaki gibi yerinde ve son sayımdan kalan süreyle tutar; işaret operatör durdurunca ya da duraklatınca etkilenir. 3414-6 a'nın
+  "durdur, kalanı taşı" çubuğu sahada durdurulana kadar taşınmaz (kullanıcı isteği; sunucu zaten taşımıyordu, 3414-7 a). Kokpit'te elle
+  taşıma (`tasima.ts`) sahada çalışan adımı reddeder: "Önce terminalde durdurun ya da duraklatın"; sunucu kaydı olmayan süren iş eskisi gibi.
+- Kişi tezgâhı (ek 2a, `servis.ts kuyruklariYazIc`): kişi kuyruğundaki bölünmemiş iş de önizlemesi öncülün sınırından önceyse itilir ve
+  `itilen`'de döner (`parca` null). Motor makine işlerini kuyruk turundan geç koyarsa (sahada süren işin gerçek kalanı) turlar motorun
+  yerleriyle yeniden koşar; değişen motorsuz iş (kişi tezgâhı, parça) yeniden yazılır, motor bir kez daha dizer (en çok üç yazım).
+- Kilitsiz ihlalin kaynağı (ek 3a): önizleme cevabında ihlal başına isteğe bağlı `neden` (ilk kayan adım, kayma, kaynağında yerinde kalan
+  iş ve nedeni; `planlama-kurallar.ts kaymaNedeni`). Ekran kaynağı söyler; kaynak bilinirken "yeniden çözün" demez.
+- Sabit (kilitli) işin çakışma iletisi (ek 2, 6): üst üste binilen iş emir ve OP ile, makine, canlıdaki saat aralığı ve yerinde kalma
+  nedeniyle ("sahada çalışıyor", "kilitli", "dondurulmuş") söylenir; çare: kilitli saati o bitişten sonraya almak ya da kilidi kaldırmak.
+- Test: `bolunmus-oncul-akisi.test.ts` 4-9 (4-5 Test2 E1-E2; 6 sahada süren iş ve kişi tezgâhı; 7-8 kişi tezgâhında itme; 9 çakışma
+  iletisi); `planlama-kurallar.test.ts` 3793 3a; istemci `KokpitOnaySira.test.tsx` 3793 3a.

@@ -43,19 +43,18 @@ describe('plan girdisi (sunucu)', () => {
     assert.doesNotThrow(() => motorYukle().compile(r.st));
   });
 
-  // 3414-6 a: kalanı taşınan süren adım (w.durdurulan). Sunucu adımı hâlâ çalışıyor diye verir (33. saat); sayımı çalışmaya yazılır ama
-  // planlamacının taşıdığı çubuk (20. saat) gerçekleşen yerine geri çekilmez ve motor onu sürüyor saymaz.
-  test('durdurulan süren adım: sayım güncellenir, çubuk taşındığı yerde kalır; işaret yokken çubuk gerçekleşen yerine çekilir', () => {
+  // 3414-6 a, 3793 5a: kalanı taşınan (w.durdurulan) ama sahada hâlâ süren adım. Sunucu adımı çalışıyor diye verir (33. saat); Kokpit onu
+  // sunucudaki gibi yerinde, son sayımdan kalan süreyle tutar (planlamacının taşıdığı 20. saat geçmez). İşaret sahada durunca etkilenir.
+  test('durdurulan ama sahada süren adım: sayım yazılır, çubuk gerçekleşen yerinde kalır (işaretsizle aynı)', () => {
     type Cikti = { S: { plan: { ops: Record<string, { S: number; act?: number; pin?: number }> }; gercek: Record<string, { S: number; n?: number; sunucu?: number }> }; st: { gercek: Record<string, unknown> } };
     const c = calisma(D0);
     const isaretli = planGirdisi({ calisma: { ...c, w: { ...(c['w'] as object), durdurulan: { 'O1.10': 1 } } }, kayit: KAYIT, kaynak: KAYNAK }) as unknown as Cikti;
     assert.deepEqual([isaretli.S.gercek['O1.10']?.S, isaretli.S.gercek['O1.10']?.n, isaretli.S.gercek['O1.10']?.sunucu], [33, 2, 1], 'sayım çalışmaya yazılır');
-    assert.equal(isaretli.S.plan.ops['O1.10']?.S, 20, 'çubuk taşındığı yerde');
-    assert.ok(!isaretli.S.plan.ops['O1.10']?.act && !isaretli.S.plan.ops['O1.10']?.pin, 'sürüyor ve sabit sayılmaz');
-    assert.equal(isaretli.st.gercek['O1.10'], undefined, 'motor kalanı gerçekleşen yerine bağlamaz');
     const isaretsiz = planGirdisi({ calisma: c, kayit: KAYIT, kaynak: KAYNAK }) as unknown as Cikti;
-    assert.deepEqual([isaretsiz.S.plan.ops['O1.10']?.S, isaretsiz.S.plan.ops['O1.10']?.act, isaretsiz.S.plan.ops['O1.10']?.pin], [33, 1, 1]);
-    assert.ok(isaretsiz.st.gercek['O1.10']);
+    for (const [ad, r] of [['işaretli', isaretli], ['işaretsiz', isaretsiz]] as const) {
+      assert.deepEqual([r.S.plan.ops['O1.10']?.S, r.S.plan.ops['O1.10']?.act, r.S.plan.ops['O1.10']?.pin], [33, 1, 1], `${ad}: çubuk gerçekleşen yerinde`);
+      assert.ok(r.st.gercek['O1.10'], `${ad}: motor kalanı gerçekleşen yerine bağlar`);
+    }
   });
 
   // 3414-4 b: yeni çalışma kapatılabilen kısıtlar kapalı başlar; rota sırası ve çalışma günü açık kalır (onlarsız plan uygulanamaz),

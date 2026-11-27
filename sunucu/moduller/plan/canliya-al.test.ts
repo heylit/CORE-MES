@@ -736,7 +736,8 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     surum = await calismaYaz({ ...ops, [k1]: { S: bas + 5.2, C: bas + 6, m: String(makineB) } }, { [k2]: { m: String(makineB), S: bas + 5 }, [k1]: { m: String(makineB), S: bas + 5.2 } });
     const ust = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/taslak-yaz', { ad: 'Deneme ust uste', calismaSurumu: surum });
     assert.equal(ust.statusCode, 409, ust.body);
-    assert.match(ust.body, /sabitlendiği saatte/);
+    // 3793 (6): ileti üst üste binilen işi, nedenini ve çaresini söyler.
+    assert.match(ust.body, /kilitli saatinde .* ile üst üste\. OP \d+ kilitli, canlıda .* arasında yerinde kalıyor\..*kilidi kaldırın/);
   });
 
   // 3607: kişiye planlanan adımın istasyonu canlıya almada boşalmaz; emir istasyonlu açık emir listesinde (Hazırlık, Atölye, terminal) kalır.

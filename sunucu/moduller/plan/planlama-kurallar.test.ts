@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  ayarCevir, calismaDurdurulanlari, calismaEkMesaisi, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, durdurmaBekleyenler, durusOkumaSonuYaz, planAni,
+  ayarCevir, calismaDurdurulanlari, calismaEkMesaisi, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, durdurmaBekleyenler, durusOkumaSonuYaz, kaymaNedeni, planAni,
   taslaktanCalismaya,
 } from './planlama-kurallar.ts';
 
@@ -231,5 +231,25 @@ describe('planlama kuralları: terminalde durdurulmayı bekleyen iş', () => {
     assert.deepEqual(durdurmaBekleyenler(['1.10', '2.10', '9.10'], kimlik, new Set(['ORN-1|10', 'ORN-3|10'])),
       ['ORN-1 OP 10 terminalde durdurulmayı bekliyor: canlıda eski yerinde kaldı, operatör durdurunca kalan adet yeni yerine geçer.']);
     assert.deepEqual(durdurmaBekleyenler([], kimlik, new Set(['ORN-1|10'])), []);
+  });
+});
+
+describe('planlama kuralları: sıraya aykırı adımın kaynağı (3793 3a)', () => {
+  const DK = 60_000;
+  const sahada = { emirNo: 'ORN-A', opNo: 10, kaynak: 'makine:1', kaynakAdi: 'ORN-T1', baslangic: -60 * DK, bitis: 990 * DK, neden: 'sahada' as const };
+  test('emrin önceki adımları canlıda kayıyorsa ilk kayan adım, kayma ve kaynağında yerinde kalan iş söylenir', () => {
+    const adimlar = [
+      { opNo: 10, kokpit: 0, canli: { kaynak: 'makine:1', baslangic: 990 * DK } },
+      { opNo: 20, kokpit: 60 * DK, canli: { kaynak: 'makine:2', baslangic: 1050 * DK } },
+      { opNo: 30, kokpit: 120 * DK, canli: { kaynak: 'kisi:5', baslangic: 125 * DK } },
+    ];
+    assert.deepEqual(kaymaNedeni(30, adimlar, [sahada, { ...sahada, emirNo: 'ORN-C', kaynak: 'makine:2', bitis: 30 * DK }]), {
+      ilkOp: 10, sonOp: 20, kaymaDk: 990,
+      engel: { emirNo: 'ORN-A', opNo: 10, kaynak: 'ORN-T1', baslangic: new Date(-60 * DK).toISOString(), bitis: new Date(990 * DK).toISOString(), neden: 'sahada' },
+    });
+    assert.equal(kaymaNedeni(30, adimlar, [])?.engel, null, 'yerinde kalan iş yoksa yalnız kayma');
+  });
+  test('15 dk ve altındaki fark kayma sayılmaz; kayma yoksa ihlal Kokpit planındadır (null)', () => {
+    assert.equal(kaymaNedeni(20, [{ opNo: 10, kokpit: 0, canli: { kaynak: 'makine:1', baslangic: 15 * DK } }, { opNo: 20, kokpit: 60 * DK, canli: null }], [sahada]), null);
   });
 });

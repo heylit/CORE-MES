@@ -6,11 +6,11 @@ import type { CalismaCanliyaAlGovdesi, CalismaGeriAlCevabi, CalismaGonderCevabi,
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { emirDilimi, isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
 import { calismaTaslagiYaz, canliSira, tabanPlani, taslakYerlesimleriOku } from './disari.ts';
-import { calismaDurdurulanlari, calismaEkMesaisi, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, durdurmaBekleyenler, kimlikEmireCevir, motorAnahtarlari, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './planlama-kurallar.ts';
+import { calismaDurdurulanlari, calismaEkMesaisi, kaymaNedeni, planAni, type KaymaAdimi, type YerindeIs, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, durdurmaBekleyenler, kimlikEmireCevir, motorAnahtarlari, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './planlama-kurallar.ts';
 import { saklanmayanKayitDegeri } from './motor-ayari-kurallar.ts';
 import { calismaPlani, type CalismaPlani } from './plan-girdisi.ts';
 import { PLANLAMA_ANAHTARI, planlamaGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
-import { canliyaAl, canliyaAlOnizlemesi, motorNumaralariOku, onayaGonder, planlanacakIsler } from './servis.ts';
+import { canliyaAl, canliyaAlOnizlemesi, motorNumaralariOku, onayaGonder, plan as planOku, planlanacakIsler } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import type { YerlesimSatiri } from './sorgular.ts';
 
@@ -120,7 +120,7 @@ export async function calismaTaslagi(db: Db, kullanici: Kullanici, g: CalismaTas
   });
   return {
     taslak: y.taslak, yazilan: y.yazilan, atlanan: y.atlanan, yazilamaz, ekMesai: { yazilan: y.ekMesai.yazilan, atlanan: y.ekMesai.atlanan + ek.yazilamaz },
-    ...(uyarilar.length > 0 ? { uyarilar } : {}),
+    ...(uyarilar.length > 0 ? { uyarilar } : {}), ...(y.itilen ? { itilen: y.itilen } : {}),
   };
 }
 
@@ -142,24 +142,55 @@ export async function calismayiCanliyaAl(db: Db, kullanici: Kullanici, g: Calism
 // 3669: çalışma planı gönderilmeden önce sunucunun yazacağı yerleşim önizlenir: komutla aynı taslak yazımı yapılır, sıra denetimi okunur ve
 // bütün yazılar ara noktaya geri alınır (taslak, onay, canlı hiçbir şey kalmaz). Yazma hatası (sürüm, yetki, yazılacak iş yok) olduğu gibi döner.
 export async function calismaOnizlemesi(db: Db, kullanici: Kullanici, g: CalismaGonderGovdesi, simdi: number = Date.now()): Promise<CanliyaAlOnizlemesiCevabi> {
-  const sonuc: { deger: CanliyaAlOnizlemesiCevabi | null } = { deger: null };
+  const sonuc: { deger: CanliyaAlOnizlemesiCevabi | null; itilen: CalismaTaslagiCevabi['itilen']; yazim: Awaited<ReturnType<typeof planOku>> | null } = { deger: null, itilen: undefined, yazim: null };
   const r = await kayitNoktasi(db, async () => {
     const y = await calismaTaslagi(db, kullanici, g, simdi);
+    sonuc.itilen = y.itilen;
     sonuc.deger = await canliyaAlOnizlemesi(db, kullanici, y.taslak.id);
+    if (sonuc.deger.ihlaller.some((i) => !i.kilitli)) sonuc.yazim = await planOku(db, kullanici, y.taslak.id);
     throw cakisma('Önizleme yazılmaz; yazılanlar geri alınır.');
   });
   if (sonuc.deger !== null) {
-    const ters = tersKimlik((await calismaOku(db, kullanici, simdi)).plan);
+    const calismaPlani = (await calismaOku(db, kullanici, simdi)).plan;
+    const ters = tersKimlik(calismaPlani);
     const k = (emirNo: string, opNo: number) => ters.get(`${emirNo}|${String(opNo)}`) ?? null;
     const { ihlaller, oneri } = sonuc.deger;
+    const neden = ihlalNedeni(calismaPlani, sonuc.yazim, k);
     return {
       ...sonuc.deger,
-      ihlaller: ihlaller.map((i) => ({ ...i, k: k(i.emirNo, i.opNo), oncul: i.oncul === null ? null : { ...i.oncul, k: k(i.oncul.emirNo, i.oncul.opNo) } })),
+      ihlaller: ihlaller.map((i) => ({
+        ...i, k: k(i.emirNo, i.opNo), oncul: i.oncul === null ? null : { ...i.oncul, k: k(i.oncul.emirNo, i.oncul.opNo) },
+        ...(i.kilitli || sonuc.yazim === null ? {} : { neden: neden(i.emirNo, i.opNo) }),
+      })),
       oneri: oneri === null ? null : { ...oneri, adimlar: oneri.adimlar.map((a) => ({ ...a, k: k(a.emirNo, a.opNo) })) },
+      ...(sonuc.itilen?.length ? { itilen: sonuc.itilen.map((x) => ({ ...x, k: k(x.emirNo, x.opNo) })) } : {}),
     };
   }
   if (!r.tamam) throw r.hata;
   throw new Error('Önizleme sonuç vermedi.');
+}
+
+// 3793 3a: kilitsiz ihlalin kaynağı yazımdan (önizlemede yazılıp geri alınan taslak) ve Kokpit'in saatlerinden okunur.
+function ihlalNedeni(p: CalismaPlani | null, yazim: Awaited<ReturnType<typeof planOku>> | null, k: (emirNo: string, opNo: number) => string | null) {
+  return (emirNo: string, opNo: number) => {
+    if (p === null || yazim === null || p.ops === null) return null;
+    const ops = p.ops;
+    const kokpit = (id: string | null): number | null => {
+      const l = id === null ? [] : Object.entries(ops).filter(([x]) => x === id || x.startsWith(`${id}~`)).map(([, o]) => o.S);
+      return l.length === 0 ? null : Math.min(...l.map((S) => Date.parse(planAni(p.baslangic, S))));
+    };
+    const anahtar = (x: { tur: string; id: number }) => `${x.tur}:${String(x.id)}`;
+    const ad = new Map(yazim.kaynaklar.map((x) => [anahtar(x), x.kod ?? x.ad]));
+    const adimlar: KaymaAdimi[] = yazim.yerlesimler.filter((y) => y.emirNo === emirNo).map((y) => ({
+      opNo: y.opNo, kokpit: kokpit(k(y.emirNo, y.opNo)), canli: { kaynak: anahtar(y.parcalar?.[0]?.kaynak ?? y.kaynak), baslangic: Date.parse(y.baslangic) },
+    }));
+    const yerinde: YerindeIs[] = yazim.yerlesimler.filter((y) => y.emirNo !== emirNo && (y.durum === 'basladi' || y.kilitli || y.dondurulmus)).flatMap((y) =>
+      (y.parcalar?.length ? y.parcalar : [y]).map((x) => ({
+        emirNo: y.emirNo, opNo: y.opNo, kaynak: anahtar(x.kaynak), kaynakAdi: ad.get(anahtar(x.kaynak)) ?? anahtar(x.kaynak), baslangic: Date.parse(x.baslangic), bitis: Date.parse(x.bitis),
+        neden: y.durum === 'basladi' ? 'sahada' as const : y.kilitli ? 'kilitli' as const : 'dondurulmus' as const,
+      })));
+    return kaymaNedeni(opNo, adimlar, yerinde);
+  };
 }
 
 // Canlıya alma adımına giden seçenekler: 4 saat gerekçesi ve başlayan işi sabitleme komuttan aynen geçer; "canlı değişti" hiç kabul edilmez.

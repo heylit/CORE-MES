@@ -106,6 +106,8 @@
 .tc-pym-pa-kisit a { min-height: var(--dokunma); display: inline-flex; align-items: center; }
 .tc-pym-pa-kisit-fazla { min-height: var(--dokunma); padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .tc-pym-pa-ihlal-kart { display: grid; gap: var(--b-2); padding: var(--b-3); border: var(--cizgi-ince) solid var(--hold); border-radius: var(--yari-2); background: var(--panel2); min-width: 0; }
+/* Saatli uzun etiket ("Arkasına al (…)") dar ekranda kartı taşırmasın: düğme sarılır. */
+.tc-pym-pa-ihlal-kart .tc-pym-pa-dugmeler .tc-dugme { max-width: 100%; white-space: normal; text-align: start; }
 
 .tc-pym-pa-ihlal-kart h3 { margin: 0; font-size: var(--yazi-s); }
 .tc-pym-pa-ihlaller, .tc-pym-pa-oneri { display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }

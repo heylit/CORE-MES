@@ -1049,6 +1049,15 @@ function uzlasikParcalar<P extends { adet: number }>(is: Is, parcalar: readonly 
 }
 const parcaIso = (p: ParcaSatiri) => ({ no: p.no, adet: p.adet, kaynak: p.kaynak, baslangic: p.baslangic.toISOString(), bitis: p.bitis.toISOString(), elleKaynak: p.elleKaynak });
 
+// 3793: bölünmüş öncülde sınır her parçanın kendi sınırının en büyüğüdür (motorun pay kuralı, engine predBound): akışlı ardıl her parçanın
+// ilk devir partisini, bekleyen ardıl son bitişi bekler. Zarf tek iş sayılsaydı akışlı ardıl ilk parçanın devriyle başlar, Kokpit'ten erken yazılırdı.
+type OnculYeri = Aralik & { kaynak: Kaynak; parcalar?: readonly (Aralik & { kaynak: Kaynak })[] };
+function onculBaslangici(b: Baglam, x: Is, oy: OnculYeri): number {
+  const t = takvim(b);
+  const l = oy.parcalar?.length ? oy.parcalar : [oy];
+  return Math.max(...l.map((p) => enErkenBaslangic(x, p, Number.NEGATIVE_INFINITY, t(p.kaynak), verimi(b)(p.kaynak))));
+}
+
 // Emir içi öncüllerin (1248 a, 1245 a: listedeki her öncül kendi türü ve deviriyle) yerine göre en erken başlangıç (öncülün takvimi ve
 // verimiyle) ve akışlı işin en erken bitişi (kendi kaynağının takvimi ve verimiyle); yeri olan öncül yoksa sınır yok.
 function onculSinirlari(b: Baglam, isEmriId: number, yerler: readonly Yer[], kaynak: Kaynak): { enErken: number | null; enErkenBitis: number | null } {
@@ -1061,7 +1070,7 @@ function onculSinirlari(b: Baglam, isEmriId: number, yerler: readonly Yer[], kay
     const oy = yerler.find((y) => y.isEmriId === o.is.id);
     if (!oy) continue;
     const x = onculeGore(is, o);
-    const bas = enErkenBaslangic(x, oy, Number.NEGATIVE_INFINITY, t(oy.kaynak), verimi(b)(oy.kaynak));
+    const bas = onculBaslangici(b, x, oy);
     const son = enErkenBitis(x, oy, t(kaynak), verimi(b)(kaynak));
     enErken = Math.max(enErken ?? bas, bas);
     if (son !== null && son !== Number.NEGATIVE_INFINITY) bitis = Math.max(bitis ?? son, son);
@@ -1075,12 +1084,11 @@ function onculSinirlari(b: Baglam, isEmriId: number, yerler: readonly Yer[], kay
 function sinirlayanOncul(b: Baglam, y: Yer, yerler: readonly Yer[]): { is: Is; bitis: number } | null {
   const is = b.isler.get(y.isEmriId);
   if (!is) return null;
-  const t = takvim(b);
   let en: { is: Is; bitis: number; bas: number } | null = null;
   for (const o of icOnculler(b.isler, is)) {
     const oy = yerler.find((z) => z.isEmriId === o.is.id);
     if (!oy) continue;
-    const bas = enErkenBaslangic(onculeGore(is, o), oy, Number.NEGATIVE_INFINITY, t(oy.kaynak), verimi(b)(oy.kaynak));
+    const bas = onculBaslangici(b, onculeGore(is, o), oy);
     if (en === null || bas > en.bas) en = { is: o.is, bitis: oy.bitis, bas };
   }
   return en;
@@ -1876,6 +1884,7 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
   let atlanan = 0;
   let motorFarki: MotorFarki | undefined;
   let yerlesmeyen: KuyrukYazCevabi['yerlesmeyen'];
+  const itilen: NonNullable<KuyrukYazCevabi['itilen']> = [];
   if (g.kuyruklar.length > 0) {
     const p = await taslagaYaz(db, k, taslak, async (b0, id) => {
       let b = b0;
@@ -1951,12 +1960,22 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
         if (tam === null) throw gecersiz(`${isMetni(b, i.is.id)} süresi bilinmiyor; rotada süreyi gir.`);
         const calismaSuresi = kesisimDk(takvim(b)(q.kaynak), bas, dk(b, new Date(i.x.onizleme!.bitis)));
         const sure = calismaSuresi >= tam - (i.is.ayarDk ?? 0) - YUVARLAMA_DK && calismaSuresi <= tam ? calismaSuresi : tam;
-        const dolu: Aralik[] = [
+        const dolu: (Aralik & { isEmriId: number })[] = [
           ...isgal(plandakiler(b, yerler)).filter((y) => ayniKaynak(y.kaynak, q.kaynak) && !tasinacak.has(y.isEmriId) && !sabitYer.has(y.isEmriId)),
-          ...[...sabitYer.values()].filter((y) => ayniKaynak(y.kaynak, q.kaynak)),
+          ...[...sabitYer].map(([isEmriId, y]) => ({ ...y, isEmriId })).filter((y) => ayniKaynak(y.kaynak, q.kaynak)),
         ];
         const sabit = sabitYeri(dolu, takvim(b)(q.kaynak), bas, sure);
         if (sabit.tur !== 'yer') {
+          // 3793 (6): üst üste binilen iş adıyla, canlıdaki saatiyle ve neden yerinde kaldığıyla söylenir; planlamacı neyi düzelteceğini bilir.
+          const ust = sabit.tur === 'vardiya-disi' ? undefined : dolu.filter((y) => y.baslangic < bas + sure && y.bitis > bas).sort((x, y) => y.bitis - x.bitis)[0];
+          if (ust !== undefined) {
+            const o = b.isler.get(ust.isEmriId);
+            const m = yerler.find((y) => y.isEmriId === ust.isEmriId);
+            const neden = o?.durum === 'basladi' ? 'sahada çalışıyor' : sabitYer.has(ust.isEmriId) || m?.kilitli ? 'kilitli' : m?.dondurulmus ? 'dondurulmuş' : 'bu yazımda taşınmıyor';
+            throw cakisma(`${isMetni(b, i.is.id)} kilitli saatinde ${kaynakMetni(b, q.kaynak)} üzerinde ${isMetni(b, ust.isEmriId)} ile üst üste. `
+              + `OP ${String(o?.opNo ?? '')} ${neden}, canlıda ${zamanMetni(b, ust.baslangic)} - ${zamanMetni(b, ust.bitis)} arasında yerinde kalıyor. `
+              + `OP ${String(i.is.opNo)} için kilitli saati ${zamanMetni(b, ust.bitis)} sonrasına alın ya da kilidi kaldırın.`);
+          }
           const neden = sabit.tur === 'vardiya-disi' ? 'vardiya dışı (mola, vardiya sonu ya da kapalı gün)' : 'bu yazımda taşınmayan başka işle üst üste';
           throw cakisma(`${isMetni(b, i.is.id)} sabitlendiği saatte ${kaynakMetni(b, q.kaynak)} üzerinde başlayamıyor (${neden}); çalışmada saati ya da sabitliği düzeltin.`);
         }
@@ -1982,6 +2001,7 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
         const paylar = kuyruklar.flatMap(({ q, isler }) => isler.filter((i) => i.is.id === isId && i.x.parca).map((i) => ({ q, i })));
         const yeni: ParcaSatiri[] = [];
         const konan: (Aralik & { kaynak: Kaynak })[] = [];
+        const itilenBu: typeof itilen = [];
         const ok = paylar.every(({ q, i }) => {
           const parca = i.x.parca!;
           const ortak = { no: parca.no, adet: parca.adet, kaynak: q.kaynak, elleSira: i.x.elle ? i.sira : null, elleIstasyonId: rotaIstasyonu(b, i.is), elleKaynak: i.x.elleKaynak };
@@ -1995,13 +2015,20 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
             ...isgal(plandakiler(b, yerler)).filter((y) => ayniKaynak(y.kaynak, q.kaynak) && y.isEmriId !== isId && !tasinacak.has(y.isEmriId) && !sabitYer.has(y.isEmriId)),
             ...[...sabitYer.values(), ...konan].filter((y) => ayniKaynak(y.kaynak, q.kaynak)),
           ];
-          const y = onizlemeYeri(b, dolu, i.x.onizleme);
+          // 3793: önizleme saati öncülün sınırından önceyse pay öncülün arkasına itilir (tur'daki gibi).
+          const sinir = onculSinirlari(b, isId, yerler, q.kaynak).enErken;
+          const o = i.x.onizleme;
+          const itilir = o !== undefined && sinir !== null && sinirdanOnce(dk(b, new Date(o.baslangic)), sinir);
+          const sure = itilir ? sureOf(i, q.kaynak) : null;
+          const y = !itilir ? onizlemeYeri(b, dolu, o) : sure === null ? null : uzayanBosluk(dolu, takvim(b)(q.kaynak), Math.max(sinir, dk(b, new Date(o!.baslangic))), sure, Number.NEGATIVE_INFINITY);
           if (y === null) return false;
+          if (itilir) itilenBu.push({ emirNo: i.is.emirNo, opNo: i.is.opNo, parca: parca.no, onizleme: new Date(o!.baslangic).toISOString(), yeni: tarih(b, y.baslangic).toISOString() });
           konan.push({ ...y, kaynak: q.kaynak });
           yeni.push({ ...ortak, baslangic: tarih(b, y.baslangic), bitis: tarih(b, y.bitis) });
           return true;
         });
         if (!ok || paylar.length < 2) continue;
+        itilen.push(...itilenBu);
         const parcalar = yeni.sort((x, y) => x.no - y.no);
         const satir: YerlesimSatiri = {
           ...mevcut, kaynak: parcalar[0]!.kaynak, baslangic: new Date(Math.min(...parcalar.map((p) => p.baslangic.getTime()))),
@@ -2057,8 +2084,9 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
         const yersiz = m.yerlesmeyen.length > 0 ? `; ${m.yerlesmeyen.length} iş yerleşmedi` : '';
         return { tur: 'sirala', ozet: `Reçete ve Rota kuyrukları sunucu motoruyla yazıldı (${g.kuyruklar.length} kaynak, ${yazilan} iş${bekleyen}${yersiz})`, isEmriIdleri: idler };
       }
-      const tur = (onceki: ReadonlyMap<number, Aralik & { kaynak: Kaynak }>) => {
-        const yeniYer = new Map<number, Aralik & { kaynak: Kaynak }>();
+      // kesin: motorun bu yazımda yerleştirdiği makine işlerinin son yeri; öncül sınırında her şeyden önce gelir (3793 2a).
+      const tur = (onceki: ReadonlyMap<number, OnculYeri>, kesin: ReadonlyMap<number, OnculYeri>) => {
+        const yeniYer = new Map<number, OnculYeri>();
         const yerlesenParca = new Map<number, number>();
         const tamam = (id: number) => yeniYer.has(id) && (yerlesenParca.get(id) ?? 0) === (parcaNolari.get(id)?.length ?? 0);
         // Akışlı adım ilk devir partisiyle başlar ve öncülünden önce bitemez: gerekirse kuyruğun kaynağında bu bitişe kadar uzar.
@@ -2066,8 +2094,8 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
         const onculSiniri = (is: Is, kaynak: Kaynak): { enErken: number; bitisSiniri: number } => {
           const yeri = (id: number) => {
             const eski = hepsi.find((y) => y.isEmriId === id);
-            return (tamam(id) ? yeniYer.get(id) : undefined) ?? onceki.get(id) ?? yeniYer.get(id) ?? sabitYer.get(id)
-              ?? (eski ? { baslangic: dk(b, eski.baslangic), bitis: dk(b, eski.bitis), kaynak: eski.kaynak } : null);
+            return kesin.get(id) ?? (tamam(id) ? yeniYer.get(id) : undefined) ?? onceki.get(id) ?? yeniYer.get(id) ?? sabitYer.get(id)
+              ?? (eski ? yerOf(b, eski) : null);
           };
           const l = icOnculler(b.isler, is).flatMap((o) => {
             const a = yeri(o.is.id);
@@ -2079,12 +2107,12 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
           let enErken = Number.NEGATIVE_INFINITY;
           let bitisSiniri = Number.NEGATIVE_INFINITY;
           for (const { a, x } of l) {
-            enErken = Math.max(enErken, enErkenBaslangic(x, a, Number.NEGATIVE_INFINITY, t(a.kaynak), verimi(b)(a.kaynak)));
+            enErken = Math.max(enErken, onculBaslangici(b, x, a));
             bitisSiniri = Math.max(bitisSiniri, enErkenBitis(x, a, t(kaynak), verimi(b)(kaynak)) ?? Number.NEGATIVE_INFINITY);
           }
           return { enErken, bitisSiniri };
         };
-        const yerlesen: { i: (typeof kuyruklar)[number]['isler'][number]; q: (typeof kuyruklar)[number]['q']; yer: Aralik }[] = [];
+        const yerlesen: { i: (typeof kuyruklar)[number]['isler'][number]; q: (typeof kuyruklar)[number]['q']; yer: Aralik; itildi: boolean }[] = [];
         for (const { q, isler } of kuyruklar) {
           const dolu: Aralik[] = [
             ...isgal(plandakiler(b, yerler)).filter((y) => ayniKaynak(y.kaynak, q.kaynak) && !tasinacak.has(y.isEmriId) && !sabitYer.has(y.isEmriId)),
@@ -2092,10 +2120,18 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
           ];
           // 3734: bölünmüş işin payı motorun önizlemesindeki saatinde yerleşir (Kokpit ile aynı malzeme hazır anı ve öncül sınırı); kuyruğun
           // öteki işleri onun etrafına dizilir. Önizleme yoksa ya da yerinde sabit bir işle çakışıyorsa pay bugünkü gibi kuyruktan dizilir.
+          // 3793: önizlemedeki saati öncülün bu yazımdaki sınırından önceyse pay o saatte yazılmaz: öncülün arkasına (önizleme saatinden ve
+          // sınırdan geç olanından) itilir ve cevapta "itildi" diye döner. Sınır sıra denetimininkiyle aynıdır; itilen pay canlıya almayı kapatmaz.
           const onizlemede = new Map<(typeof isler)[number], Aralik>();
+          const itilecek = new Map<(typeof isler)[number], number>();
+          // 3793 2a: kişi tezgâhındaki bölünmemiş iş de motorsuz yazılır; önizlemesi öncülün sınırından önceyse o da itilir.
           for (const i of isler) {
-            if (!tasinacak.has(i.is.id) || !i.x.parca) continue;
-            const y = onizlemeYeri(b, dolu, i.x.onizleme);
+            if (!tasinacak.has(i.is.id) || (!i.x.parca && q.kaynak.tur === 'makine')) continue;
+            const o = i.x.onizleme;
+            const sinir = onculSiniri(i.is, q.kaynak).enErken;
+            if (o !== undefined && sinirdanOnce(dk(b, new Date(o.baslangic)), sinir)) { itilecek.set(i, Math.max(sinir, dk(b, new Date(o.baslangic)))); continue; }
+            if (!i.x.parca) continue;
+            const y = onizlemeYeri(b, dolu, o);
             if (y !== null) { onizlemede.set(i, y); dolu.push(y); }
           }
           let enErken = dk(b, new Date(q.baslangic));
@@ -2106,59 +2142,85 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
             // Parça öncülün son parçalarını işlemeyebilir: bitiş sınırı bölünmemiş işe konur.
             const sinir = onculSiniri(i.is, q.kaynak);
             const hazir = onizlemede.get(i);
-            const yer = hazir ?? uzayanBosluk(dolu, takvim(b)(q.kaynak), Math.max(enErken, sinir.enErken), sure, i.x.parca ? Number.NEGATIVE_INFINITY : sinir.bitisSiniri);
+            const itilen = itilecek.get(i);
+            const yer = hazir ?? uzayanBosluk(dolu, takvim(b)(q.kaynak), itilen ?? Math.max(enErken, sinir.enErken), sure, i.x.parca ? Number.NEGATIVE_INFINITY : sinir.bitisSiniri);
             if (yer === null) throw cakisma(`${kaynakMetni(b, q.kaynak)} için planlama ufkunda ${isMetni(b, i.is.id)} sığmıyor.`);
             if (hazir === undefined) dolu.push(yer);
             const o = yeniYer.get(i.is.id);
-            yeniYer.set(i.is.id, o ? { ...o, baslangic: Math.min(o.baslangic, yer.baslangic), bitis: Math.max(o.bitis, yer.bitis) } : { ...yer, kaynak: q.kaynak });
+            const parcalar = i.x.parca ? [...o?.parcalar ?? [], { baslangic: yer.baslangic, bitis: yer.bitis, kaynak: q.kaynak }] : undefined;
+            yeniYer.set(i.is.id, {
+              ...(o ? { ...o, baslangic: Math.min(o.baslangic, yer.baslangic), bitis: Math.max(o.bitis, yer.bitis) } : { baslangic: yer.baslangic, bitis: yer.bitis, kaynak: q.kaynak }),
+              ...(parcalar ? { parcalar } : {}),
+            });
             if (i.x.parca) yerlesenParca.set(i.is.id, (yerlesenParca.get(i.is.id) ?? 0) + 1);
-            enErken = yer.bitis;
-            yerlesen.push({ i, q, yer });
+            // İtilen pay saatine göre yerleşir, kuyruk sırasına göre değil: arkasındaki önizlemesiz işler onun bitişine kaymaz (3793 Risk N1).
+            if (itilen === undefined) enErken = yer.bitis;
+            yerlesen.push({ i, q, yer, itildi: itilen !== undefined });
           }
         }
         return { yeniYer, yerlesen };
       };
-      let sonuc = tur(new Map());
-      for (let n = 0; n < 10 && parcaNolari.size > 0; n += 1) {
-        const yeni = tur(sonuc.yeniYer);
-        const ayni = [...yeni.yeniYer].every(([id, a]) => sonuc.yeniYer.get(id)?.bitis === a.bitis && sonuc.yeniYer.get(id)?.baslangic === a.baslangic);
-        sonuc = yeni;
-        if (ayni) break;
-      }
-      atlanan += kuyruklar.reduce((t, k) => t + k.isler.filter(atlandi).length, 0);
-      const parcaYerleri = new Map<number, ParcaSatiri[]>();
-      for (const { i, q, yer } of sonuc.yerlesen) {
-        yazilan += 1;
-        if (i.x.parca) {
-          parcaYerleri.set(i.is.id, [...(parcaYerleri.get(i.is.id) ?? []), {
-            no: i.x.parca.no, adet: i.x.parca.adet, kaynak: q.kaynak, baslangic: tarih(b, yer.baslangic), bitis: tarih(b, yer.bitis),
-            elleSira: i.x.elle ? i.sira : null, elleIstasyonId: rotaIstasyonu(b, i.is), elleKaynak: i.x.elleKaynak, ...(i.x.parca.motorBolmesi ? { motorBolmesi: true } : {}),
-          }]);
-          continue;
+      // Parça ya da kişi kuyruğu varsa öncülün yeri başka kuyrukta sonradan belli olur: turlar yeri değişmeyene kadar yinelenir.
+      const kisiKuyruklu = kuyruklar.some(({ q }) => q.kaynak.tur !== 'makine');
+      const yakinsa = (kesin: ReadonlyMap<number, OnculYeri>) => {
+        let r = tur(new Map(), kesin);
+        for (let n = 0; n < 10 && (parcaNolari.size > 0 || kisiKuyruklu); n += 1) {
+          const yeni = tur(r.yeniYer, kesin);
+          const ayni = [...yeni.yeniYer].every(([id, a]) => r.yeniYer.get(id)?.bitis === a.bitis && r.yeniYer.get(id)?.baslangic === a.baslangic);
+          r = yeni;
+          if (ayni) break;
         }
-        await s.yerlesimYaz(db, id, {
-          isEmriId: i.is.id, kaynak: q.kaynak, baslangic: tarih(b, yer.baslangic), bitis: tarih(b, yer.bitis), kilitli: false, dondurulmus: i.x.dondurulmus, elleSira: i.x.elle ? i.sira : null, elleIstasyonId: rotaIstasyonu(b, i.is), elleKaynak: i.x.elleKaynak,
-        });
-        idler.push(i.is.id);
-      }
-      // Bölünmüş işin ana satırı zarftır: ilk parçanın kaynağı, ilk başlangıç, son bitiş; iş düzeyinde elle sıra parçaların en küçüğü.
-      for (const [isId, l] of parcaYerleri) {
-        const parcalar = [...l].sort((x, y) => x.no - y.no);
-        const elleler = parcalar.flatMap((p) => (p.elleSira === null ? [] : [p.elleSira]));
-        await s.yerlesimYaz(db, id, {
-          isEmriId: isId, kaynak: parcalar[0]!.kaynak, baslangic: new Date(Math.min(...parcalar.map((p) => p.baslangic.getTime()))),
-          bitis: new Date(Math.max(...parcalar.map((p) => p.bitis.getTime()))), kilitli: false,
-          dondurulmus: kuyruklar.some((k) => k.isler.some((i) => i.is.id === isId && i.x.dondurulmus)),
-          elleSira: elleler.length ? Math.min(...elleler) : null, elleIstasyonId: rotaIstasyonu(b, b.isler.get(isId)!), elleKaynak: false, parcalar,
-        });
-        idler.push(isId);
-      }
-      // 1408 (1409 a): bölünmüş iş ve kişi kuyruğu ekranın sırasıyla, motorsuz yazıldı. Makine kuyruğundaki öteki işler onların etrafında
-      // sunucu motoruyla, yalnız makine kuyruklu istekteki gibi ekranın sırası korunarak yeniden dizilir.
-      const motorKuyrugu = kuyruklar.filter(({ q }) => q.kaynak.tur === 'makine').map(({ q, isler }) => ({
-        makineId: q.kaynak.id, isler: isler.filter((i) => tasinacak.has(i.is.id) && !i.x.parca).map((i) => ({ isId: i.is.id, onizleme: i.x.onizleme ?? null })),
-      })).filter((q) => q.isler.length > 0);
-      if (planMotoru !== null && motorKuyrugu.length > 0) {
+        return r;
+      };
+      // Motorsuz yazılan işin (parça ve kişi kuyruğu) yeri: motor makine işlerini kaydırdıysa yeniden bakılır.
+      const motorsuzYerler = (r: ReturnType<typeof tur>) => r.yerlesen.filter(({ i, q }) => i.x.parca || q.kaynak.tur !== 'makine')
+        .map(({ i, yer }) => `${String(i.is.id)}|${String(i.x.parca?.no ?? 0)}|${String(yer.baslangic)}`).sort().join(';');
+      atlanan += kuyruklar.reduce((t, k) => t + k.isler.filter(atlandi).length, 0);
+      const yazilanBas = yazilan;
+      const itilenBas = itilen.length;
+      let sonuc = yakinsa(new Map());
+      // 3793 2a: motor makine işini (çalışan işin gerçek kalanı, sabit iş) kuyruk turundan geç koyabilir; motorsuz yazılan ardıl (kişi tezgâhı,
+      // parça) o zaman öncülünden önce kalır. Motorun yerleri kesin sayılıp turlar yeniden koşar, değişen motorsuz iş yeniden yazılır ve motor
+      // onun etrafında bir kez daha dizer. En çok üç yazım.
+      for (let dongu = 0; ; dongu += 1) {
+        yazilan = yazilanBas;
+        itilen.length = itilenBas;
+        const parcaYerleri = new Map<number, ParcaSatiri[]>();
+        for (const { i, q, yer, itildi } of sonuc.yerlesen) {
+          yazilan += 1;
+          if (itildi && i.x.onizleme) {
+            itilen.push({ emirNo: i.is.emirNo, opNo: i.is.opNo, parca: i.x.parca?.no ?? null, onizleme: new Date(i.x.onizleme.baslangic).toISOString(), yeni: tarih(b, yer.baslangic).toISOString() });
+          }
+          if (i.x.parca) {
+            parcaYerleri.set(i.is.id, [...(parcaYerleri.get(i.is.id) ?? []), {
+              no: i.x.parca.no, adet: i.x.parca.adet, kaynak: q.kaynak, baslangic: tarih(b, yer.baslangic), bitis: tarih(b, yer.bitis),
+              elleSira: i.x.elle ? i.sira : null, elleIstasyonId: rotaIstasyonu(b, i.is), elleKaynak: i.x.elleKaynak, ...(i.x.parca.motorBolmesi ? { motorBolmesi: true } : {}),
+            }]);
+            continue;
+          }
+          await s.yerlesimYaz(db, id, {
+            isEmriId: i.is.id, kaynak: q.kaynak, baslangic: tarih(b, yer.baslangic), bitis: tarih(b, yer.bitis), kilitli: false, dondurulmus: i.x.dondurulmus, elleSira: i.x.elle ? i.sira : null, elleIstasyonId: rotaIstasyonu(b, i.is), elleKaynak: i.x.elleKaynak,
+          });
+          idler.push(i.is.id);
+        }
+        // Bölünmüş işin ana satırı zarftır: ilk parçanın kaynağı, ilk başlangıç, son bitiş; iş düzeyinde elle sıra parçaların en küçüğü.
+        for (const [isId, l] of parcaYerleri) {
+          const parcalar = [...l].sort((x, y) => x.no - y.no);
+          const elleler = parcalar.flatMap((p) => (p.elleSira === null ? [] : [p.elleSira]));
+          await s.yerlesimYaz(db, id, {
+            isEmriId: isId, kaynak: parcalar[0]!.kaynak, baslangic: new Date(Math.min(...parcalar.map((p) => p.baslangic.getTime()))),
+            bitis: new Date(Math.max(...parcalar.map((p) => p.bitis.getTime()))), kilitli: false,
+            dondurulmus: kuyruklar.some((k) => k.isler.some((i) => i.is.id === isId && i.x.dondurulmus)),
+            elleSira: elleler.length ? Math.min(...elleler) : null, elleIstasyonId: rotaIstasyonu(b, b.isler.get(isId)!), elleKaynak: false, parcalar,
+          });
+          idler.push(isId);
+        }
+        // 1408 (1409 a): bölünmüş iş ve kişi kuyruğu ekranın sırasıyla, motorsuz yazıldı. Makine kuyruğundaki öteki işler onların etrafında
+        // sunucu motoruyla, yalnız makine kuyruklu istekteki gibi ekranın sırası korunarak yeniden dizilir.
+        const motorKuyrugu = kuyruklar.filter(({ q }) => q.kaynak.tur === 'makine').map(({ q, isler }) => ({
+          makineId: q.kaynak.id, isler: isler.filter((i) => tasinacak.has(i.is.id) && !i.x.parca).map((i) => ({ isId: i.is.id, onizleme: i.x.onizleme ?? null })),
+        })).filter((q) => q.isler.length > 0);
+        if (planMotoru === null || motorKuyrugu.length === 0) break;
         const m = await sunucuMotoru(db, await baglamKur(db, k, id), id, motorKuyrugu);
         if (m.yerlesmez.size > 0) await s.yerlesimleriSil(db, id, [...m.yerlesmez]);
         idler.push(...m.yerlesmez);
@@ -2166,13 +2228,20 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
         for (const [isId, y] of m.yer) await s.yerlesimYaz(db, id, { ...yazili.get(isId)!, baslangic: y.baslangic, bitis: y.bitis });
         motorFarki = m.fark;
         yerlesmeyen = m.yerlesmeyen.map((x) => { const i = b.isler.get(x.isId)!; return { emirNo: i.emirNo, opNo: i.opNo, ...nedenAlanlari(x.neden) }; });
+        if (dongu >= 2 || (parcaNolari.size === 0 && !kisiKuyruklu)) break;
+        const kaynagi = new Map(motorKuyrugu.flatMap((q) => q.isler.map((x) => [x.isId, q.makineId] as const)));
+        const kesin = new Map([...m.yer].flatMap(([isId, y]) => (kaynagi.has(isId)
+          ? [[isId, { baslangic: dk(b, y.baslangic), bitis: dk(b, y.bitis), kaynak: { tur: 'makine', id: kaynagi.get(isId)! } as Kaynak }] as const] : [])));
+        const yeni = yakinsa(kesin);
+        if (motorsuzYerler(yeni) === motorsuzYerler(sonuc)) break;
+        sonuc = yeni;
       }
       return { tur: 'sirala', ozet: `Reçete ve Rota kuyrukları yazıldı (${g.kuyruklar.length} kaynak, ${yazilan} iş)`, isEmriIdleri: [...new Set(idler)] };
     });
     taslak = { id: p.taslak!.id, surum: p.taslak!.surum };
   }
   if (taslak === null) throw dogrulama('Yazılacak kuyruk yok.', 'kuyruklar');
-  return { cevap: { taslak: taslak.id, canli: false, yazilan, atlanan, ...(motorFarki === undefined ? {} : { motorFarki }), ...(yerlesmeyen?.length ? { yerlesmeyen } : {}) }, ekMesai };
+  return { cevap: { taslak: taslak.id, canli: false, yazilan, atlanan, ...(motorFarki === undefined ? {} : { motorFarki }), ...(yerlesmeyen?.length ? { yerlesmeyen } : {}), ...(itilen.length > 0 ? { itilen } : {}) }, ekMesai };
 }
 
 // 3734-2: çalışan bölünmüş işte yerinde kalan payların kaynakları: terminalin çalıştırdığı kaynak (yoksa iş emrinin kaynağı) ve sayımı olan

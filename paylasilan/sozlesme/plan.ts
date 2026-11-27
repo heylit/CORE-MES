@@ -402,6 +402,9 @@ export const kuyrukYazGovdesi = z.object({
 export const motorFarki = z.array(z.object({
   anahtar: z.string(), onizleme: z.object({ baslangic: zaman, bitis: zaman }).nullable(), sunucu: z.object({ baslangic: zaman, bitis: zaman }),
 }));
+// 3793: önizlemedeki saati öncülün sunucudaki sınırından önce olduğu için öncülün arkasına itilen paylar; onizleme Kokpit'in saati, yeni yazılan saat.
+// parca: bölünmüş işin payı; bölünmemiş iş (kişi tezgâhı) için null.
+export const itilenPay = z.object({ emirNo: z.string(), opNo: z.number().int(), parca: z.number().int().nullable(), onizleme: zaman, yeni: zaman });
 export const kuyrukYazCevabi = z.object({
   taslak: KIMLIK, canli: z.boolean(),
   // Yazılan iş sayısı; atlanan: başlamış ya da bitmiş, kilitli ya da dondurulmuş iş (plan modülünün durumu geçerlidir).
@@ -410,6 +413,8 @@ export const kuyrukYazCevabi = z.object({
   motorFarki: motorFarki.optional(),
   // 981 a-1: sunucu motorunun yerleştiremediği işler, nedeniyle (öncülü yerleşmeyen ardılı dahil); öteki işler yazılmıştır. Yoksa alan yok.
   yerlesmeyen: z.array(z.object({ emirNo: z.string(), opNo: z.number().int(), ...planlanamama })).optional(),
+  // 3793: öncülünün arkasına itilen paylar. Yoksa alan yok.
+  itilen: z.array(itilenPay).optional(),
 });
 export const canliyaAlCevabi = senaryolarCevabi.extend({ motorFarki: motorFarki.optional() });
 // Canlı planın özeti: son canlıya alma ve makine kuyrukları. Reçete ve Rota bunu kendi hesapladığı kuyrukla karşılaştırıp canlıya
@@ -488,7 +493,15 @@ export const canliyaAlOnizlemesiCevabi = z.object({
     isEmriId: KIMLIK, emirNo: z.string(), opNo: z.number().int(), k: z.string().nullable(), kilitli: z.boolean(), baslangic: zaman,
     oncul: z.object({ emirNo: z.string(), opNo: z.number().int(), k: z.string().nullable(), bitis: zaman }).nullable(),
     farkDk: z.number().int().nullable(),
+    // 3793 3a: ihlalin kaynağı. Emrin önceki adımları canlıda Kokpit'tekinden geç başlıyorsa ilk kayan adım, kayma ve o adımın kaynağında
+    // yerinde kalan iş (sahada süren, kilitli, dondurulmuş). Kayma yoksa ihlal Kokpit planındadır (null; yeniden çözmek değiştirir).
+    neden: z.object({
+      ilkOp: z.number().int(), sonOp: z.number().int(), kaymaDk: z.number().int(),
+      engel: z.object({ emirNo: z.string(), opNo: z.number().int(), kaynak: z.string(), baslangic: zaman, bitis: zaman, neden: z.enum(['sahada', 'kilitli', 'dondurulmus']).nullable() }).nullable(),
+    }).nullable().optional(),
   })),
+  // 3793: yazımda öncülünün arkasına itilen paylar (k: Kokpit'teki iş); yoksa alan yok.
+  itilen: z.array(itilenPay.extend({ k: z.string().nullable() })).optional(),
 });
 export const kilitliKaydirGovdesi = taslakGovdesi.extend({
   adimlar: z.array(z.object({ isEmriId: KIMLIK, baslangic: tarihZaman })).min(1).max(50),

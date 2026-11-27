@@ -354,10 +354,14 @@ export function yonUygula(deger: unknown, emirId: string, yon: 'plan' | 'ileri' 
 const yenidenPlanlaAdi = (isler: readonly string[], kilitKaldir = false, baslamis = false): string => `${isler.includes('*') ? 'Bütün plan baştan kurulacak' : isler.length === 1 ? `${isler[0]!} yeniden planlanacak` : `${String(isler.length)} emir yeniden planlanacak`}${kilitKaldir ? '; kilitler kalkar' : ''}${baslamis ? '; başlamış işler dahil' : ''}`;
 // baslamisDiz (3600, yalnız plan.baslamis-diz): istenen emirlerin başlamış (bitmemiş, fason olmayan) işleri w.durdurulan'a yazılır; motor yapılan
 // kısmı geçmişte bırakır, kalan adedi aynı tezgâhta şimdiden sonraya dizer (3414-6 a). Biten ve fason iş dokunulmaz; Geri al işareti geri alır.
+// 3793 (kullanıcı isteği 5): sahada süren adım (sunucunun çalışıyor dediği, bitişsiz gerçekleşen: gercek[id].sunucu) işaretlenmez; Kokpit onu
+// sürdüğü yerde son sayımdan kalan süreyle bırakır, canlı da yerini değiştirmez. Yalnız sahada süren değil ama plana göre başlamış iş taşınır.
 export function baslamisIsler(deger: unknown, isler: readonly string[]): string[] {
   if (!nesne(deger) || !nesne(deger.plan) || !nesne(deger.plan.ops)) return [];
   const hepsi = isler.includes('*'), secili = new Set(isler);
-  return Object.entries(deger.plan.ops).filter(([, r]) => nesne(r) && !!r.act && !r.done && !r.fas && (hepsi || secili.has(String(r.job)))).map(([id]) => id);
+  const g = nesne(deger.gercek) ? deger.gercek : {};
+  const sahadaSurer = (id: string) => { const a = g[id]; return nesne(a) && !!a.sunucu && a.S != null && a.C == null; };
+  return Object.entries(deger.plan.ops).filter(([id, r]) => nesne(r) && !!r.act && !r.done && !r.fas && !sahadaSurer(id) && (hepsi || secili.has(String(r.job)))).map(([id]) => id);
 }
 export function kalkacakKilitler(deger: unknown, isler: readonly string[], baslamisDahil = false): string[] {
   if (!nesne(deger) || !nesne(deger.locks)) return [];

@@ -145,13 +145,17 @@ describe('taşıma hesabı motorun takvimiyle (2790)', () => {
     assert.deepEqual(ozet(tasimaHesabi(calisma('b', { 'S1.10': op('S1', 'T1', 8) }, { kapali: ['calismaGunu'] }), 8, { isId: 'S1.10', tezgah: 'T1', baslangic: cmt })), { 'S1.10': ['T1', cmt, cmt + 2, 'tasinan'] });
   });
 
-  test('TH-14 (3414-6 a): süren iş taşınınca durdurulmuş sayılır; yapılan adet düşer, kalan adet yeni yerine dizilir, ardıl arkasına itilir', () => {
+  test('TH-14 (3414-6 a, 3793): sahada çalışan iş taşınmaz; sunucu kaydı olmayan süren iş taşınınca durdurulmuş sayılır; yapılan adet düşer, kalan adet yeni yerine dizilir, ardıl arkasına itilir', () => {
     // OP 10 08:00'de başladı, 2 adetten 1'i sayıldı; şimdi 09:00. 12:00'ye taşınınca kalan 1 adet = 1 saat.
     const isler = { 'S1.10': op('S1', 'T1', 8, { act: 1, pin: 1 }), 'S1.20': op('S1', 'T2', 10) };
     const gercek = { 'S1.10': { m: 'T1', S: 8, kalan: 1, sayim: 9, n: 1, A: 2, sunucu: 1 } };
+    // 3793: sahada çalışan adım (sunucunun çalışan adımı) Kokpit'te taşınmaz.
     const r = tasimaHesabi(calisma('b', isler, { gercek }), 9, { isId: 'S1.10', tezgah: 'T1', baslangic: 12 });
-    assert.deepEqual(ozet(r), { 'S1.10': ['T1', 12, 13, 'tasinan'], 'S1.20': ['T2', 13, 15, 'itilen'] });
-    assert.match(r.ileti!, /^OP 10 durdurulmuş sayıldı: yapılan 1 adet yerinde kaldı, kalan 1 adet yeni yerine planlandı\. Canlıya geçmesi için işin terminalde durdurulması gerekir\./);
+    assert.deepEqual(r, { gecerli: false, ileti: 'Adım sahada çalışıyor; Kokpit\'te taşınmaz. Önce terminalde durdurun ya da duraklatın, sonra taşıyın.', isler: [] });
+    const { sunucu: _s, ...kayit } = gercek['S1.10'];
+    const kayitli = tasimaHesabi(calisma('b', isler, { gercek: { 'S1.10': kayit } }), 9, { isId: 'S1.10', tezgah: 'T1', baslangic: 12 });
+    assert.deepEqual(ozet(kayitli), { 'S1.10': ['T1', 12, 13, 'tasinan'], 'S1.20': ['T2', 13, 15, 'itilen'] });
+    assert.match(kayitli.ileti!, /^OP 10 durdurulmuş sayıldı: yapılan 1 adet yerinde kaldı, kalan 1 adet yeni yerine planlandı\. Canlıya geçmesi için işin terminalde durdurulması gerekir\./);
     // Sayım bilinmiyorsa adedin tamamı taşınır; başka emrin süren işi yerinde kalır.
     const sayimsiz = tasimaHesabi(calisma('b', isler, { gercek: { 'S1.10': { m: 'T1', S: 8 } } }), 9, { isId: 'S1.10', tezgah: 'T1', baslangic: 12 });
     assert.deepEqual(ozet(sayimsiz)['S1.10'], ['T1', 12, 14, 'tasinan']);

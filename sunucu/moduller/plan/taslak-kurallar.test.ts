@@ -162,6 +162,10 @@ describe('3282 1d: ayar ve yön komutu', () => {
     assert.deepEqual((yok.deger as typeof c).w, c.w);
     assert.equal(komutAdi({ tur: 'yeniden-planla', isler: ['*'], baslamisDiz: true }), 'Bütün plan baştan kurulacak; başlamış işler dahil');
     // Hiç başlamış iş yoksa işaret yazılmaz, satır kilitsiz değildir.
+    // 3793: sahada süren adım (sunucunun çalışıyor dediği, bitişsiz) durdurulmuş sayılmaz; sahada sürmeyen başlamış iş sayılır.
+    const sahada = { ...c, gercek: { 'S1.10': { m: 'T1', S: 7, sunucu: 1 }, 'S2.10': { m: 'T2', S: 29 } } };
+    assert.deepEqual(baslamisIsler(sahada, ['*']), ['S2.10']);
+    assert.deepEqual(((yenidenPlanlaUygula(sahada, ['S1'], k, false, true) as unknown as { deger: typeof c }).deger.w as Record<string, unknown>).durdurulan, { 'X.1': 1 });
     const bosluk = yenidenPlanlaUygula(c, ['S1x'], k, false, true);
     assert.ok('hata' in bosluk);
   });

@@ -9,8 +9,9 @@ import { ACILIS_OLCEGI, BOS_SECIM } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import { otomatikUygulaSifirla } from '../motor/atolye/gonder.ts';
 import { KomsuKilitler } from '../motor/atolye/CanliOnizleme.tsx';
-import { kaydirmaDugmesi, kaydirmaSaati, komsuAdi, komsuKilitKaymalari, yazilanOneri, kapaliListeFarkli, onizlemeEngeli, ONIZLEME_BEKLEME_MS, ONIZLEME_ZAMAN_ASIMI_MS, sureMetni, useGondermeOnizlemesi } from '../motor/atolye/canli-onizleme.ts';
+import { careCumlesi, gunSaat, kilidiKaldir, kilitCakismasiAyir, kilitCakismasiIsi, kilitCakismasiNedeni, itilenSatiri, kaymaCumlesi, oneriYokMetni, kaydirmaDugmesi, kaydirmaSaati, komsuAdi, komsuKilitKaymalari, yazilanOneri, kapaliListeFarkli, onizlemeEngeli, ONIZLEME_BEKLEME_MS, ONIZLEME_ZAMAN_ASIMI_MS, sureMetni, useGondermeOnizlemesi } from '../motor/atolye/canli-onizleme.ts';
 import { planKurSifirla } from '../motor/coz.ts';
+import { saatOku } from '../motor/kurallar.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import { saatiSabitle } from '../test-saati.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
@@ -49,15 +50,15 @@ function sunucu(onizleme: CanliyaAlOnizlemesiCevabi | ApiHatasi, tasiSonuclari: 
     return Promise.reject(new Error(`beklenmeyen istek ${yol}`));
   }) as never);
 }
-function sayfayiAc(kapali: string[] = [], islemler: string[] = ['plan.kilitle'], guncel = true) {
+function sayfayiAc(kapali: string[] = [], islemler: string[] = ['plan.kilitle'], guncel = true, ek: { locks?: Record<string, unknown>; kayit?: unknown; degistir?: CalismaKomutu['degistir'] } = {}) {
   const geriAl = vi.fn(() => true);
-  const komut = { degistir: () => false, geriAl, geriAlinabilir: () => true, geriAdimlari: () => [], geriDon: () => true, kaydet: () => Promise.resolve(4), komutBasladi: vi.fn(), komutDustu: vi.fn() } as unknown as CalismaKomutu;
+  const komut = { degistir: ek.degistir ?? (() => false), geriAl, geriAlinabilir: () => true, geriAdimlari: () => [], geriDon: () => true, kaydet: () => Promise.resolve(4), komutBasladi: vi.fn(), komutDustu: vi.fn() } as unknown as CalismaKomutu;
   const yenile = vi.fn();
-  const depo = { ben: { kisi: { ad: 'ORN-Planlamaci' } }, durum: null, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat: null }, senaryolar: { canli: null, canliSurum: 3, senaryolar: [] }, calismaSurumu: 4, receteRotaKaydi: null } as unknown as PlanlamaDeposu;
+  const depo = { ben: { kisi: { ad: 'ORN-Planlamaci' } }, durum: null, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat: null }, senaryolar: { canli: null, canliSurum: 3, senaryolar: [] }, calismaSurumu: 4, receteRotaKaydi: ek.kayit ?? null } as unknown as PlanlamaDeposu;
   render(
     <MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici>
       <Kokpit
-        depo={depo} calisma={guncel ? guncelCalisma(kapali) : { ...guncelCalisma(kapali), dataVer: 9999 }} komut={komut} git={vi.fn()} yenile={yenile} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al', ...islemler])}
+        depo={depo} calisma={{ ...(guncel ? guncelCalisma(kapali) : { ...guncelCalisma(kapali), dataVer: 9999 }), ...(ek.locks ? { locks: ek.locks } : {}) }} komut={komut} git={vi.fn()} yenile={yenile} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al', ...islemler])}
         olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={vi.fn()}
       />
     </BildirimSaglayici></MemoryRouter>,
@@ -264,6 +265,32 @@ describe('sıra denetimi yardımcıları', () => {
     expect(onizlemeEngeli({ tur: 'hata', ileti: 'x' })).not.toBeNull();
     expect(onizlemeEngeli({ tur: 'hata', ileti: 'x' }, false)).toBeNull();
   });
+  it('3793: kilitsiz ihlalde engel kilit demez; adım, öncülün canlı bitişi ve taşıma önerisi yazılır', () => {
+    const kilitsiz = { ...IHLAL, kilitli: false };
+    const e = onizlemeEngeli({ tur: 'hazir', veri: veri({ ihlaller: [kilitsiz] }) })!;
+    expect(e).not.toContain('kilidi');
+    expect(e).toContain('ORN-E-1 OP 70');
+    expect(e).toContain(gunSaat(IHLAL.oncul!.bitis));
+    expect(careCumlesi(kilitsiz)).toContain('parçalarını');
+    expect(careCumlesi(kilitsiz, true)).toBe(`Öneri: OP 70'in parçalarını OP 60 canlıda bittikten sonraya, ${gunSaat(IHLAL.oncul!.bitis)} ve sonrasına taşıyın ya da bölmeyi kaldırın.`);
+    expect(careCumlesi(kilitsiz, false)).not.toContain('bölme');
+    expect(careCumlesi({ ...kilitsiz, oncul: null })).toContain('yeniden çözün');
+    expect(onizlemeEngeli({ tur: 'hazir', veri: veri({ ihlaller: [kilitsiz, IHLAL] }) })).toContain('kilidi');
+    expect(itilenSatiri({ emirNo: 'ORN-E-1', opNo: 70, parca: 2, k: K2, onizleme: '2026-10-21T08:00:00.000Z', yeni: '2026-10-21T10:30:00.000Z' }))
+      .toBe(`ORN-E-1 OP 70 parça 2: Kokpit ${gunSaat('2026-10-21T08:00:00.000Z')} → canlıya alınınca ${gunSaat('2026-10-21T10:30:00.000Z')} (öncülün arkasına itildi)`);
+  });
+  it('3793 3a: ihlalin kaynağı bilindiğinde metin onu söyler ve "yeniden çözün" demez', () => {
+    const engel = { emirNo: 'ORN-E-9', opNo: 10, kaynak: 'ORN-T1', baslangic: '2026-10-20T05:00:00.000Z', bitis: '2026-10-21T05:40:00.000Z', neden: 'sahada' as const };
+    const kayan = { ...IHLAL, kilitli: false, neden: { ilkOp: 10, sonOp: 50, kaymaDk: 990, engel } };
+    expect(kaymaCumlesi(kayan)).toBe(`ORN-T1 üzerinde sahada süren ORN-E-9 OP 10 canlıda ${gunSaat(engel.bitis)} bitişine kadar yerinde kalıyor; bu yüzden ORN-E-1 OP 10-OP 50 16 sa 30 dk kayıyor.`);
+    expect(careCumlesi({ ...kayan, oncul: null })).not.toContain('yeniden çözün');
+    expect(careCumlesi(kayan, false)).toBe(`${kaymaCumlesi(kayan)!} Öneri: OP 70'i OP 60 canlıda bittikten sonraya, ${gunSaat(IHLAL.oncul!.bitis)} ve sonrasına taşıyın.`);
+    expect(kaymaCumlesi({ ...kayan, neden: { ...kayan.neden, engel: null } })).toContain("Kokpit'teki yeri canlıda dolu");
+    expect(kaymaCumlesi({ ...kayan, neden: null })).toBeNull();
+    expect(oneriYokMetni([kayan])).toBe(kaymaCumlesi(kayan));
+    expect(oneriYokMetni([{ ...kayan, neden: null }])).toContain('yeniden çözün');
+    expect(itilenSatiri({ emirNo: 'ORN-E-1', opNo: 60, parca: null, k: K2, onizleme: '2026-10-21T08:00:00.000Z', yeni: '2026-10-21T10:30:00.000Z' })).toMatch(/^ORN-E-1 OP 60: Kokpit/);
+  });
   it('kapalı liste sıradan bağımsız karşılaştırılır', () => {
     expect(kapaliListeFarkli({ kapali: ['a', 'b'] }, ['b', 'a'])).toBe(false);
     expect(kapaliListeFarkli({ kapali: ['a'] }, ['a', 'b'])).toBe(true);
@@ -361,5 +388,98 @@ describe('önizleme çalışmaya bağlıdır (kaydırma sonrası ve eski sürüm
     await ilerle(ONIZLEME_BEKLEME_MS + 10);
     expect(post.mock.calls.length).toBe(1);
     expect(h.result.current.durum.tur).toBe('hazir');
+  });
+});
+
+// 3793-2 (madde 8): kilitli adım canlıda yerinde kalan işle üst üste; sunucunun iletisi (servis.ts, 3793 6) çakışan işi ve aralığı yazar.
+describe('canlıya al: kilit yerinde kalan işle çakışınca iki çare (3793-2)', () => {
+  const nokta = K2.lastIndexOf('.');
+  const IS = K2.slice(0, nokta), OP = K2.slice(nokta + 1);
+  const KAYIT = { orders: [{ id: IS, no: 'ORN-E-9' }] };
+  const emirNo = (id: string) => (id === IS ? 'ORN-E-9' : id);
+  const ILETI = `ORN-E-9 OP ${OP} kilitli saatinde CNC-002 üzerinde ORN-E-7 OP 20 ile üst üste. OP 20 sahada çalışıyor, canlıda 2026-10-20 00:40 - 2026-10-21 08:30 arasında yerinde kalıyor. OP ${OP} için kilitli saati 2026-10-21 08:30 sonrasına alın ya da kilidi kaldırın.`;
+  const tezgahi = (): string => (guncelCalisma().plan!.ops as Record<string, { m: string }>)[K2]!.m;
+  const kilit = () => ({ [K2]: { m: tezgahi(), S: 30 } });
+  const cakisma = () => new ApiHatasi(409, { kod: 'CAKISMA', mesaj: ILETI });
+
+  it('ileti okunur: emir, OP, kaynak, çakışan iş, neden ve aralık; tanınmayan ileti null', () => {
+    expect(OP).toMatch(/^\d+$/);
+    const x = kilitCakismasiAyir(`İş yazılamadı: ${ILETI}`)!;
+    expect(x).toEqual({ emirNo: 'ORN-E-9', opNo: Number(OP), kaynak: 'CNC-002', engelEmirNo: 'ORN-E-7', engelOpNo: 20, neden: 'sahada çalışıyor', baslangic: '2026-10-20 00:40', bitis: '2026-10-21 08:30' });
+    expect(kilitCakismasiNedeni(x)).toBe('ORN-E-7 OP 20 sahada çalışıyor; canlıda 20.10 00:40 - 21.10 08:30 arasında yerinde kalıyor.');
+    expect(kilitCakismasiAyir(ILETI.replace('sahada çalışıyor', 'bu yazımda taşınmıyor'))?.neden).toBe('bu yazımda taşınmıyor');
+    expect(kilitCakismasiAyir('Taslakta sıraya aykırı adım var: ORN-E-9 OP 20 elle kilitli')).toBeNull();
+  });
+
+  it('yeni saat canlı bitişten sonraki ilk çeyrek saattir (dakikaya kesik bitiş aynı dakikada üst üste kalmasın); kilit yoksa null', () => {
+    const c = { ...guncelCalisma(), locks: kilit() };
+    const x = kilitCakismasiAyir(ILETI)!;
+    const bitis = saatOku(c.D, '2026-10-21 08:30')!;
+    expect(kilitCakismasiIsi(c, x, emirNo, 0)).toEqual({ k: K2, tezgah: tezgahi(), S: bitis + 0.25 });
+    expect(kilitCakismasiIsi(c, kilitCakismasiAyir(ILETI.replace('08:30 arasında', '08:20 arasında'))!, emirNo, 0)!.S).toBe(bitis);
+    expect(kilitCakismasiIsi({ ...c, locks: {} }, x, emirNo, 0)).toBeNull();
+    expect(kilitCakismasiIsi(c, x, (id) => id, 0)).toBeNull();
+  });
+
+  it('kilidi kaldırmak kayıtlı çalışmada tek değişikliktir; kilit yoksa değişiklik olmaz', () => {
+    const degistir = vi.fn((_ne: string, fn: (t: ReturnType<typeof guncelCalisma>) => boolean | void) => fn(t) !== false);
+    const t = { ...guncelCalisma(), locks: kilit() };
+    expect(kilidiKaldir({ degistir } as unknown as CalismaKomutu, K2, `ORN-E-9 OP ${OP}`)).toBe(true);
+    expect(t.locks[K2]).toBeUndefined();
+    expect(degistir.mock.calls[0]![0]).toBe('Kilit kaldırıldı');
+    expect(kilidiKaldir({ degistir } as unknown as CalismaKomutu, K2, 'x')).toBe(false);
+  });
+
+  it('"Arkasına al" onay penceresi açar; onaylanınca kilit Kokpit taşıma komutuyla canlı bitişin arkasına yazılır, sayfa yenilenir, Geri al görünür', async () => {
+    const post = sunucu(cakisma());
+    const { yenile, geriAl } = sayfayiAc([], ['plan.kilitle'], true, { locks: kilit(), kayit: KAYIT });
+    const kart = await screen.findByRole('group', { name: 'Kilit çakışması' }, { timeout: 5000 });
+    expect(kart.textContent).toContain('ORN-E-7 OP 20 sahada çalışıyor');
+    expect(kart.textContent).toContain('CNC-002');
+    expect(screen.queryByText(/Sıra denetimi alınamadı/)).toBeNull();
+    expect(screen.getByText('Kilitli adım yerinde kalan işle üst üste; önce kilidi arkasına alın ya da kaldırın.')).toBeTruthy();
+    expect((await sayfaDugmesi()).hasAttribute('disabled')).toBe(true);
+    expect(post.mock.calls.filter((x) => x[0] === IS_TASI)).toHaveLength(0);
+    fireEvent.click(within(kart).getByRole('button', { name: /^Arkasına al \(/ }));
+    expect(post.mock.calls.filter((x) => x[0] === IS_TASI)).toHaveLength(0);
+    const pencere = await screen.findByRole('dialog');
+    expect(pencere.textContent).toContain('Geri al ile döner');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Taşı' }));
+    await waitFor(() => expect(yenile).toHaveBeenCalled());
+    const tasi = post.mock.calls.filter((x) => x[0] === IS_TASI);
+    expect(tasi).toHaveLength(1);
+    const c = guncelCalisma();
+    expect(tasi[0]![1]).toMatchObject({ isId: K2, tezgah: tezgahi(), baslangic: saatOku(c.D, '2026-10-21 08:30')! + 0.25 });
+    fireEvent.click(await screen.findByRole('button', { name: 'Geri al' }));
+    expect(geriAl).toHaveBeenCalledOnce();
+  });
+
+  it('"Kilidi kaldır" onaylanınca kilit çalışmadan kalkar; vazgeçilirse hiçbir şey yazılmaz', async () => {
+    sunucu(cakisma());
+    const degistir = vi.fn(() => true);
+    sayfayiAc([], ['plan.kilitle'], true, { locks: kilit(), kayit: KAYIT, degistir });
+    const kart = await screen.findByRole('group', { name: 'Kilit çakışması' }, { timeout: 5000 });
+    fireEvent.click(within(kart).getByRole('button', { name: 'Kilidi kaldır' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Vazgeç' }));
+    expect(degistir).not.toHaveBeenCalled();
+    fireEvent.click(within(kart).getByRole('button', { name: 'Kilidi kaldır' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Kilidi kaldır' }));
+    expect(degistir).toHaveBeenCalledOnce();
+    expect((degistir.mock.calls[0] as unknown[])[0]).toBe('Kilit kaldırıldı');
+    expect(await within(kart).findByText(/kilidi kaldırıldı/)).toBeTruthy();
+  });
+
+  it('kilitleme yetkisi yoksa düğmeler kapalıdır ve nedeni yazar; kilit çalışmada yoksa Kokpit\'te elle taşı der', async () => {
+    sunucu(cakisma());
+    sayfayiAc([], [], true, { locks: kilit(), kayit: KAYIT });
+    const kart = await screen.findByRole('group', { name: 'Kilit çakışması' }, { timeout: 5000 });
+    expect(within(kart).getByRole('button', { name: 'Kilidi kaldır' }).hasAttribute('disabled')).toBe(true);
+    expect(kart.textContent).toContain('plan kilitleme yetkisi ister');
+    cleanup();
+    sunucu(cakisma());
+    sayfayiAc([], ['plan.kilitle'], true, { locks: {}, kayit: KAYIT });
+    const kart2 = await screen.findByRole('group', { name: 'Kilit çakışması' }, { timeout: 5000 });
+    expect(within(kart2).getByRole('button', { name: 'Arkasına al' }).hasAttribute('disabled')).toBe(true);
+    expect(kart2.textContent).toContain("Kokpit'te elle taşıyın");
   });
 });

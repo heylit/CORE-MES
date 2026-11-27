@@ -51,7 +51,8 @@ for (const ayni of [false, true]) describe(`3600 R3/R4: terminalde calisan is ($
     const u = await tamam<{ durum: string; calismaSurumu: number }>(y, 'POST', '/plan/taslagim/uygula', { taslakSurumu: t2.taslak!.surum });
     const r = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'baslamis', calismaSurumu: u.calismaSurumu, dortSaatGerekcesi: 'Deneme gerekcesi: baslamis is dizildi' });
     assert.equal(r.statusCode, 200, r.body);
-    assert.match(r.body, /OP 10 terminalde durdurulmayı bekliyor/);
+    // 3793 (istek 5): sahada süren adım baştan dizmede durdurulmuş sayılmaz; "durdurulmayı bekliyor" uyarısı da çıkmaz.
+    assert.doesNotMatch(r.body, /terminalde durdurulmayı bekliyor/);
     const sonra = await yerOf(isler[0]);
     assert.equal(sonra.baslangic, once.baslangic);
     assert.equal(sonra.bitis, once.bitis);

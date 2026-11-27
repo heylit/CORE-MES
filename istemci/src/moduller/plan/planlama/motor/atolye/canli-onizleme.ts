@@ -3,7 +3,7 @@ import type { CanliyaAlOnizlemesiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { api, ApiHatasi, hataIletisi } from '../../../../../ortak/veri/api.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
-import { simdiSaati, type OkunanPlan } from '../kurallar.ts';
+import { saatOku, simdiSaati, type OkunanPlan } from '../kurallar.ts';
 import { calismayiGeriAl, isiTasi, otomatikUygulaIste } from './gonder.ts';
 
 // 3669: çalışma planı gönderilmeden önce sunucunun yazacağı yerleşimin sıra denetimi. Uç yazar ve geri alır (kalıcı iz yok); sonuç çalışmanın
@@ -172,13 +172,81 @@ export function nedenCumlesi(c: PlanlamaCalismasi, p: OkunanPlan, i: Ihlal): str
     : `Canlı yerleşimde ${ad} ${gunSaat(i.oncul.bitis)}'de bitiyor; ${kilit}`;
 }
 
+// 3793: kilitsiz ihlalin çaresi: adımı (bölünmüşse parçalarını) sunucunun öncül bitişinden sonraya taşımak. Öncülü bilinmiyorsa planı yeniden çözmek.
+// bolunmus: adım Kokpit'te paylıysa (bilinmiyorsa undefined) öneri parçaları ve bölmeyi kaldırmayı söyler.
+// 3793 3a: ihlalin kaynağı (emrin önceki adımları canlıda kayıyor; kayan ilk adımın kaynağında yerinde kalan iş). Kaynak bilindiğinde "yeniden
+// çözün" denmez: Kokpit aynı planı üretir.
+const ENGEL_NEDENI = { sahada: 'sahada süren', kilitli: 'kilitli', dondurulmus: 'dondurulmuş' } as const;
+export function kaymaCumlesi(i: Ihlal): string | null {
+  const n = i.neden;
+  if (n === undefined || n === null) return null;
+  const aralik = n.ilkOp === n.sonOp ? `OP ${String(n.ilkOp)}` : `OP ${String(n.ilkOp)}-OP ${String(n.sonOp)}`;
+  if (n.engel === null) return `${i.emirNo} ${aralik} canlıda Kokpit'tekinden ${sureMetni(n.kaymaDk)} geç başlıyor (Kokpit'teki yeri canlıda dolu).`;
+  const e = n.engel;
+  return `${e.kaynak} üzerinde ${e.neden === null ? 'yerinde kalan' : ENGEL_NEDENI[e.neden]} ${e.emirNo} OP ${String(e.opNo)} canlıda ${gunSaat(e.bitis)} bitişine kadar `
+    + `yerinde kalıyor; bu yüzden ${i.emirNo} ${aralik} ${sureMetni(n.kaymaDk)} kayıyor.`;
+}
+// Kilitli adım önerisi yokken düğmelerin yanındaki metin: kaynağı bilinen ihlal varsa onu söyler, yoksa yeniden çözmeyi önerir.
+export const oneriYokMetni = (l: readonly Ihlal[]): string => {
+  const k = l.map((i) => (i.kilitli ? null : kaymaCumlesi(i))).find((x) => x !== null);
+  return k ?? "Kilitsiz adım için planı Kokpit'te yeniden çözün.";
+};
+export function careCumlesi(i: Ihlal, bolunmus?: boolean): string {
+  if (i.kilitli) return `${adimAdi(i)}'in kilidini öncül bittikten sonraya kaydırın.`;
+  const kayma = kaymaCumlesi(i);
+  if (i.oncul === null) return kayma ?? `${adimAdi(i)} için planı Kokpit'te yeniden çözün.`;
+  const ne = bolunmus === true ? `${adimAdi(i)}'in parçalarını` : bolunmus === false ? `${adimAdi(i)}'i` : `${adimAdi(i)}'i (bölünmüşse parçalarını)`;
+  const kaldir = bolunmus === false ? '' : ' ya da bölmeyi kaldırın';
+  const oneri = `Öneri: ${ne} ${adimAdi(i.oncul)} canlıda bittikten sonraya, ${gunSaat(i.oncul.bitis)} ve sonrasına taşıyın${kaldir}.`;
+  return kayma === null ? oneri : `${kayma} ${oneri}`;
+}
+// 3793: sunucunun öncülün arkasına ittiği pay: Kokpit'teki saati ve canlıya yazılacak saati.
+export type ItilenPay = NonNullable<CanliyaAlOnizlemesiCevabi['itilen']>[number];
+export const itilenSatiri = (x: ItilenPay): string =>
+  `${x.emirNo} ${adimAdi(x)}${x.parca === null ? '' : ` parça ${String(x.parca)}`}: Kokpit ${gunSaat(x.onizleme)} → canlıya alınınca ${gunSaat(x.yeni)} (öncülün arkasına itildi)`;
+
+// 3793-2 (madde 8): kilitli adım canlıda yerinde kalan işle üst üste gelince sunucu yazımı durdurur ve iletide çakışan işi, kaynağı, nedeni ve
+// canlıdaki aralığı yazar (servis.ts, 3793 6). Sunucu kuralı değişmeden iki çare sunulur: kilidi o işin arkasına taşımak ya da kilidi kaldırmak.
+// İleti tanınmazsa (eski sunucu, başka engel) düğme çıkmaz, ileti olduğu gibi kalır.
+export interface KilitCakismasi {
+  emirNo: string; opNo: number; kaynak: string; engelEmirNo: string; engelOpNo: number;
+  neden: 'sahada çalışıyor' | 'kilitli' | 'dondurulmuş' | 'bu yazımda taşınmıyor'; baslangic: string; bitis: string;
+}
+const KILIT_CAKISMASI = /(\S+) OP (\d+) kilitli saatinde (.+?) üzerinde (\S+) OP (\d+) ile üst üste\. OP \d+ (sahada çalışıyor|kilitli|dondurulmuş|bu yazımda taşınmıyor), canlıda (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) - (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) arasında yerinde kalıyor/;
+export function kilitCakismasiAyir(ileti: string): KilitCakismasi | null {
+  const m = KILIT_CAKISMASI.exec(ileti);
+  if (!m) return null;
+  return { emirNo: m[1]!, opNo: Number(m[2]), kaynak: m[3]!, engelEmirNo: m[4]!, engelOpNo: Number(m[5]), neden: m[6] as KilitCakismasi['neden'], baslangic: m[7]!, bitis: m[8]! };
+}
+// Kilidin anahtarı emir no ve OP'den bulunur (bölünmüş adım sabitlenmez, anahtarı payısızdır). Yeni saat canlıdaki bitişten sonraki ilk çeyrek
+// saattir: iletideki saat dakikaya kesiktir, aynı dakikaya konan kilit saniyelerle yine üst üste kalırdı. Tezgâh kilidin tezgâhıdır.
+export function kilitCakismasiIsi(c: PlanlamaCalismasi, x: KilitCakismasi, emirNo: (id: string) => string, simdi: number): KaydirmaIsi | null {
+  const ad = `${x.emirNo} OP ${String(x.opNo)}`;
+  const k = Object.keys(c.locks).find((id) => komsuAdi(id, emirNo) === ad);
+  const kilit = k === undefined ? undefined : c.locks[k] as { m?: unknown } | null;
+  const bitis = saatOku(c.D, x.bitis);
+  if (k === undefined || typeof kilit?.m !== 'string' || bitis === null) return null;
+  return { k, tezgah: kilit.m, S: kaydirmaSaati(bitis + 1 / 60, simdi) };
+}
+export const kilitCakismasiNedeni = (x: KilitCakismasi): string =>
+  `${x.engelEmirNo} OP ${String(x.engelOpNo)} ${x.neden}; canlıda ${x.baslangic.slice(8, 10)}.${x.baslangic.slice(5, 7)} ${x.baslangic.slice(11)} - ${x.bitis.slice(8, 10)}.${x.bitis.slice(5, 7)} ${x.bitis.slice(11)} arasında yerinde kalıyor.`;
+// Kilidi kaldırma kayıtlı çalışmada tek adımdır (Geri al getirir); plan bekleyen değişiklik olarak yeniden dizilir.
+export function kilidiKaldir(komut: CalismaKomutu, k: string, ad: string): boolean {
+  return komut.degistir('Kilit kaldırıldı', (t) => { if (!(k in t.locks)) return false; delete t.locks[k]; return true; }, { ayrinti: ad });
+}
+
 // Gönderme düğmeleri denetim bitene kadar, denetim alınamadığında ve sıraya aykırı adım varken kapalıdır (onaylı v2); neden düğmenin yanında yazılır.
 // Eski sonuç ihlal gösteriyorsa yeni sonuç gelene kadar açılmaz. Etkin değilse (yetki ya da plan güncel değil) bu denetim engel koymaz.
+// 3793: kilitli adım yoksa "kilidi kaydırın" denmez; ilk aykırı adım ve çaresi söylenir.
 export function onizlemeEngeli(d: OnizlemeDurumu, etkin = true): string | null {
   if (!etkin) return null;
   if (d.tur === 'yukleniyor') return 'Sıra denetimi bitince açılır.';
-  if (d.tur === 'hata') return 'Sıra denetimi alınamadığı için kapalı; yeniden deneyin.';
-  return d.veri.ihlaller.length > 0 ? "Önce kilidi kaydırın ya da adımı Kokpit'te düzeltin." : null;
+  if (d.tur === 'hata') return kilitCakismasiAyir(d.ileti) !== null ? 'Kilitli adım yerinde kalan işle üst üste; önce kilidi arkasına alın ya da kaldırın.' : 'Sıra denetimi alınamadığı için kapalı; yeniden deneyin.';
+  const l = d.veri.ihlaller;
+  if (l.length === 0) return null;
+  if (l.some((i) => i.kilitli)) return "Önce kilidi kaydırın ya da adımı Kokpit'te düzeltin.";
+  const ilk = l[0]!;
+  return `${ilk.emirNo} ${adimAdi(ilk)} öncülü bitmeden başlıyor. ${careCumlesi(ilk)}`;
 }
 export const kapaliListeFarkli = (c: Pick<PlanlamaCalismasi, 'kapali'>, sunucu: readonly string[]): boolean =>
   c.kapali.length !== sunucu.length || c.kapali.some((x) => !sunucu.includes(x));
