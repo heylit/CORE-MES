@@ -8,3 +8,59 @@
 .tc-proses-halka-sahip { color: var(--muted); font-size: var(--yazi-s); }
 .tc-proses-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); max-width: 80ch; }
 .tc-proses-halka > .tc-rozet { align-self: flex-start; }
+
+/* Teknik resim revizyonu seçici (3800): az revizyonda düğme dizisi. */
+.tc-proses-rev { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-proses-rev-etiket { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-s); }
+.tc-proses-rev-dugme { display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma); padding: 0 var(--b-3); line-height: 1; border: 1px solid var(--edge); border-radius: var(--yari-tam); background: var(--panel2); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
+.tc-proses-rev-dugme small { color: var(--muted); font-weight: 400; font-size: var(--yazi-xs); }
+.tc-proses-rev-dugme[aria-pressed="true"] { border-color: var(--secili-zemin); background: var(--secili-zemin); color: var(--secili-yazi); }
+.tc-proses-rev-dugme[aria-pressed="true"] small { color: inherit; }
+.tc-proses-rev-liste { max-width: calc(var(--b-6) * 10); }
+
+/* NC/CAM sekmesi: solda operasyona göre liste, sağda seçili programın kartı; dar ekranda biri görünür. */
+.tc-proses-nc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--b-4); align-items: start; }
+.tc-proses-nc-liste { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-proses-nc-liste > section { display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-proses-nc-grup { margin: 0; color: var(--muted); font-size: var(--yazi-s); font-weight: 700; }
+.tc-proses-nc-satir { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-height: var(--dokunma); padding: var(--b-2) var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.tc-proses-nc-satir small { flex-basis: 100%; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-proses-nc-satir[aria-pressed="true"] { border-color: var(--hazard); box-shadow: inset 0 0 0 1px var(--hazard); }
+.tc-proses-nc-satir[data-bos] { border-style: dashed; background: transparent; }
+.tc-proses-nc-satir[data-bos] > span { display: inline-flex; align-items: center; gap: var(--b-1); font-weight: 700; }
+.tc-proses-nc-ekle { align-self: flex-start; }
+.tc-proses-nc-ayrinti { min-width: 0; }
+.tc-proses-nc-kart { display: flex; flex-direction: column; gap: var(--b-3); padding: var(--b-4); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel); min-width: 0; }
+.tc-proses-nc-kb { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-proses-nc-ad { display: inline-flex; align-items: center; gap: var(--b-1); margin: 0; font-family: var(--font-mono); font-size: var(--yazi-m); overflow-wrap: anywhere; min-width: 0; }
+.tc-proses-nc-eylem { display: inline-flex; gap: var(--b-1); margin-left: auto; }
+.tc-proses-nc-baslik { display: flex; align-items: center; gap: var(--b-1); margin: 0; font-size: var(--yazi-s); }
+.tc-proses-geri { display: none; }
+.tc-proses-uyari { display: flex; align-items: flex-start; gap: var(--b-1); margin: 0; padding: var(--b-2) var(--b-3); border-radius: var(--yari-1); background: var(--panel2); font-size: var(--yazi-s); }
+.tc-proses-alanlar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 5)), 1fr)); gap: var(--b-2) var(--b-4); margin: 0; }
+.tc-proses-alanlar dt { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-proses-alanlar dd { margin: 0; overflow-wrap: anywhere; }
+.tc-proses-alan-genis { grid-column: 1 / -1; }
+.tc-proses-mono { font-family: var(--font-mono); }
+.tc-proses-satirlar { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--edge); }
+.tc-proses-satirlar > li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--b-1) var(--b-3); padding: var(--b-2) 0; border-bottom: 1px solid var(--edge); }
+.tc-proses-satirlar small { display: block; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-proses-takimlar > li { grid-template-columns: calc(var(--b-6) * 1.5) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); align-items: baseline; }
+
+/* Form: iki sütunlu alanlar, takım ve aparat satırları. */
+.tc-proses-form-secici { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-proses-form-etiket { font-size: var(--yazi-s); font-weight: 700; }
+.tc-proses-form-secici > small { color: var(--muted); font-size: var(--yazi-xs); overflow-wrap: anywhere; }
+.tc-proses-form-iki { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 6)), 1fr)); gap: var(--b-3); }
+.tc-proses-form-liste { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); min-width: 0; }
+.tc-proses-form-satir { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 3)), 1fr)); align-items: end; gap: var(--b-2); padding-bottom: var(--b-2); border-bottom: 1px solid var(--edge); }
+.tc-proses-form-hata { grid-column: 1 / -1; margin: 0; color: var(--stop); font-size: var(--yazi-s); }
+
+@media (max-width: 767px) {
+  .tc-proses-nc { grid-template-columns: minmax(0, 1fr); }
+  .tc-proses-nc[data-ayrinti] .tc-proses-nc-liste, .tc-proses-nc:not([data-ayrinti]) .tc-proses-nc-ayrinti { display: none; }
+  .tc-proses-geri { display: inline-flex; }
+  .tc-proses-nc-kart { padding: var(--b-3); }
+  .tc-proses-takimlar > li { grid-template-columns: calc(var(--b-6) * 1.5) minmax(0, 1fr); }
+  .tc-proses-takimlar > li > :nth-child(n + 3) { grid-column: 2; color: var(--muted); font-size: var(--yazi-s); }
+}

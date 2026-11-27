@@ -1,4 +1,4 @@
-import type { ProsesHalkasi, ProsesOperasyonu } from '#paylasilan/sozlesme/proses.ts';
+import type { NcDurumu, ProsesHalkasi, ProsesOperasyonu, ProsesRevizyonu } from '#paylasilan/sozlesme/proses.ts';
 
 // Halka durumu sahibin okumasından türer; Proses kendi "hazır" kuralını koymaz (3277 Kurgu 1): burada yalnız sahibin verdiği
 // yürürlük, onay ve kayıt varlığı halkaya çevrilir. Parça düzeyinde okunacak yeri olmayan halka "kaynak-yok" kalır (3291).
@@ -63,23 +63,99 @@ export function ilkParcaHalkasi(g: IlkParcaGirdisi): ProsesHalkasi {
   return { ...ortak, durum: 'tamam', ozet: `${String(g.onay)} açık emirde onay` };
 }
 
-// Parça düzeyinde okunacak yeri bugün olmayan halkalar (Atölye ön bakışı 3277; 3291 sahiplerden ister).
+// Parça düzeyinde okunacak yeri bugün olmayan halka (Atölye ön bakışı 3277); kurulum sayfası 3800-3'te NC kaydından üretilir.
 export const KAYNAKSIZ_HALKALAR: readonly ProsesHalkasi[] = [
-  { anahtar: 'nc', durum: 'kaynak-yok', ozet: null, sahip: 'Sahibi belli değil', yol: null },
-  { anahtar: 'takim', durum: 'kaynak-yok', ozet: null, sahip: 'CNC Kurulum', yol: null },
-  { anahtar: 'baglama', durum: 'kaynak-yok', ozet: null, sahip: 'Rota', yol: null },
   { anahtar: 'kurulum', durum: 'kaynak-yok', ozet: null, sahip: 'CNC Kurulum', yol: null },
 ];
 
 // Zincir sırası Atölye ön bakışıyladır: çizim, rota, NC, takım, bağlama, kurulum, kontrol planı, ilk parça.
-export function zincir(h: { cizim: ProsesHalkasi; rota: ProsesHalkasi; kontrol: ProsesHalkasi; ilkParca: ProsesHalkasi }): ProsesHalkasi[] {
-  const k = new Map(KAYNAKSIZ_HALKALAR.map((x) => [x.anahtar, x]));
-  const al = (a: string): ProsesHalkasi => {
-    const x = k.get(a as ProsesHalkasi['anahtar']);
-    if (!x) throw new Error(`Halka tanımsız: ${a}`);
-    return x;
+export function zincir(h: {
+  cizim: ProsesHalkasi; rota: ProsesHalkasi; nc: ProsesHalkasi; takim: ProsesHalkasi; baglama: ProsesHalkasi; kontrol: ProsesHalkasi; ilkParca: ProsesHalkasi;
+}): ProsesHalkasi[] {
+  const kurulum = KAYNAKSIZ_HALKALAR.find((x) => x.anahtar === 'kurulum');
+  if (!kurulum) throw new Error('Halka tanımsız: kurulum');
+  return [h.cizim, h.rota, h.nc, h.takim, h.baglama, kurulum, h.kontrol, h.ilkParca];
+}
+
+/* ---------------- NC/CAM program kaydı ve teknik resim revizyonu (3800) ---------------- */
+
+// Revizyon kodu büyük-küçük harf ve kenar boşluğu ayırmadan karşılaştırılır (3788 markalama tanımıyla aynı).
+export const revizyonAnahtari = (kod: string | null): string => (kod === null ? '' : kod.trim().toUpperCase());
+export const ayniRevizyon = (a: string | null, b: string | null): boolean => revizyonAnahtari(a) === revizyonAnahtari(b);
+
+export interface CizimRevizyonuGirdisi { kod: string | null; durum: 'yayinda' | 'eski'; sira: number }
+
+// Belge Merkezi'nin revizyonlarından seçici listesi: kodsuz revizyon listeye girmez, aynı kod tek satırdır, yeniden eskiye.
+// Yürürlükteki parça revizyonu (Değişiklik Yönetimi) listede işaretlenir; çizimde yoksa da başa eklenir.
+export function revizyonListesi(cizim: readonly CizimRevizyonuGirdisi[], yururlukte: string | null): ProsesRevizyonu[] {
+  const sonuc: ProsesRevizyonu[] = [];
+  for (const r of [...cizim].sort((a, b) => b.sira - a.sira)) {
+    if (r.kod === null || r.kod.trim() === '' || sonuc.some((x) => ayniRevizyon(x.kod, r.kod))) continue;
+    sonuc.push({ kod: r.kod.trim(), durum: r.durum });
+  }
+  if (yururlukte !== null && yururlukte.trim() !== '') {
+    const i = sonuc.findIndex((x) => ayniRevizyon(x.kod, yururlukte));
+    if (i >= 0) sonuc[i] = { kod: sonuc[i]!.kod, durum: 'yururlukte' };
+    else sonuc.unshift({ kod: yururlukte.trim(), durum: 'yururlukte' });
+  }
+  return sonuc;
+}
+
+// İstenen revizyon listede varsa o; yoksa yürürlükteki, o da yoksa ilk (en yeni) revizyon. Revizyonsuz parçada null.
+export function revizyonSec(liste: readonly ProsesRevizyonu[], istenen: string | null): string | null {
+  const bulunan = istenen === null ? undefined : liste.find((r) => ayniRevizyon(r.kod, istenen));
+  return (bulunan ?? liste.find((r) => r.durum === 'yururlukte') ?? liste[0])?.kod ?? null;
+}
+
+// Yazılan revizyon kodu parçanın revizyonlarından biri olmalıdır; boş kod tüm revizyonlar demektir.
+export function revizyonKoduGecerliMi(liste: readonly ProsesRevizyonu[], kod: string | null): string | null | false {
+  if (kod === null) return null;
+  const r = liste.find((x) => ayniRevizyon(x.kod, kod));
+  return r === undefined ? false : r.kod;
+}
+
+export interface ProgramKapsami { opNo: number; revizyonKodu: string | null; durum: NcDurumu }
+
+// Seçili revizyonda geçerli programlar: bir operasyonun bu revizyona özel (eski olmayan) programı varsa yalnız özel olanlar;
+// yoksa tüm revizyonlar programları "genel yerine" işaretiyle. Başka revizyonun programı hiç gösterilmez. Eskiler sonda kalır.
+export function gecerliProgramlar<T extends ProgramKapsami>(programlar: readonly T[], secili: string | null): (T & { genelYerine: boolean })[] {
+  const ozelOp = new Set(programlar.filter((p) => p.revizyonKodu !== null && p.durum !== 'eski' && secili !== null && ayniRevizyon(p.revizyonKodu, secili)).map((p) => p.opNo));
+  const sonuc = programlar.flatMap((p) => {
+    if (p.revizyonKodu === null) return ozelOp.has(p.opNo) ? [] : [{ ...p, genelYerine: secili !== null && programlar.some((x) => x.opNo === p.opNo && x.revizyonKodu !== null) }];
+    return secili !== null && ayniRevizyon(p.revizyonKodu, secili) ? [{ ...p, genelYerine: false }] : [];
+  });
+  return [...sonuc.filter((p) => p.durum !== 'eski'), ...sonuc.filter((p) => p.durum === 'eski')];
+}
+
+export interface NcHalkaGirdisi { ad: string; durum: NcDurumu; takimSayisi: number; aparatSayisi: number }
+
+// NC, takım ve bağlama halkası seçili revizyonda geçerli (eski olmayan) programlardan türer. Hangi operasyonun NC istediği bugün
+// bilinmez (3800 V): program yoksa "yok", onaysız program "eksik".
+export function ncHalkalari(programlar: readonly NcHalkaGirdisi[]): { nc: ProsesHalkasi; takim: ProsesHalkasi; baglama: ProsesHalkasi } {
+  const ortak = { sahip: 'Proses', yol: null } as const;
+  const gecerli = programlar.filter((p) => p.durum !== 'eski');
+  if (gecerli.length === 0) {
+    return {
+      nc: { ...ortak, anahtar: 'nc', durum: 'yok', ozet: null },
+      takim: { ...ortak, anahtar: 'takim', durum: 'yok', ozet: null },
+      baglama: { ...ortak, anahtar: 'baglama', durum: 'yok', ozet: null },
+    };
+  }
+  const onaysiz = gecerli.filter((p) => p.durum !== 'onayli').length;
+  const takimsiz = gecerli.filter((p) => p.takimSayisi === 0).length;
+  const aparatsiz = gecerli.filter((p) => p.aparatSayisi === 0).length;
+  const n = String(gecerli.length);
+  return {
+    nc: { ...ortak, anahtar: 'nc', durum: onaysiz > 0 ? 'eksik' : 'tamam', ozet: onaysiz > 0 ? `${n} program · ${String(onaysiz)} onaysız` : `${n} program onaylı` },
+    takim: {
+      ...ortak, anahtar: 'takim', durum: takimsiz > 0 ? 'eksik' : 'tamam',
+      ozet: takimsiz > 0 ? `${String(takimsiz)} programda takım listesi yok` : `${String(gecerli.reduce((t, p) => t + p.takimSayisi, 0))} takım satırı`,
+    },
+    baglama: {
+      ...ortak, anahtar: 'baglama', durum: aparatsiz > 0 ? 'eksik' : 'tamam',
+      ozet: aparatsiz > 0 ? `${String(aparatsiz)} programda aparat yok` : `${String(gecerli.reduce((t, p) => t + p.aparatSayisi, 0))} aparat satırı`,
+    },
   };
-  return [h.cizim, h.rota, al('nc'), al('takim'), al('baglama'), al('kurulum'), h.kontrol, h.ilkParca];
 }
 
 export interface OperasyonGirdisi {
