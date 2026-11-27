@@ -65,3 +65,26 @@ export function bolOnizlemesiKur(once: Model, sonra: Model, isId: string, zaman:
     aralik: { bas: Math.min(...noktalar), son: Math.max(...noktalar) }, cumle, kisa,
   };
 }
+
+// Önizleme okları: eski yerden yeni yere kesik ok (bölünen adımın eski yerinden paylara, kayan işin eski yerinden yeni yerine).
+// Kutular tahta içi px'tir; hedef yatayda ayrışıksa ok kenar ortasından, üst üste biniyorsa dikey kenardan çıkar. Saf.
+export interface OkKutu { x1: number; x2: number; y1: number; y2: number }
+const yuvarla = (n: number): string => String(Math.round(n * 10) / 10);
+export function bolOkYolu(a: OkKutu, b: OkKutu): { yol: string; uc: string } {
+  const ay = (a.y1 + a.y2) / 2, by = (b.y1 + b.y2) / 2;
+  let p: [number, number], q: [number, number];
+  const ax = (a.x1 + a.x2) / 2;
+  // Yatayda ayrışıksa ok eski yerin ortasından çıkar (yan yana duran hayalette boyu görünsün).
+  if (b.x1 >= a.x2) { p = [ax, ay]; q = [b.x1, by]; }
+  else if (b.x2 <= a.x1) { p = [ax, ay]; q = [b.x2, by]; }
+  else {
+    const x = (Math.max(a.x1, b.x1) + Math.min(a.x2, b.x2)) / 2;
+    if (by >= ay) { p = [x, a.y2]; q = [x, b.y1]; } else { p = [x, a.y1]; q = [x, b.y2]; }
+  }
+  const dx = q[0] - p[0], dy = q[1] - p[1], uz = Math.hypot(dx, dy), ux = uz < 1 ? 1 : dx / uz, uy = uz < 1 ? 0 : dy / uz;
+  const tx = q[0] - ux * 6, ty = q[1] - uy * 6;
+  return {
+    yol: `M${yuvarla(p[0])},${yuvarla(p[1])} L${yuvarla(tx)},${yuvarla(ty)}`,
+    uc: `M${yuvarla(q[0])},${yuvarla(q[1])} L${yuvarla(tx - uy * 3.5)},${yuvarla(ty + ux * 3.5)} L${yuvarla(tx + uy * 3.5)},${yuvarla(ty - ux * 3.5)} z`,
+  };
+}

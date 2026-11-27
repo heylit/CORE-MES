@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bolOnizlemesiKur, BOL_UYGULA_NOTU } from './bol-onizleme.ts';
+import { bolOkYolu, bolOnizlemesiKur, BOL_UYGULA_NOTU } from './bol-onizleme.ts';
 import type { KokpitModeli } from './kurallar.ts';
 
 // 3792: önce ve sonra modelinden önizleme. Veri uydurmadır (ORN-).
@@ -39,6 +39,17 @@ describe('bolOnizlemesiKur (3792)', () => {
     expect(o.cumle).toBe(`ORN-E101 · Freze 2 paya bölünür: T-02 60 adet, T-04 60 adet (eski yer: T-02 Pzt 08:00–14:00) · 1 iş erkene çekilir (Freze −2 sa 30 dk) · emir bitişi 16:00 → 13:00, termine yetişir · ${BOL_UYGULA_NOTU}`);
     expect(o.kisa).not.toContain('Uygula');
     expect(o.kisa).toContain('eski yer: T-02');
+  });
+
+  it('bolOkYolu: hedef sağdaysa kenar ortasından, üst üste biniyorsa dikey kenardan çıkar; uç hedefte biter; boş kutuda bozulmaz', () => {
+    const sag = bolOkYolu({ x1: 0, x2: 10, y1: 0, y2: 10 }, { x1: 30, x2: 50, y1: 0, y2: 10 });
+    expect(sag.yol).toBe('M5,5 L24,5');
+    expect(sag.uc.startsWith('M30,5 ')).toBe(true);
+    const alt = bolOkYolu({ x1: 0, x2: 40, y1: 40, y2: 44 }, { x1: 10, x2: 30, y1: 0, y2: 20 });
+    expect(alt.yol).toBe('M20,40 L20,26');
+    const bos = bolOkYolu({ x1: 5, x2: 5, y1: 5, y2: 5 }, { x1: 5, x2: 5, y1: 5, y2: 5 });
+    expect(bos.yol).not.toContain('NaN');
+    expect(bos.uc).not.toContain('NaN');
   });
 
   it('adım tek parçaya dönüyorsa ya da planda yoksa önizleme kurulmaz (Bölmeyi kaldır panelde etkisiyle kalır)', () => {

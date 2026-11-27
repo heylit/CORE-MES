@@ -99,6 +99,11 @@ describe('Kokpit: bölmenin etkisi tahtada taslak olarak görünür (3792)', () 
       expect(b.querySelector('[data-makas]')).not.toBeNull();
     }
     expect(document.querySelector('.tc-pyq-tahta [data-bol-eski="2.20"]')?.textContent).toMatch(/^eski yer · .+ \d\d:\d\d–\d\d:\d\d$/);
+    // Eski yerden paylara ve kayan işin eski yerinden yeni yerine kesik ok.
+    await waitFor(() => { expect(document.querySelectorAll('.tc-pyq-tahta [data-bol-ok]').length).toBeGreaterThan(0); });
+    expect([...document.querySelectorAll('.tc-pyq-tahta [data-bol-ok-tur="pay"]')].map((g) => g.getAttribute('data-bol-ok')).sort()).toEqual(['2.20>2.20', '2.20>2.20~2']);
+    expect([...document.querySelectorAll('.tc-pyq-tahta [data-bol-ok-tur="kayan"]')].map((g) => g.getAttribute('data-bol-ok'))).toEqual(['2.30>2.30']);
+    for (const g of document.querySelectorAll('.tc-pyq-tahta [data-bol-ok]')) expect(g.querySelectorAll('path')).toHaveLength(2);
     const serit = screen.getByRole('region', { name: 'Değişiklikleriniz' });
     expect(serit.textContent).toContain('Önizleme: bölmenin taslağı · plan değişmedi');
     expect(serit.textContent).toContain('Canlıya al, bölme uygulanınca ya da vazgeçilince açılır');
@@ -143,6 +148,7 @@ describe('Kokpit: bölmenin etkisi tahtada taslak olarak görünür (3792)', () 
     await waitFor(() => { expect(screen.queryByRole('group', { name: 'Bölmeyi onayla' })).toBeNull(); });
     expect(yollar(post, '/taslagim/geri-al')).toHaveLength(1);
     expect(taslakCubuklari()).toEqual([]);
+    await waitFor(() => { expect(document.querySelectorAll('[data-bol-ok]')).toHaveLength(0); });
     const panel = screen.getByRole('complementary', { name: 'Planda böl' });
     expect((within(panel).getAllByLabelText('Adet') as HTMLInputElement[]).map((x) => x.value)).toEqual(girilen);
     // Esc: ikinci deneme.

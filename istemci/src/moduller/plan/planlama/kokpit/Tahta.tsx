@@ -38,7 +38,7 @@ import {
 
 export type TahtaGozu = 'T' | 'S';
 import { MakasSimgesi } from './BolOnayi.tsx';
-import type { BolOnizlemesi } from './bol-onizleme.ts';
+import { bolOkYolu, type BolOnizlemesi } from './bol-onizleme.ts';
 export interface CanliYer { m: string; S: number; C: number }
 export interface TahtaOzellikleri {
   m: KokpitModeli; cx: Derleme; goz: TahtaGozu; olcek: KokpitOlcegi;
@@ -250,6 +250,7 @@ export function Tahta(o: TahtaOzellikleri) {
     if (sahip.getAttribute('aria-owns') !== idler) sahip.setAttribute('aria-owns', idler);
   });
   const [oklar, setOklar] = useState<Ok[]>([]);
+  const [bolOklari, setBolOklari] = useState<{ ad: string; tur: 'pay' | 'kayan'; yol: string; uc: string }[]>([]);
   const [ustteki, setUstteki] = useState<string | null>(null);
   // 3681: tabloda payları açılmış bölünmüş adımlar.
   const [acikPay, setAcikPay] = useState<ReadonlySet<string>>(new Set());
@@ -339,6 +340,33 @@ export function Tahta(o: TahtaOzellikleri) {
     izleyen.observe(kok);
     return () => { izleyen.disconnect(); };
   }, [baglar, m, goz, px, yerlesim]);
+  // 3792: önizleme okları (eski yerden payların ve kayan işin yeni yerine); kutular ekrandan okunur, çubuklar satırlarda ölçülür.
+  useLayoutEffect(() => {
+    const kok = ic.current;
+    if (!kok || !bolOn) { setBolOklari((l) => (l.length ? [] : l)); return undefined; }
+    const ciz = (): void => {
+      const ust = kok.getBoundingClientRect();
+      const kutu = (el: Element) => { const r = el.getBoundingClientRect(); return { x1: r.left - ust.left, x2: r.right - ust.left, y1: r.top - ust.top, y2: r.bottom - ust.top }; };
+      const l: { ad: string; tur: 'pay' | 'kayan'; yol: string; uc: string }[] = [];
+      const paylar = [...kok.querySelectorAll<HTMLElement>('[data-is][data-taslak]')];
+      // Her pay kendi eski payından (aynı kimlik), yoksa bölünen adımın ilk eski yerinden çıkar.
+      for (const p of paylar) {
+        const id = p.dataset.is ?? '', y = bolOn.eski.find((e) => e.id === id) ?? bolOn.eski[0];
+        const kaynak = y ? kok.querySelector(`[data-bol-eski="${tirnakIci(y.id)}"]`) : null;
+        if (y && kaynak) l.push({ ad: `${y.id}>${id}`, tur: 'pay', ...bolOkYolu(kutu(kaynak), kutu(p)) });
+      }
+      for (const id of Object.keys(bolOn.kayanEski)) {
+        const kaynak = kok.querySelector(`[data-eski-is="${tirnakIci(id)}"]`), hedef = kok.querySelector(`[data-is="${tirnakIci(id)}"]`);
+        if (kaynak && hedef) l.push({ ad: `${id}>${id}`, tur: 'kayan', ...bolOkYolu(kutu(kaynak), kutu(hedef)) });
+      }
+      setBolOklari(l);
+    };
+    ciz();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const izleyen = new ResizeObserver(ciz);
+    izleyen.observe(kok);
+    return () => { izleyen.disconnect(); };
+  }, [bolOn, m, goz, px, yerlesim, eskiYer]);
   const emir = useMemo(() => new Map(m.emirler.map((e) => [e.id, e])), [m]);
   const adaylar = useCallback((x: KokpitIsi): string[] => emir.get(x.job)?.adimlar.find((a) => a.id === adimKimligi(x))?.adaylar ?? [], [emir]);
   // Bölme eni ve sütun şablonu tahtanın değişkenidir: bütün satırlar ve başlık aynı ızgarayı okur (satır içi stil yok).
@@ -1423,6 +1451,13 @@ export function Tahta(o: TahtaOzellikleri) {
           <svg className="tc-pyq-oklar" aria-hidden="true">
             {oklar.map((k) => (
               <g key={`${k.kimden}>${k.kime}`} data-ok={`${k.kimden}>${k.kime}`} data-tur={k.tur} data-ters={k.ters ? '' : undefined}><path d={k.yol} /><path className="tc-pyq-ok-ucu" d={k.uc} /></g>
+            ))}
+          </svg>
+        )}
+        {bolOklari.length > 0 && (
+          <svg className="tc-pyq-oklar" aria-hidden="true">
+            {bolOklari.map((k) => (
+              <g key={k.ad} data-tur="o" data-bol-ok={k.ad} data-bol-ok-tur={k.tur}><path d={k.yol} /><path className="tc-pyq-ok-ucu" d={k.uc} /></g>
             ))}
           </svg>
         )}

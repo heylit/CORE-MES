@@ -102,6 +102,10 @@ test('Kokpit 3792: Etkisini gör bölünmüş planı tahtada taslak olarak göst
   await expect(taslak.first().locator('[data-taslak-rozet]')).toHaveText('taslak');
   const eski = kokpit.locator('.tc-pyq-tahta [data-bol-eski]');
   await expect(eski.first()).toContainText('eski yer');
+  // Eski yerden paylara ve kayan işin eski yerinden yeni yerine kesik ok (data- özniteliğiyle sayılır); 360'ta da.
+  await expect(kokpit.locator('.tc-pyq-tahta [data-bol-ok-tur="pay"]')).toHaveCount(2);
+  await expect(kokpit.locator('.tc-pyq-tahta [data-bol-ok-tur="kayan"]')).not.toHaveCount(0);
+  for (const d of await kokpit.locator('.tc-pyq-tahta [data-bol-ok] path:first-child').evaluateAll((l) => l.map((p) => p.getAttribute('d') ?? ''))) expect(d).toMatch(/^M-?[\d.]+,-?[\d.]+ L-?[\d.]+,-?[\d.]+$/);
   const serit = page.getByRole('region', { name: 'Değişiklikleriniz' });
   await expect(serit).toContainText('Önizleme: bölmenin taslağı · plan değişmedi');
   await expect(serit).toContainText('Canlıya al, bölme uygulanınca ya da vazgeçilince açılır');
