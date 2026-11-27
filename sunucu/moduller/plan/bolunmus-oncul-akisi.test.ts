@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { before, describe, test } from 'node:test';
 import { kilitCakismasiAyrintisi, type CanliyaAlOnizlemesiCevabi, type PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
-import type { DegerlendirmeDurumuCevabi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
+import type { CalismaTaslagiCevabi, DegerlendirmeDurumuCevabi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { kablola } from '../../kablolama.ts';
 import { kullaniciYukle } from '../kisiler/disari.ts';
 import { emirBaslat } from '../uretim-emirleri/disari.ts';
@@ -77,11 +77,13 @@ function ortam() {
   };
   const onizleYaniti = (surum: number) => istek(c.planlama, 'POST', '/plan/planlama-calismasi/gonderme-onizlemesi', { ad: 'Önizleme', calismaSurumu: surum });
   const onizle = (surum: number) => tamam<CanliyaAlOnizlemesiCevabi>(c.planlama, 'POST', '/plan/planlama-calismasi/gonderme-onizlemesi', { ad: 'Önizleme', calismaSurumu: surum });
-  const taslakYaz = async (surum: number): Promise<PlanCevabi> => {
+  const taslakYazCevapli = async (surum: number): Promise<{ cevap: CalismaTaslagiCevabi; t: PlanCevabi }> => {
     const r = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/taslak-yaz', { ad: 'Taslak', calismaSurumu: surum });
     assert.equal(r.statusCode, 200, r.body);
-    return planOku(r.json<{ taslak: { id: number } }>().taslak.id);
+    const cevap = r.json<CalismaTaslagiCevabi>();
+    return { cevap, t: await planOku(cevap.taslak.id) };
   };
+  const taslakYaz = async (surum: number): Promise<PlanCevabi> => (await taslakYazCevapli(surum)).t;
   // Adım sahada verilen tezgâhta başlatılır (Üretim Emirleri'nin başlatması).
   const baslat = async (isEmri: number, istasyon: number, makine: number) => {
     const { operatorId } = durum();
@@ -150,7 +152,7 @@ function ortam() {
     assert.ok(ops[kA] && String(ops[kB30]?.m).startsWith('kisi-'), JSON.stringify(Object.values(ops).map((o) => [o.job, o.m, o.S])));
     return { s1, istT, istK, t1, t2, operatorId, ikinci, a10: a10!, b10: b10!, b20: b20!, b30: b30!, kA, kB10, kB20, kB30 };
   };
-  return { DK, calismaOku, planiKaydet, bolVeUygula, yenidenPlanla, kur, kurKisi, canliyaAl, onizle, onizleYaniti, taslakYaz, baslat, ilkPayiBitir, kaydir, parcaYeri, yeri, farkDk };
+  return { DK, vt, calismaOku, planiKaydet, bolVeUygula, yenidenPlanla, kur, kurKisi, canliyaAl, onizle, onizleYaniti, taslakYaz, taslakYazCevapli, baslat, ilkPayiBitir, kaydir, parcaYeri, yeri, farkDk };
 }
 
 describe('plan (gerçek PostgreSQL): bölünmüş öncülde Kokpit ve canlıya alma yerleşimi aynı (3793)', () => {
@@ -241,24 +243,45 @@ describe('plan (gerçek PostgreSQL): akışlı bağda bölünmüş ardıl öncü
   });
 });
 
+// 3818: canlıdaki yerler önceki yazımın saatindendir; motor öncülü bu yazımda daha geç koyabilir (zaman bir dilim ilerledi). Testte canlıdaki
+// OP20 bir dilim (15 dk) erkene alınır: pay canlıdaki OP20'ye göre değil, motorun bu yazımda koyduğu OP20'ye göre itilmeli.
+type Ortam = ReturnType<typeof ortam>;
+const calisanPayItmesi = async (o: Ortam, kod: string, [adet1, adet2]: [number, number], payKaydir: (plan: Parameters<Ortam['kaydir']>[0], k: Awaited<ReturnType<Ortam['kur']>>, e2Pay: string) => number) => {
+  const { DK, vt, planiKaydet, bolVeUygula, kur, canliyaAl, onizle, taslakYazCevapli, baslat, kaydir, yeri } = o;
+  const k = await kur(kod, { bagimlilik: 'bekleyen', devirAdedi: null });
+  const bol30 = { [k.k30]: [{ adet: adet1, m: String(k.e1) }, { adet: adet2, m: String(k.e2) }] };
+  const { surum: s1, plan: p1 } = await bolVeUygula({ ...k.bol10, ...bol30 });
+  await canliyaAl(s1);
+  const e2Pay = p1.ops[k.k30]!.m === String(k.e2) ? k.k30 : `${k.k30}~2`;
+  await baslat(k.op30, k.istE, k.e1);
+  const { plan } = await bolVeUygula({ ...k.bol10, ...bol30 });
+  const surum = await planiKaydet(kaydir(plan, [e2Pay], payKaydir(plan, k, e2Pay)), { elleBol: { ...k.bol10, ...bol30 } });
+  await vt().tx((db) => db.sorgu("UPDATE plan_yerlesimi SET baslangic = baslangic - interval '15 minutes', bitis = bitis - interval '15 minutes' WHERE is_emri_id = $1", [k.op20]));
+  const oz = await onizle(surum);
+  assert.deepEqual(oz.itilen?.map((x) => [x.opNo, x.k]), [[30, k.k30]], JSON.stringify(oz.itilen));
+  assert.deepEqual(oz.ihlaller, []);
+  // İtilen saat ve satırın zarfı aynı yazımdan okunur (önizleme ayrı yazımdır, arada dilim değişebilir).
+  const { cevap, t } = await taslakYazCevapli(surum);
+  const bitis20 = new Date(yeri(t, k.op20).bitis).getTime();
+  const op30 = yeri(t, k.op30);
+  const p2 = op30.parcalar!.find((x) => String(x.kaynak.id) === String(k.e2))!;
+  assert.ok(new Date(p2.baslangic).getTime() >= bitis20 - DK, `OP30 e2 payı OP20 bitince başlar: ${String(p2.baslangic)}`);
+  assert.deepEqual(cevap.itilen?.filter((x) => x.opNo === 30).map((x) => [x.parca, x.yeni]), [[p2.no, new Date(p2.baslangic).toISOString()]], JSON.stringify(cevap.itilen));
+  const anlar = (f: (x: { baslangic: string | Date; bitis: string | Date }) => string | Date) => op30.parcalar!.map((x) => new Date(f(x)).getTime());
+  assert.equal(new Date(op30.baslangic).getTime(), Math.min(...anlar((x) => x.baslangic)), 'satırın başı paylarınkiyle aynı');
+  assert.equal(new Date(op30.bitis).getTime(), Math.max(...anlar((x) => x.bitis)), 'satırın sonu paylarınkiyle aynı');
+};
 describe('plan (gerçek PostgreSQL): çalışan bölünmüş işin başlamamış payı öncülün arkasına itilir (3793)', () => {
-  const { DK, planiKaydet, bolVeUygula, kur, canliyaAl, onizle, taslakYaz, baslat, kaydir, yeri } = ortam();
-  test('OP30 bölünmüş ve 1. payı sahada çalışıyor; 2. payı Kokpit\'te OP20 bitmeden önceye çekilmişse yerinde kalan pay oynamaz, 2. pay itilir', async () => {
-    const k = await kur('BOE', { bagimlilik: 'bekleyen', devirAdedi: null });
-    const bol30 = { [k.k30]: [{ adet: 15, m: String(k.e1) }, { adet: 15, m: String(k.e2) }] };
-    const { surum: s1, plan: p1 } = await bolVeUygula({ ...k.bol10, ...bol30 });
-    await canliyaAl(s1);
-    const e2Pay = p1.ops[k.k30]!.m === String(k.e2) ? k.k30 : `${k.k30}~2`;
-    await baslat(k.op30, k.istE, k.e1);
-    const { plan } = await bolVeUygula({ ...k.bol10, ...bol30 });
-    const surum = await planiKaydet(kaydir(plan, [e2Pay], -3), { elleBol: { ...k.bol10, ...bol30 } });
-    const oz = await onizle(surum);
-    assert.deepEqual(oz.itilen?.map((x) => [x.opNo, x.k]), [[30, k.k30]], JSON.stringify(oz.itilen));
-    assert.deepEqual(oz.ihlaller, []);
-    const t = await taslakYaz(surum);
-    const bitis20 = new Date(yeri(t, k.op20).bitis).getTime();
-    const p2 = t.yerlesimler.find((y) => y.isEmriId === k.op30)!.parcalar!.find((x) => String(x.kaynak.id) === String(k.e2))!;
-    assert.ok(new Date(p2.baslangic).getTime() >= bitis20 - DK, `OP30 e2 payı OP20 bitince başlar: ${String(p2.baslangic)}`);
+  const o = ortam();
+  test('OP30 bölünmüş ve 1. payı sahada çalışıyor; 2. payı Kokpit\'te OP20 bitmeden önceye çekilmişse yerinde kalan pay oynamaz, 2. pay motorun koyduğu OP20\'nin arkasına itilir', async () => {
+    await calisanPayItmesi(o, 'BOE', [15, 15], () => -3);
+  });
+});
+describe('plan (gerçek PostgreSQL): çalışan bölünmüş işin payı motor sonrası öncüle göre itilir (3818)', () => {
+  const o = ortam();
+  test('2. pay canlıdaki OP20\'nin hemen arkasındaysa ilk bakışta itilmez; motor OP20\'yi bir dilim geç koyunca itilir ve "itildi" listesine girer', async () => {
+    // 2. pay uzun (25 adet): satırın sonu itilen payın sonudur, zarfın sonu da denetlenir.
+    await calisanPayItmesi(o, 'BOF', [5, 25], (plan, k, e2Pay) => plan.ops[k.k20]!.C - 0.25 - plan.ops[e2Pay]!.S);
   });
 });
 

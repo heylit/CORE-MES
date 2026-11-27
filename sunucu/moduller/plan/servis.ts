@@ -1999,6 +1999,7 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
       // öteki işleri yeni yerin etrafına dizilir. Bir pay yerleşemezse (önizleme yok, yerinde kalan işle çakışma) ya da sayım bilinmiyorsa iş bütünüyle eski yerinde kalır.
       const calisanBolunmus = [...parcaNolari.keys()].filter((isId) => b.isler.get(isId)?.durum === 'basladi');
       const kalanlar = await kalanPayKaynaklari(db, b, calisanBolunmus);
+      const calisanPaylari = new Map<number, { no: number; kaynak: Kaynak; sure: number; onizleme: string | null }[]>();
       for (const isId of calisanBolunmus) {
         const mevcut = hepsi.find((y) => y.isEmriId === isId);
         if (mevcut === undefined || !bolunmus(mevcut) || sabitMi(mevcut)) continue;
@@ -2025,15 +2026,16 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
           const sinir = onculSinirlari(b, isId, yerler, q.kaynak).enErken;
           const o = i.x.onizleme;
           const itilir = o !== undefined && sinir !== null && sinirdanOnce(dk(b, new Date(o.baslangic)), sinir);
-          const sure = itilir ? sureOf(i, q.kaynak) : null;
+          const sure = sureOf(i, q.kaynak);
           const y = !itilir ? onizlemeYeri(b, dolu, o) : sure === null ? null : uzayanBosluk(dolu, takvim(b)(q.kaynak), Math.max(sinir, dk(b, new Date(o!.baslangic))), sure, Number.NEGATIVE_INFINITY);
           if (y === null) return false;
           if (itilir) itilenBu.push({ emirNo: i.is.emirNo, opNo: i.is.opNo, parca: parca.no, onizleme: new Date(o!.baslangic).toISOString(), yeni: tarih(b, y.baslangic).toISOString() });
+          if (sure !== null) calisanPaylari.set(isId, [...calisanPaylari.get(isId) ?? [], { no: parca.no, kaynak: q.kaynak, sure, onizleme: o?.baslangic ?? null }]);
           konan.push({ ...y, kaynak: q.kaynak });
           yeni.push({ ...ortak, baslangic: tarih(b, y.baslangic), bitis: tarih(b, y.bitis) });
           return true;
         });
-        if (!ok || paylar.length < 2) continue;
+        if (!ok || paylar.length < 2) { calisanPaylari.delete(isId); continue; }
         itilen.push(...itilenBu);
         const parcalar = yeni.sort((x, y) => x.no - y.no);
         const satir: YerlesimSatiri = {
@@ -2251,6 +2253,43 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
         // Üç yazımda oturmadıysa son yazım kalır; ardıl öncülünden önce kalabilir (sıra denetimi gösterir), cevap bunu söyler (3803 N2).
         if (dongu >= 2) { yakinsamadi = true; break; }
         sonuc = yeni;
+      }
+      // Motor öncülü bu yazımda yazılı yerinden geç koyabilir (zaman bir dilim ilerledi, kuyruk yeniden dizildi). Çalışan bölünmüş işin
+      // başlamamış payı öncülün yazılı yerine göre yerleşmişti: motor sonrası yerine göre yeniden bakılır, önce kalan pay arkasına itilir.
+      if (calisanPaylari.size > 0) {
+        const son = await s.yerlesimler(db, id);
+        const sonYerler = son.map((y) => yerOf(b, y));
+        for (const [isId, paylar] of calisanPaylari) {
+          const satir = son.find((y) => y.isEmriId === isId);
+          if (satir?.parcalar === undefined || satir.parcalar === null) continue;
+          const yeniParcalar: ParcaSatiri[] = [];
+          const konan: (Aralik & { kaynak: Kaynak })[] = [];
+          let degisti = false;
+          for (const p of satir.parcalar) {
+            const pay = paylar.find((x) => x.no === p.no && ayniKaynak(x.kaynak, p.kaynak));
+            const sinir = pay === undefined ? null : onculSinirlari(b, isId, sonYerler, p.kaynak).enErken;
+            if (pay === undefined || sinir === null || !sinirdanOnce(dk(b, p.baslangic), sinir)) { yeniParcalar.push(p); continue; }
+            const dolu: Aralik[] = [
+              ...isgal(plandakiler(b, sonYerler)).filter((y) => ayniKaynak(y.kaynak, p.kaynak) && y.isEmriId !== isId),
+              ...konan.filter((y) => ayniKaynak(y.kaynak, p.kaynak)),
+            ];
+            const y = uzayanBosluk(dolu, takvim(b)(p.kaynak), sinir, pay.sure, Number.NEGATIVE_INFINITY);
+            if (y === null) throw cakisma(`${kaynakMetni(b, p.kaynak)} için planlama ufkunda ${isMetni(b, isId)} parça ${String(p.no)} sığmıyor.`);
+            konan.push({ ...y, kaynak: p.kaynak });
+            yeniParcalar.push({ ...p, baslangic: tarih(b, y.baslangic), bitis: tarih(b, y.bitis) });
+            degisti = true;
+            const yeniAn = tarih(b, y.baslangic).toISOString();
+            const is = b.isler.get(isId)!;
+            const eski = itilen.find((x) => x.emirNo === is.emirNo && x.opNo === is.opNo && x.parca === p.no);
+            if (eski !== undefined) eski.yeni = yeniAn;
+            else itilen.push({ emirNo: is.emirNo, opNo: is.opNo, parca: p.no, onizleme: new Date(pay.onizleme ?? p.baslangic).toISOString(), yeni: yeniAn });
+          }
+          if (!degisti) continue;
+          await s.yerlesimYaz(db, id, {
+            ...satir, baslangic: new Date(Math.min(...yeniParcalar.map((p) => p.baslangic.getTime()))),
+            bitis: new Date(Math.max(...yeniParcalar.map((p) => p.bitis.getTime()))), parcalar: yeniParcalar,
+          });
+        }
       }
       return { tur: 'sirala', ozet: `Reçete ve Rota kuyrukları yazıldı (${g.kuyruklar.length} kaynak, ${yazilan} iş)`, isEmriIdleri: [...new Set(idler)] };
     });

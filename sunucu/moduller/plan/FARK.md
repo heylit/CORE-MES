@@ -490,3 +490,9 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - Pay kilidi (N6 devamı, Risk B1): bölünmüş adımı birleştirmek kalıcı pay kilidini düşürüyorsa taslak komutu anında `plan.kilitle` ister
   (yetki hatası, bölmedeki gibi); yoksa bütün taslak uygulanırken 403 alırdı ve neden görünmezdi. Geçici pay kilidi yetkisiz de kalkar.
   Test: `taslak-kurallar.test.ts` silme testi.
+
+## Çalışan bölünmüş işin payı motor sonrası öncüle göre (3818; 2026-11-27)
+- Çalışan bölünmüş işin başlamamış payı öncülün yazılı (canlı) yerine göre itiliyordu; motor aynı yazımda öncülü daha geç koyunca (zaman bir
+  dilim ilerlemiş, kuyruk yeniden dizilmiş) pay öncülden önce kalıyordu. Motor turlarından sonra pay öncülün son yerine göre yeniden
+  denetlenir; önce kalan pay arkasına itilir ve cevaptaki `itilen` satırı yeni saati taşır. Yerinde kalan (çalışan ya da sayımlı) pay oynamaz.
+- Test: `bolunmus-oncul-akisi.test.ts` 3793 4. senaryo canlıdaki öncülü bir dilim erkene alır (eski kodda her koşuda kırmızı).
