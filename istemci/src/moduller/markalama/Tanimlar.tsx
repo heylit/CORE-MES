@@ -207,10 +207,10 @@ function revizyonUyarisi(t: Taslak): string | null {
 // adımlarından seçilir, tanım istenirse yalnız bu emre özel olur. Malzemeden: revizyon yazılır (boş: bütün revizyonlar), operasyon yürürlükteki rotadan.
 function YeniTanimSecimi({ t, degistir, tanimlar }: { t: Taslak; degistir: (d: Partial<Taslak>) => void; tanimlar: readonly MarkalamaTanimi[] }) {
   const emir = t.kaynakEmir;
-  const rev = t.cizimRevizyonKodu.trim().toLocaleUpperCase('tr');
+  const rev = t.cizimRevizyonKodu.trim().toUpperCase();
   const emirId = t.emreOzel && emir !== null ? emir.id : null;
   const tanimli = new Set(tanimlar.filter((d) => d.malzemeId === t.malzemeId && d.uretimEmriId === emirId
-    && (d.cizimRevizyonKodu ?? '').toLocaleUpperCase('tr') === rev).map((d) => d.opNo));
+    && (d.cizimRevizyonKodu ?? '').trim().toUpperCase() === rev).map((d) => d.opNo));
   const temizle = () => degistir({ kaynakEmir: null, emreOzel: false, emirNo: null, malzemeId: null, malzemeKodu: null, model: null, opNo: '', cizimRevizyonKodu: '' });
   return (
     <div className="tc-mrk-form">

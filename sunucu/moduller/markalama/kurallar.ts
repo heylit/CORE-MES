@@ -147,7 +147,8 @@ export function hurdaNedeniHatasi(komut: DurumKomutu, hurdaNedeniId: number | nu
 
 // MRK-13 (3788): teknik resim revizyon kodu boşluk ve büyük-küçük harf ayırmadan karşılaştırılır ("c" ile "C" aynı revizyondur).
 // Kod servise Üretim Emirleri'nin gösterim kuralıyla ("Rev C" -> "C") gelir; burada yalnız harf büyüklüğü eşitlenir.
-export const revizyonAnahtari = (kod: string | null): string | null => (kod === null ? null : kod.trim().toLocaleUpperCase('tr'));
+// Veritabanındaki tekillik dizini upper(btrim()) ile karşılaştırır; aynı sonucu vermesi için dil kuralsız büyük harf (i -> I, ı ve İ ayrı kalır).
+export const revizyonAnahtari = (kod: string | null): string | null => (kod === null ? null : kod.trim().toUpperCase());
 
 export interface TanimAdayi { id: number; aktif: boolean; uretimEmriId: number | null; cizimRevizyonKodu: string | null }
 export type TanimSecimi = { durum: 'bulundu'; id: number } | { durum: 'tanim-yok' | 'revizyon-tanimi-yok' };

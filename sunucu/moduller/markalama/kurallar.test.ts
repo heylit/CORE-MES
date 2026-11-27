@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { AlanGovdesi } from '#paylasilan/sozlesme/markalama.ts';
 import {
-  alanHatasi, baslangicHatasi, durumGecisi, emreOzelRevizyonHatasi, hurdaNedeniHatasi, isoHafta, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi, tanimSec,
+  alanHatasi, baslangicHatasi, durumGecisi, emreOzelRevizyonHatasi, hurdaNedeniHatasi, revizyonAnahtari, isoHafta, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi, tanimSec,
 } from './kurallar.ts';
 import type { TanimAdayi } from './kurallar.ts';
 
@@ -113,6 +113,12 @@ describe('markalama kuralları', () => {
     assert.deepEqual(tanimSec([aday(8, { uretimEmriId: 5, aktif: false }), genel], 5, null), { durum: 'bulundu', id: 1 }, 'pasif emre özel tanım genele düşer');
     assert.deepEqual(tanimSec([ozel, genel], 5, 'C'), { durum: 'bulundu', id: 1 }, 'emrin revizyonu değiştiyse eski emre özel tanım kullanılmaz');
     assert.deepEqual(tanimSec([aday(9, { uretimEmriId: 5, cizimRevizyonKodu: 'C' }), ozel], 5, 'B'), { durum: 'bulundu', id: 4 }, 'aynı emre iki revizyonlu tanımdan emrin revizyonundaki');
+  });
+
+  test('MRK-14: revizyon anahtarı veritabanının upper(btrim()) kuralıyla aynı: dil kuralsız büyük harf', () => {
+    assert.equal(revizyonAnahtari(' i '), 'I');
+    assert.equal(revizyonAnahtari('b2'), 'B2');
+    assert.equal(revizyonAnahtari(null), null);
   });
 
   test('MRK-15: emre özel tanımın revizyonu emrinkidir', () => {

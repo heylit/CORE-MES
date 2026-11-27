@@ -620,6 +620,10 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.deepEqual([e1Ozel.durum, e1Ozel.tanim?.id], ['bulundu', ozel.id]);
     assert.equal((await is(e2)).tanim?.id, revC.id, 'başka emrin özel tanımı geçmez');
     assert.equal((await markala('operator', ozel.id, e2)).durum, 422, 'MRK-16: emre özel tanım başka emirde seri vermez');
+    const genelle = await markala('operator', genel.id, e1);
+    assert.equal(genelle.durum, 422, 'MRK-16: emre özel tanım varken aynı emirde genel tanımla seri verilmez');
+    assert.equal((await markala('operator', genel.id, e2)).durum, 422, 'MRK-16: emrin revizyonuna tanım varken genel tanımla seri verilmez');
+    assert.equal((await markala('operator', revC.id, e2)).durum, 200, 'seçilen tanımla seri verilir');
     const b = await markala('operator', ozel.id, e1);
     assert.equal(b.durum, 200, JSON.stringify(b.govde));
     assert.match(b.govde.seriNo, /^OMK-DNM-/);

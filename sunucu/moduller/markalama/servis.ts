@@ -21,6 +21,7 @@ import {
   alanHatasi, baslangicHatasi, durumGecisi, emreOzelRevizyonHatasi, hurdaNedeniHatasi, kapsamAnahtari, normalHatasi, olcuHatasi, revizyonAnahtari,
   sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi, tanimSec,
 } from './kurallar.ts';
+import type { TanimSecimi } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 const TANIM_YOK = 'Markalama tanımı bulunamadı.';
@@ -278,14 +279,29 @@ export async function malzemeOperasyonlari(db: Db, malzemeId: number): Promise<O
 }
 
 // İşin tanımı (MRK-14): emir ve operasyon için. Terminal ve markalama terminali bununla okur; seçimi sunucu yapar.
-export async function isTanimi(db: Db, emirId: number, opNo: number): Promise<IsTanimiCevabi> {
-  const emir = await acikEmirSecimi(db, emirId);
+// Operasyon numarası bugünkü rotadan okunur: tanım operasyon kimliğiyle bağlıysa numara değişse de aynı adımdadır.
+// Hedef ya numaradır ya da bir tanımın kendi adımı (seri verilirken).
+async function emirdekiSecim(db: Db, emir: EmirSecimi, hedef: number | s.TanimSatiri): Promise<TanimSecimi> {
   const satirlar = await s.tanimlariOku(db, emir.malzemeId);
   const guncel = new Map((await yururlukteOperasyonlar(db, [emir.malzemeId])).map((o): [number, number] => [o.operasyonId, o.opNo]));
-  const opdaki = satirlar.filter((t) => ((t.operasyonId === null ? undefined : guncel.get(t.operasyonId)) ?? t.opNo) === opNo);
-  const secim = tanimSec(opdaki, emir.id, emir.cizimRevizyonKodu);
+  const no = (t: s.TanimSatiri) => (t.operasyonId === null ? undefined : guncel.get(t.operasyonId)) ?? t.opNo;
+  const opNo = typeof hedef === 'number' ? hedef : no(hedef);
+  return tanimSec(satirlar.filter((t) => no(t) === opNo), emir.id, emir.cizimRevizyonKodu);
+}
+
+export async function isTanimi(db: Db, emirId: number, opNo: number): Promise<IsTanimiCevabi> {
+  const emir = await acikEmirSecimi(db, emirId);
+  const secim = await emirdekiSecim(db, emir, opNo);
   if (secim.durum !== 'bulundu') return { durum: secim.durum, tanim: null, emir };
   return { durum: 'bulundu', tanim: await tanimGetir(db, secim.id), emir };
+}
+
+// MRK-16 (3788): seri yalnız emrin o operasyonu için seçilen tanımdan verilir; emre özel ya da revizyonlu tanım varken genel tanımla
+// seri alınamaz (ekranı atlayan istek de).
+async function seciliTanimDenetle(db: Db, t: s.TanimSatiri, emirId: number): Promise<void> {
+  const emir = await acikEmirSecimi(db, emirId);
+  const secim = await emirdekiSecim(db, emir, t);
+  if (secim.durum !== 'bulundu' || secim.id !== t.id) throw gecersiz('Bu emirde bu operasyon için başka bir markalama tanımı geçerli; seri verilmez.');
 }
 
 // Sıradaki numaralar sayacı tüketmez; gün sunucunun tesis günüdür.
@@ -306,6 +322,7 @@ export async function markala(db: Db, kullanici: Kullanici, g: MarkalaGovdesi): 
   const alanlar = (await s.alanlariOku(db, [t.id])).get(t.id) ?? [];
   if (!seriAlaniVarMi(alanlar)) throw gecersiz('Bu tanımda seri no taşıyan marka yok; seri verilmez.');
   const k = await seriKaynagi(db, t, g.uretimEmriId);
+  await seciliTanimDenetle(db, t, g.uretimEmriId);
   // MRK-12, 2036 a: seri yalnız markalama istasyonunda verilir; istasyon zorunlu, kayıtlı, aktif ve tipi markalama (yabancı anahtar Aşama 2'de).
   // Seri alma yetkisi rol düzeyindedir (2030); hangi tezgâhta verildiğini bu kural sınırlar.
   if (g.istasyonId === null) throw dogrulama('Markalama istasyonu seçin; seri yalnız markalama istasyonunda verilir.', 'istasyonId');
