@@ -1,5 +1,7 @@
 import { useEffect, type RefObject } from 'react';
-import type { TeklifFormuAlani, TeklifFormuDili } from '#paylasilan/sozlesme/siparisler.ts';
+import type {
+  TeklifFormuAlanAnahtari, TeklifFormuAlanAyari, TeklifFormuAlanlari, TeklifFormuAlani, TeklifFormuDegerliAlan, TeklifFormuDili, TeklifFormuIcerigi,
+} from '#paylasilan/sozlesme/siparisler.ts';
 
 // Teklif formunun basılan metni (3245 d). Şablonun dili sabit etiketleri, sayı ve tarih biçimini seçer; tutarlar sunucudan metin gelir.
 export const FORM_SOZLERI = {
@@ -24,6 +26,61 @@ export const FORM_SOZLERI = {
 // Sözleşmedeki sınırların istemci kopyası (istemci paylasilan'dan değer almaz); asıl denetim sunucudadır.
 export const FORM_ALANLARI = ['{MUSTERI}', '{YETKILI}', '{TEKLIF_NO}', '{GECERLILIK}', '{TESLIM_GUN}'] as const satisfies readonly TeklifFormuAlani[];
 export const SART_EN_COK = 20;
+
+type Soz = keyof (typeof FORM_SOZLERI)['tr'];
+export type AlanBolumu = 'Müşteri' | 'Teklif' | 'Kalem sütunları' | 'Toplamlar' | 'Teslim ve ödeme' | 'İmzalar';
+export interface AlanTanimi { anahtar: TeklifFormuAlanAnahtari; bolum: AlanBolumu; soz: Soz; kilitli: boolean; degerli: boolean; cokSatir?: boolean }
+const a = (anahtar: TeklifFormuAlanAnahtari, bolum: AlanBolumu, soz: Soz, tur: 'kilitli' | 'degerli' | 'serbest' = 'kilitli', cokSatir = false): AlanTanimi =>
+  ({ anahtar, bolum, soz, kilitli: tur === 'kilitli', degerli: tur === 'degerli', ...(cokSatir ? { cokSatir } : {}) });
+// 3794: formun basılı alanları (sözleşmedeki listenin istemci kopyası; sunucu da denetler). Kilitli alanın değeri tekliften ya da sürümden gelir,
+// yalnız gizlenir; değerli alanın değeri bu teklifin formuna yazılabilir; serbest alan (ilgili, açıklama, birim, imza) yalnız etiket ve görünüm taşır.
+export const FORM_ALAN_TANIMLARI: readonly AlanTanimi[] = [
+  a('musteriUnvan', 'Müşteri', 'unvan', 'degerli', true), a('musteriAdres', 'Müşteri', 'adres', 'degerli', true),
+  a('musteriVergiDairesi', 'Müşteri', 'vergiDairesi', 'degerli'), a('musteriVergiNo', 'Müşteri', 'vergi', 'degerli'), a('musteriIlgili', 'Müşteri', 'ilgili', 'serbest'),
+  a('teklifNo', 'Teklif', 'no'), a('teklifTur', 'Teklif', 'tur', 'degerli'), a('teklifSurum', 'Teklif', 'surum'), a('teklifTarih', 'Teklif', 'tarih'),
+  a('teklifGecerlilik', 'Teklif', 'gecerlilik'), a('teklifKonu', 'Teklif', 'konu', 'degerli', true), a('teklifPara', 'Teklif', 'para'),
+  a('sutunKod', 'Kalem sütunları', 'kod', 'serbest'), a('sutunAciklama', 'Kalem sütunları', 'aciklama', 'serbest'), a('sutunMiktar', 'Kalem sütunları', 'miktar'),
+  a('sutunBirim', 'Kalem sütunları', 'birim', 'serbest'), a('sutunYerlilik', 'Kalem sütunları', 'yerlilik'), a('sutunBirimFiyat', 'Kalem sütunları', 'birimFiyat'),
+  a('sutunIskontolu', 'Kalem sütunları', 'iskontolu'), a('sutunTutar', 'Kalem sütunları', 'tutar'),
+  a('toplamAra', 'Toplamlar', 'ara'), a('toplamIskonto', 'Toplamlar', 'iskonto'), a('toplamKdvHaric', 'Toplamlar', 'kdvHaric'), a('toplamKdv', 'Toplamlar', 'kdv'),
+  a('toplamGenel', 'Toplamlar', 'genel'),
+  a('kosulTeslim', 'Teslim ve ödeme', 'teslim'), a('kosulTermin', 'Teslim ve ödeme', 'termin'), a('kosulOdeme', 'Teslim ve ödeme', 'odeme'), a('kosulGecerlilik', 'Teslim ve ödeme', 'gecerlilik'),
+  a('imzaFirma', 'İmzalar', 'firmaOnayi', 'serbest'), a('imzaMusteri', 'İmzalar', 'musteriOnayi', 'serbest'),
+];
+export const FORM_ALAN_BOLUMLERI: readonly AlanBolumu[] = ['Müşteri', 'Teklif', 'Kalem sütunları', 'Toplamlar', 'Teslim ve ödeme', 'İmzalar'];
+export const ALAN_ETIKETI_EN_COK = 60;
+export const ALAN_DEGERI_EN_COK = 400;
+
+export const alanAyari = (i: TeklifFormuIcerigi, k: TeklifFormuAlanAnahtari): TeklifFormuAlanAyari => i.alanlar?.[k] ?? {};
+export const alanBasilir = (i: TeklifFormuIcerigi, k: TeklifFormuAlanAnahtari): boolean => alanAyari(i, k).durum === undefined;
+export const alanEtiketi = (i: TeklifFormuIcerigi, k: TeklifFormuAlanAnahtari, dil: TeklifFormuDili): string => {
+  const t = FORM_ALAN_TANIMLARI.find((x) => x.anahtar === k);
+  return alanAyari(i, k).etiket ?? (t === undefined ? k : FORM_SOZLERI[dil][t.soz]);
+};
+// Bu forma yazılan değer kayıttakinin yerine basılır; yazılmadıysa kayıttaki (yoksa null).
+export const alanDegeri = (i: TeklifFormuIcerigi, k: TeklifFormuDegerliAlan, kayit: string | null): string | null => alanAyari(i, k).deger ?? kayit;
+
+// Ayar değişir; boş etiket ya da değer "dilin etiketi / kayıttaki değer" demektir ve saklanmaz, boş kalan ayar ve boş liste silinir.
+export function alanDegistir(i: TeklifFormuIcerigi, k: TeklifFormuAlanAnahtari, parca: { durum?: TeklifFormuAlanAyari['durum'] | null; etiket?: string; deger?: string }): TeklifFormuAlanlari | undefined {
+  const eski = alanAyari(i, k);
+  const durum = parca.durum === undefined ? eski.durum : parca.durum ?? undefined;
+  const etiket = parca.etiket === undefined ? eski.etiket : parca.etiket.trim() === '' ? undefined : parca.etiket;
+  const deger = parca.deger === undefined ? eski.deger : parca.deger.trim() === '' ? undefined : parca.deger;
+  const yeni: TeklifFormuAlanAyari = { ...(durum ? { durum } : {}), ...(etiket === undefined ? {} : { etiket }), ...(deger === undefined ? {} : { deger }) };
+  const { [k]: _, ...geri } = i.alanlar ?? {};
+  const sonuc: TeklifFormuAlanlari = Object.keys(yeni).length === 0 ? geri : { ...geri, [k]: yeni };
+  return Object.keys(sonuc).length === 0 ? undefined : sonuc;
+}
+// Şablona yalnız etiket ve görünüm gider; değer teklifin kendi formundadır (sunucu da reddeder).
+export function degersizAlanlar(alanlar: TeklifFormuAlanlari | undefined): TeklifFormuAlanlari | undefined {
+  if (alanlar === undefined) return undefined;
+  const sonuc = Object.fromEntries(Object.entries(alanlar).flatMap(([k, v]) => {
+    if (v === undefined) return [];
+    const { deger: _, ...geri } = v;
+    return Object.keys(geri).length === 0 ? [] : [[k, geri]];
+  })) as TeklifFormuAlanlari;
+  return Object.keys(sonuc).length === 0 ? undefined : sonuc;
+}
 const ORAN = /^\d{1,3}(\.\d{1,2})?$/;
 
 // KDV oranı virgülle de yazılabilir; geçersizse null (sorgu atılmaz, kutu hatayı söyler).

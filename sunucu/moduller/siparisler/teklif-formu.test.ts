@@ -111,6 +111,20 @@ describe('siparisler teklif formu (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await gonder(yonetici, '/siparisler/teklif-formu/sablonlar/999999/kaydet', { surum: 1, ad: 'Yok', dil: 'tr', icerik })).statusCode, 404);
   });
 
+  test('3794 şablon alan etiketi ve görünümü saklar; şablonda alan değeri ve bilinmeyen alan 400', async () => {
+    const s = (await form()).sablonlar.find((x) => x.ad === 'Kısa form');
+    assert.ok(s);
+    const alanlar = { teklifKonu: { etiket: 'Proje' }, sutunYerlilik: { durum: 'gizli' }, imzaMusteri: { durum: 'kaldirildi' } };
+    const c = await gonder(yonetici, `/siparisler/teklif-formu/sablonlar/${s.id}/kaydet`, { surum: s.surum, ad: s.ad, dil: s.dil, icerik: { ...s.icerik, alanlar } });
+    assert.equal(c.statusCode, 200, c.body);
+    const yeni = c.json<TeklifFormuCevabi>().sablonlar.find((x) => x.id === s.id);
+    assert.deepEqual(yeni?.icerik.alanlar, alanlar);
+    const govde = (icerik: object) => ({ surum: yeni?.surum, ad: s.ad, dil: s.dil, icerik: { ...s.icerik, ...icerik } });
+    assert.equal((await gonder(yonetici, `/siparisler/teklif-formu/sablonlar/${s.id}/kaydet`, govde({ alanlar: { teklifKonu: { deger: 'ORN konu' } } }))).statusCode, 400);
+    assert.equal((await gonder(yonetici, `/siparisler/teklif-formu/sablonlar/${s.id}/kaydet`, govde({ alanlar: { yokAlan: { durum: 'gizli' } } }))).statusCode, 400);
+    assert.equal((await gonder(yonetici, `/siparisler/teklif-formu/sablonlar/${s.id}/kaydet`, govde({ alanlar: { teklifNo: { durum: 'silindi' } } }))).statusCode, 400);
+  });
+
   test('kopya kaynağın içeriğini alır, varsayılan olmaz; aynı ad 409', async () => {
     const s = (await form()).sablonlar.find((x) => x.varsayilan);
     assert.ok(s);
@@ -200,8 +214,20 @@ describe('siparisler teklif formu (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(geri.statusCode, 200, geri.body);
     assert.equal((await oku(yonetici, yol)).json<TeklifFormuVerisiCevabi>().metin, null);
     assert.equal((await gonder(yonetici, '/siparisler/teklifler/999999/form-metni-kaydet', { surum: 1, metin: null })).statusCode, 404);
+    // 3794: teklife özel alan ayarı saklanır; metin alanının değeri yazılır, sürümden gelen değer (fiyat, toplam, no) yazılamaz.
+    const alanli = { dil: metin.dil, icerik: { ...metin.icerik, alanlar: { musteriUnvan: { deger: 'ORN Şube' }, toplamGenel: { durum: 'gizli' }, musteriAdres: { etiket: 'Teslim adresi' } } } };
+    const a = await gonder(yonetici, `/siparisler/teklifler/${t.id}/form-metni-kaydet`, { surum: geri.json<TeklifAyrintisi>().surum, metin: alanli });
+    assert.equal(a.statusCode, 200, a.body);
+    assert.deepEqual((await oku(yonetici, yol)).json<TeklifFormuVerisiCevabi>().metin, alanli);
+    assert.deepEqual(a.json<TeklifAyrintisi>().surumler, v.surumler);
+    for (const alanlar of [{ toplamGenel: { deger: '1' } }, { sutunBirimFiyat: { deger: '1' } }, { teklifNo: { deger: 'X' } }, { musteriUnvan: { deger: ' ' } }]) {
+      const r = await gonder(yonetici, `/siparisler/teklifler/${t.id}/form-metni-kaydet`, { surum: a.json<TeklifAyrintisi>().surum, metin: { ...metin, icerik: { ...metin.icerik, alanlar } } });
+      assert.equal(r.statusCode, 400, JSON.stringify(alanlar));
+    }
+    const bos = await gonder(yonetici, `/siparisler/teklifler/${t.id}/form-metni-kaydet`, { surum: a.json<TeklifAyrintisi>().surum, metin: null });
+    assert.equal(bos.statusCode, 200, bos.body);
     // Kabul edilen teklifin basılı metni değişmez.
-    const g = geri.json<TeklifAyrintisi>();
+    const g = bos.json<TeklifAyrintisi>();
     const kabul = await gonder(yonetici, `/siparisler/teklifler/${t.id}/kabul`, { surum: g.surum, surumNo: 1 });
     assert.equal(kabul.statusCode, 200, kabul.body);
     const kapali = await gonder(yonetici, `/siparisler/teklifler/${t.id}/form-metni-kaydet`, { surum: kabul.json<TeklifAyrintisi>().surum, metin });

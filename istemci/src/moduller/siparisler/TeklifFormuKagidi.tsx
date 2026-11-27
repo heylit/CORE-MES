@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
-import type { TeklifFormuDili, TeklifFormuIcerigi, TeklifFormuKurumu } from '#paylasilan/sozlesme/siparisler.ts';
-import { FORM_SOZLERI, alanlariDoldur, formSayisi, formTarihi, hitap } from './teklif-formu.ts';
+import type { TeklifFormuAlanAnahtari, TeklifFormuDili, TeklifFormuIcerigi, TeklifFormuKurumu } from '#paylasilan/sozlesme/siparisler.ts';
+import { FORM_SOZLERI, alanBasilir, alanDegeri, alanEtiketi, alanlariDoldur, formSayisi, formTarihi, hitap } from './teklif-formu.ts';
 
 export interface FormSatiri { id: number; kod: string | null; ad: string; miktar: string; birim: string | null; yerlilik: string | null; birimFiyat: string | null; iskontoluFiyat: string | null; tutar: string | null }
 export interface FormVerisi {
@@ -33,17 +33,22 @@ const imzaAdi = (ad: string): string => (ONAY_ADLARI.has(ad.trim().toLocaleLower
 // (data-theme="light"); boş giriş, şart, imza ve doküman kutusu basılmaz.
 export const TeklifFormuKagidi = forwardRef<HTMLElement, Ozellikler>(function TeklifFormuKagidi({ dil, icerik, kurum, logo, veri }, ref) {
   const z = FORM_SOZLERI[dil];
-  const ilgili = hitap(veri.ilgili, veri.musteri.ad, dil);
+  // 3794: alanın etiketi, görünümü ve (metin alanında) bu forma yazılan değeri içerikten gelir.
+  const b = (k: TeklifFormuAlanAnahtari) => alanBasilir(icerik, k);
+  const e = (k: TeklifFormuAlanAnahtari) => alanEtiketi(icerik, k, dil);
+  const musteriAd = alanDegeri(icerik, 'musteriUnvan', veri.musteri.ad);
+  const ilgili = hitap(veri.ilgili, musteriAd, dil);
   const doldur = (m: string) => alanlariDoldur(m, {
-    musteri: veri.musteri.ad ?? '', yetkili: ilgili, teklifNo: veri.no, gecerlilik: formTarihi(veri.gecerlilik, dil),
+    musteri: musteriAd ?? '', yetkili: ilgili, teklifNo: veri.no, gecerlilik: formTarihi(veri.gecerlilik, dil),
     teslimGun: veri.teslimGun === null ? '—' : String(veri.teslimGun),
   });
   const giris = doldur(icerik.giris).trim();
   const alt = doldur(icerik.alt).trim();
   const iskontolu = veri.iskontoOrani !== null && Number(veri.iskontoOrani) > 0;
-  const kodlu = veri.satirlar.some((s) => s.kod !== null);
+  const kodlu = b('sutunKod') && veri.satirlar.some((s) => s.kod !== null);
   // 3400-3: hiçbir kalemde yerlilik yoksa sütun basılmaz.
-  const yerli = veri.satirlar.some((s) => s.yerlilik !== null);
+  const yerli = b('sutunYerlilik') && veri.satirlar.some((s) => s.yerlilik !== null);
+  const iskontoSutunu = iskontolu && b('sutunIskontolu');
   const para = veri.paraBirimi;
   const kurumSatirlari = [kurum.adres, [kurum.telefon && `${z.tel} ${kurum.telefon}`, kurum.eposta].filter(Boolean).join(' · '), kurum.vergi].filter((x) => x !== '');
   const belge = icerik.belge;
@@ -51,9 +56,40 @@ export const TeklifFormuKagidi = forwardRef<HTMLElement, Ozellikler>(function Te
     .filter(([, d]) => d.trim() !== '');
   // Logo yoksa ünvan zaten antetin solundadır; doküman kutulu antette alt satırda tekrarlanmaz.
   const kurumAlti = [logo ? kurum.unvan : '', ...kurumSatirlari].filter((k) => k !== '');
-  const musteriSatirlari = ([
-    [z.unvan, veri.musteri.ad ?? '—'], [z.adres, veri.musteri.adres], [z.vergiDairesi, veri.musteri.vergiDairesi], [z.vergi, veri.musteri.vergiNo], [z.ilgili, veri.ilgili.trim() === '' ? null : veri.ilgili.trim()],
-  ] satisfies [string, string | null][]).flatMap(([dt, dd]) => (dd === null ? [] : [[dt, dd] as const]));
+  const satirlar = (l: [TeklifFormuAlanAnahtari, string | null][]) => l.flatMap(([k, dd]) => (dd === null || !b(k) ? [] : [[k, e(k), dd] as const]));
+  const musteriSatirlari = satirlar([
+    ['musteriUnvan', musteriAd ?? '—'], ['musteriAdres', alanDegeri(icerik, 'musteriAdres', veri.musteri.adres)],
+    ['musteriVergiDairesi', alanDegeri(icerik, 'musteriVergiDairesi', veri.musteri.vergiDairesi)], ['musteriVergiNo', alanDegeri(icerik, 'musteriVergiNo', veri.musteri.vergiNo)],
+    ['musteriIlgili', veri.ilgili.trim() === '' ? null : veri.ilgili.trim()],
+  ]);
+  const teklifSatirlari = satirlar([
+    ['teklifNo', veri.no], ['teklifTur', alanDegeri(icerik, 'teklifTur', z.satisTeklifi)], ['teklifSurum', String(veri.surumNo)],
+    ['teklifTarih', formTarihi(veri.tarih, dil)], ['teklifGecerlilik', formTarihi(veri.gecerlilik, dil)],
+    ['teklifKonu', alanDegeri(icerik, 'teklifKonu', veri.baslik)], ['teklifPara', para],
+  ]);
+  const kosulSatirlari = satirlar([
+    ['kosulTeslim', veri.teslimGun === null ? '—' : `${String(veri.teslimGun)} ${z.gun}`],
+    ['kosulTermin', veri.terminTarihi === null ? null : formTarihi(veri.terminTarihi, dil)],
+    ['kosulOdeme', veri.odemeKosulu !== null && veri.odemeKosulu.trim() !== '' ? veri.odemeKosulu : null],
+    ['kosulGecerlilik', formTarihi(veri.gecerlilik, dil)],
+  ]);
+  const toplam = veri.toplam;
+  const toplamSatirlari = toplam === null ? [] : satirlar([
+    ['toplamAra', iskontolu ? formSayisi(toplam.araToplam, dil) : null],
+    ['toplamIskonto', iskontolu ? `−${formSayisi(toplam.iskontoTutari, dil)}` : null],
+    ['toplamKdvHaric', formSayisi(toplam.kdvHaric, dil)],
+    ['toplamKdv', formSayisi(toplam.kdvTutari, dil)],
+    ['toplamGenel', `${formSayisi(toplam.genelToplam, dil)} ${para}`],
+  ]);
+  const toplamEtiketi = (k: TeklifFormuAlanAnahtari, et: string): string => {
+    if (k === 'toplamIskonto') return `${et} (%${formSayisi(veri.iskontoOrani, dil, 'miktar')})`;
+    if (k === 'toplamKdv' && toplam !== null) return `${et} (%${formSayisi(toplam.kdvOrani, dil, 'miktar')})`;
+    return et;
+  };
+  const sutunlar = {
+    aciklama: b('sutunAciklama'), miktar: b('sutunMiktar'), birim: b('sutunBirim'), fiyat: b('sutunBirimFiyat'), tutar: b('sutunTutar'),
+  };
+  const imzalar = ([['imzaFirma', icerik.imza1, kurum.unvan], ['imzaMusteri', icerik.imza2, musteriAd ?? '']] as const).filter(([k]) => b(k));
   return (
     <article ref={ref} className="tc-tf-kagit" data-theme="light" lang={dil} aria-label={`${z.teklif} ${veri.no}`}>
       <header className="tc-tf-ust tc-tf-bant">
@@ -73,19 +109,13 @@ export const TeklifFormuKagidi = forwardRef<HTMLElement, Ozellikler>(function Te
         <section>
           <h2>{z.musteri}</h2>
           <dl className="tc-tf-meta">
-            {musteriSatirlari.map(([dt, dd]) => <div key={dt}><dt>{dt}</dt><dd className="tc-tf-satirli">{dd}</dd></div>)}
+            {musteriSatirlari.map(([k, dt, dd]) => <div key={k}><dt>{dt}</dt><dd className="tc-tf-satirli">{dd}</dd></div>)}
           </dl>
         </section>
         <section>
           <h2>{z.teklif}</h2>
           <dl className="tc-tf-meta">
-            <div><dt>{z.no}</dt><dd>{veri.no}</dd></div>
-            <div><dt>{z.tur}</dt><dd>{z.satisTeklifi}</dd></div>
-            <div><dt>{z.surum}</dt><dd>{veri.surumNo}</dd></div>
-            <div><dt>{z.tarih}</dt><dd>{formTarihi(veri.tarih, dil)}</dd></div>
-            <div><dt>{z.gecerlilik}</dt><dd>{formTarihi(veri.gecerlilik, dil)}</dd></div>
-            <div><dt>{z.konu}</dt><dd>{veri.baslik}</dd></div>
-            <div><dt>{z.para}</dt><dd>{para}</dd></div>
+            {teklifSatirlari.map(([k, dt, dd]) => <div key={k}><dt>{dt}</dt><dd className="tc-tf-satirli">{dd}</dd></div>)}
           </dl>
         </section>
       </div>
@@ -93,8 +123,10 @@ export const TeklifFormuKagidi = forwardRef<HTMLElement, Ozellikler>(function Te
       <table className="tc-tf-tablo">
         <thead>
           <tr>
-            <th className="tc-tf-sag">#</th>{kodlu && <th>{z.kod}</th>}<th>{z.aciklama}</th><th className="tc-tf-sag">{z.miktar}</th><th className="tc-tf-birim">{z.birim}</th>{yerli && <th className="tc-tf-sag">{z.yerlilik}</th>}
-            <th className="tc-tf-sag">{z.birimFiyat}</th>{iskontolu && <th className="tc-tf-sag">{z.iskontolu}</th>}<th className="tc-tf-sag">{`${z.tutar} (${para})`}</th>
+            <th className="tc-tf-sag">#</th>{kodlu && <th>{e('sutunKod')}</th>}{sutunlar.aciklama && <th>{e('sutunAciklama')}</th>}
+            {sutunlar.miktar && <th className="tc-tf-sag">{e('sutunMiktar')}</th>}{sutunlar.birim && <th className="tc-tf-birim">{e('sutunBirim')}</th>}
+            {yerli && <th className="tc-tf-sag">{e('sutunYerlilik')}</th>}{sutunlar.fiyat && <th className="tc-tf-sag">{e('sutunBirimFiyat')}</th>}
+            {iskontoSutunu && <th className="tc-tf-sag">{e('sutunIskontolu')}</th>}{sutunlar.tutar && <th className="tc-tf-sag">{`${e('sutunTutar')} (${para})`}</th>}
           </tr>
         </thead>
         <tbody>
@@ -102,45 +134,41 @@ export const TeklifFormuKagidi = forwardRef<HTMLElement, Ozellikler>(function Te
             <tr key={s.id}>
               <td className="tc-tf-sag">{i + 1}</td>
               {kodlu && <td className="tc-tf-kod">{s.kod ?? ''}</td>}
-              <td>{s.ad}</td>
-              <td className="tc-tf-sag">{formSayisi(s.miktar, dil, 'miktar')}</td>
-              <td className="tc-tf-birim">{s.birim ?? ''}</td>
+              {sutunlar.aciklama && <td>{s.ad}</td>}
+              {sutunlar.miktar && <td className="tc-tf-sag">{formSayisi(s.miktar, dil, 'miktar')}</td>}
+              {sutunlar.birim && <td className="tc-tf-birim">{s.birim ?? ''}</td>}
               {yerli && <td className="tc-tf-sag">{s.yerlilik === null ? '' : `%${formSayisi(s.yerlilik, dil, 'miktar')}`}</td>}
-              <td className="tc-tf-sag">{formSayisi(s.birimFiyat, dil, 'fiyat')}</td>
-              {iskontolu && <td className="tc-tf-sag">{formSayisi(s.iskontoluFiyat, dil, 'fiyat')}</td>}
-              <td className="tc-tf-sag">{formSayisi(s.tutar, dil)}</td>
+              {sutunlar.fiyat && <td className="tc-tf-sag">{formSayisi(s.birimFiyat, dil, 'fiyat')}</td>}
+              {iskontoSutunu && <td className="tc-tf-sag">{formSayisi(s.iskontoluFiyat, dil, 'fiyat')}</td>}
+              {sutunlar.tutar && <td className="tc-tf-sag">{formSayisi(s.tutar, dil)}</td>}
             </tr>
           ))}
         </tbody>
       </table>
-      {veri.toplam !== null && (
+      {toplamSatirlari.length > 0 && (
         <dl className="tc-tf-toplam">
-          {iskontolu && <div><dt>{z.ara}</dt><dd>{formSayisi(veri.toplam.araToplam, dil)}</dd></div>}
-          {iskontolu && <div><dt>{`${z.iskonto} (%${formSayisi(veri.iskontoOrani, dil, 'miktar')})`}</dt><dd>{`−${formSayisi(veri.toplam.iskontoTutari, dil)}`}</dd></div>}
-          <div><dt>{z.kdvHaric}</dt><dd>{formSayisi(veri.toplam.kdvHaric, dil)}</dd></div>
-          <div><dt>{`${z.kdv} (%${formSayisi(veri.toplam.kdvOrani, dil, 'miktar')})`}</dt><dd>{formSayisi(veri.toplam.kdvTutari, dil)}</dd></div>
-          <div className="tc-tf-genel"><dt>{z.genel}</dt><dd>{`${formSayisi(veri.toplam.genelToplam, dil)} ${para}`}</dd></div>
+          {toplamSatirlari.map(([k, dt, dd]) => <div key={k} className={k === 'toplamGenel' ? 'tc-tf-genel' : undefined}><dt>{toplamEtiketi(k, dt)}</dt><dd>{dd}</dd></div>)}
         </dl>
       )}
-      <section className="tc-tf-bolum">
-        <h2>{z.kosullar}</h2>
-        <dl className="tc-tf-meta">
-          <div><dt>{z.teslim}</dt><dd>{veri.teslimGun === null ? '—' : `${String(veri.teslimGun)} ${z.gun}`}</dd></div>
-          {veri.terminTarihi !== null && <div><dt>{z.termin}</dt><dd>{formTarihi(veri.terminTarihi, dil)}</dd></div>}
-          {veri.odemeKosulu !== null && veri.odemeKosulu.trim() !== '' && <div><dt>{z.odeme}</dt><dd>{veri.odemeKosulu}</dd></div>}
-          <div><dt>{z.gecerlilik}</dt><dd>{formTarihi(veri.gecerlilik, dil)}</dd></div>
-        </dl>
-      </section>
+      {kosulSatirlari.length > 0 && (
+        <section className="tc-tf-bolum">
+          <h2>{z.kosullar}</h2>
+          <dl className="tc-tf-meta">
+            {kosulSatirlari.map(([k, dt, dd]) => <div key={k}><dt>{dt}</dt><dd>{dd}</dd></div>)}
+          </dl>
+        </section>
+      )}
       {icerik.sartlar.length > 0 && (
         <section className="tc-tf-bolum">
           <h2>{z.sartlar}</h2>
           <ol className="tc-tf-sartlar">{icerik.sartlar.map((s, i) => <li key={`${String(i)}-${s}`}>{s}</li>)}</ol>
         </section>
       )}
-      <div className="tc-tf-imzalar">
-        <div className="tc-tf-imza"><span className="tc-tf-onay">{z.firmaOnayi}</span>{imzaAdi(icerik.imza1)}<small>{kurum.unvan}</small></div>
-        <div className="tc-tf-imza"><span className="tc-tf-onay">{z.musteriOnayi}</span>{imzaAdi(icerik.imza2)}<small>{veri.musteri.ad ?? ''}</small></div>
-      </div>
+      {imzalar.length > 0 && (
+        <div className="tc-tf-imzalar">
+          {imzalar.map(([k, ad, alti]) => <div key={k} className="tc-tf-imza"><span className="tc-tf-onay">{e(k)}</span>{imzaAdi(ad)}<small>{alti}</small></div>)}
+        </div>
+      )}
       <footer className="tc-tf-alt"><span>{alt}</span><span>{`${veri.no} · ${z.surum} ${String(veri.surumNo)}`}</span></footer>
     </article>
   );

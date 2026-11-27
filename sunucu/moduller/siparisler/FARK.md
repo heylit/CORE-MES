@@ -47,3 +47,10 @@ VARSAYIM: plan vadeyi okumaya başlayınca ipucu yeniden yazılır.
 - Sınırlama: kuru olmayan teklifler kuyruk sınırı (200) içinde yer tutar; hata satırları hep bekleyenlerin arkasına gider, ama 200'den fazla kursuz teklif birikirse arkadakiler gecikir.
 - Teklifin kendi kurunu saklamak (kur dondurma) ayrı karardır; bu işte yapılmadı.
 - EkoTigerAPI `m.Rate ?? 1` davranışına dokunulmadı.
+
+## 3794 Teklif formu alanları (karar 27.11, A: alan paneli)
+- Form içeriğine (şablon ve teklife özel metin, ikisi de jsonb) isteğe bağlı `alanlar` eklendi: alan anahtarı -> { durum: gizli | kaldirildi, etiket, deger }. Göç yok; alanı olmayan eski içerik eskisi gibi basılır.
+- Değeri forma yazılabilen yalnız metin alanlarıdır (müşteri ünvan, adres, vergi dairesi, vergi no; teklif türü ve konu). Teklif no, sürüm, tarih, geçerlilik, para birimi, miktar, fiyat, tutar, toplamlar, teslim ve ödeme sürümden gelir: sunucu bunlara değer yazılmasını 400 ile reddeder, yalnız gizlenir. Para ve sürüm kuralı değişmedi.
+- Şablonda alan değeri yazılmaz (400); şablon yalnız etiket ve görünüm taşır.
+- Kabul, red ya da siparişe dönen teklifte form metni kapalıdır (değişmedi).
+- VARSAYIM: gizli ile kaldırılan kâğıtta aynı çıkar (basılmaz); fark yalnız panelde (gizli listede kalır, kaldırılan Kaldırılanlar'a gider). Genel toplam gizlenebilir; ön izlemede sessiz not çıkar, engel yoktur.
