@@ -39,6 +39,8 @@
   display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-3);
   padding: var(--b-4) var(--b-5); border-top: 1px solid var(--edge);
 }
+/* Uzun düğme yazısı (büyük yazı boyutu, uzun onay metni) satıra sığmazsa sarılır; yoksa son düğme `flex-end` ile sol kenardan taşıp kırpılırdı (3806). */
+.tc-pencere-alt > .tc-dugme { max-width: 100%; white-space: normal; text-align: center; padding-block: calc((var(--dugme-boy) - 1lh) / 2 - 1px); }
 
 @media (max-width: 767px) {
   .tc-perde { align-items: flex-end; padding: 0; }
@@ -49,6 +51,7 @@
   .tc-pencere-govde { padding: var(--b-4); }
   .tc-pencere-tam > .tc-pencere-govde { padding: 0; }
   .tc-pencere-alt > * { flex: 1; }
+  .tc-pencere-alt > .tc-dugme { flex: 1 1 auto; }
 }
 
 .tc-pencere-ileti { font-weight: 600; color: var(--ink); }
