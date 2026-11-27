@@ -607,6 +607,10 @@ export function elleBolSilUygula(deger: unknown, k: { isId: string }, kisi: Komu
   // Payların kilidi de kalkar; ilk pay adımın kimliğini taşır, onun kilidi adımın kilidi olarak kalır.
   const locks = nesne(deger.locks) ? deger.locks : {};
   const paylar = Object.keys(locks).filter((id) => id.startsWith(`${k.isId}~`));
+  // Kalıcı pay kilidi düşüren taslak uygulanırken plan.kilitle ister; komut anında söylenmezse bütün taslak hangi komut yüzünden durduğu
+  // görünmeden 403 alırdı. Geçici kilit kayıtlı kilit sayılmaz.
+  const kalici = paylar.filter((id) => { const x = locks[id]; return !(nesne(x) && x['gecici']); });
+  if (kalici.length > 0 && kisi.kilitYetkisi !== true) return { hata: { tur: 'yetki', ileti: 'Kilitli payları birleştirmek plan kilitleme yetkisi ister (birleştirme pay kilidini kaldırır).' } };
   if (paylar.length > 0) {
     const l = { ...locks };
     for (const id of paylar) { delete l[id]; geri.push({ yol: ['locks'], id, once: locks[id] }); }
