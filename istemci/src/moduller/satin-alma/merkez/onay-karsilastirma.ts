@@ -7,7 +7,7 @@ import type { PurchaseRequest, RequestItem } from "./tipler.ts";
 import { SIMGELER } from "../../../ortak/tasarim/simgeler.ts";
 import { S } from "./store.ts";
 import { lateBy, payText, terminMetni, supName, supplierStats, validity, vsLast, type EvalRow, type Evaluation } from "./calc.ts";
-import { odemeAyrintisi } from "./karar-ayrintisi.ts";
+import { kilitMetni, kurFarkiHTML, odemeAyrintisi } from "./karar-ayrintisi.ts";
 import { secilemezAlternatif } from "./alternatif.ts";
 import { addDays, deltaHTML, esc, fmtDate, isNum, money, nf0, nfx, numIn, parseNum, pct, todayStr } from "./util.ts";
 import { alternatifRozeti, kademeRozeti, stars } from "./views.ts";
@@ -66,16 +66,25 @@ function bolumler(r: PurchaseRequest, kartlar: EvalRow[]): Bolum[] {
   const sst = supplierStats();
   const acik = r.status === "eval" || r.status === "approval";
   const dovizVar = kartlar.some((x) => x.q.currency !== "TRY");
+  // 3799: nakliye ve masrafın altında TL karşılığı, talebin kuruyla (onayda sabit kur). Ara toplam iskontodan önce olduğu için TL
+  // karşılığı satırıyla karışmasın diye TL almaz; kalem hücresinde TL zaten büyük sayıdır.
+  const tl = (x: EvalRow, n: number) => `${money(n, x.q.currency)}${x.q.currency === "TRY" ? "" : sub(money(n * x.c.rate))}`;
+  const kilit = kilitMetni(r);
   const tutar: Satir[] = [
     { ad: "Ara toplam", hucreler: kartlar.map((x) => money(x.c.sub, x.q.currency)) },
     { ad: "İskonto", hucreler: kartlar.map((x) => (x.c.disc ? "%" + nfx.format(x.c.disc * 100) : "–")) },
-    { ad: "Nakliye ve masraf", hucreler: kartlar.map((x) => (x.q.deliveryIncluded && !x.c.other ? "dahil" : money(x.c.ship + x.c.other, x.q.currency))) },
+    { ad: "Nakliye ve masraf", hucreler: kartlar.map((x) => (x.q.deliveryIncluded && !x.c.other ? "dahil" : tl(x, x.c.ship + x.c.other))) },
   ];
   if (dovizVar) {
     tutar.push({ ad: "Toplam (teklif para birimi)", hucreler: kartlar.map((x) => money(x.c.total, x.q.currency)) });
-    tutar.push({ ad: "Kur", hucreler: kartlar.map((x) => (x.q.currency === "TRY" ? "–" : `${nfx.format(x.c.rate)}${sub(isNum(x.q.fxRate) && Math.abs(x.q.fxRate - x.c.rate) > 1e-6 ? `teklif günü ${nfx.format(x.q.fxRate)}` : acik ? "güncel" : "sipariş günü")}`)) });
+    tutar.push({ ad: "Kur", hucreler: kartlar.map((x) => {
+      if (x.q.currency === "TRY") return "–";
+      const sabit = kilit !== null && isNum(r.award?.fx?.[x.q.currency]);
+      const not = sabit ? kilit : isNum(x.q.fxRate) && Math.abs(x.q.fxRate - x.c.rate) > 1e-6 ? `teklif günü ${nfx.format(x.q.fxRate)}` : acik ? "güncel" : "sipariş günü";
+      return `${nfx.format(x.c.rate)}${sabit ? ' <span class="flag info">sabit</span>' : ""}${sub(esc(not))}`;
+    }) });
   }
-  tutar.push({ ad: "TL karşılığı", anahtar: true, yon: "min", degerler: kartlar.map((x) => (tam(x) ? x.c.totalTRY : null)), hucreler: kartlar.map((x) => `${money(x.c.totalTRY)}${tam(x) ? "" : sub("eksik kalemli")}`) });
+  tutar.push({ ad: "TL karşılığı", anahtar: true, yon: "min", degerler: kartlar.map((x) => (tam(x) ? x.c.totalTRY : null)), hucreler: kartlar.map((x) => `${money(x.c.totalTRY)}${kurFarkiHTML(r, x)}${tam(x) ? "" : sub("eksik kalemli")}`) });
   return [
     { ad: "Kalemler (birim fiyat, TL)", simge: "box", satirlar: items.map((it) => kalemSatiri(r, it, kartlar)) },
     { ad: "Tutar ve kur", simge: "lira", satirlar: tutar },

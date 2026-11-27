@@ -13,7 +13,7 @@ import {
 } from "./store.ts";
 import {
   awardOrders, awardTotals, birimReddi, siparisEtiketi, kataloglaEslesenleriBagla, evaluate, matIndex, orderDue, planCost, matOf, matStats, nextNo, payText, perfDesc, perfScore, priceHistory, puanDegeri, supRating, quoteCalc,
-  supName, supplierStats, terminGunu, terminTabani, terminTarihi, vsLast, fiyatUyarisi, EMPTY_STATS, fixedRates, pasifEki, birimUyarisi, miktarIn, miktarSayisi, yapistirilanKalemler, kaydedilecekKur, kurIstenir, otomatikKur, KUR_ILETISI,
+  supName, supplierStats, terminGunu, terminTabani, terminTarihi, vsLast, fiyatUyarisi, EMPTY_STATS, fixedRates, pasifEki, birimUyarisi, miktarIn, miktarSayisi, yapistirilanKalemler, kaydedilecekKur, kurIstenir, otomatikKur, KUR_ILETISI, kurKilitli, liveRate,
 } from "./calc.ts";
 import {
   $, $$, addDays, clamp, clone, dayDiff, deltaHTML, esc, fmtDate, isNum, money, nf0, nf2, nfx, norm, numIn, parseNum,
@@ -330,7 +330,9 @@ function updateQuoteLive(): void {
     const cell = $(`[data-line="${it.id}"]`);
     if (cell) {
       const l = c.lines[it.id];
+      // 3799: döviz satırın altında TL karşılığı (iskontosuz, formun kuruyla).
       cell.innerHTML = l ? esc(money(l.line, draftQ.currency))
+        + (draftQ.currency !== "TRY" ? `<span class="sub">${esc(money(l.line * c.rate))}</span>` : "")
         + (l.alinan !== undefined ? `<span class="sub">en az ${esc(numIn(l.alinan))} ${esc(it.unit)} alınır</span>` : "")
         + (l.tier !== undefined ? `<span class="sub">${esc(numIn(l.tier))} ${esc(it.unit)} ve üstü fiyatı, birim ${esc(money(l.unit, draftQ.currency))}</span>` : "")
         + (l.ust ? `<span class="sub"><span class="flag info">${esc(numIn(l.ust.min))} ${esc(it.unit)} alınırsa toplam ${esc(money(l.ust.line, draftQ.currency))}</span></span>` : "") : "–";
@@ -338,7 +340,7 @@ function updateQuoteLive(): void {
     const vs = $(`[data-vs="${it.id}"]`);
     if (vs) { const l = c.lines[it.id]; const d = l ? vsLast(r, it, l.unit * c.unitTRY) : null; vs.innerHTML = d ? `${deltaHTML(d.pct)} <span class="faint">${money(d.last.unitTRY)}, ${esc(d.last.supplier)}</span>${fiyatUyarisi(d.pct, settings().priceAlertPct) ? ' <span class="flag warn">pazarlık payı</span>' : ""}` : '<span class="faint">kayıt yok</span>'; }
   });
-  $("#q-live").innerHTML = `<div><span>Toplam</span><b>${money(c.total, draftQ.currency)}</b></div>${draftQ.currency !== "TRY" ? `<div><span>TL, ${OPEN.includes(r.status) ? "güncel" : "sabit"} kur ${nfx.format(c.rate)}</span><b>${money(c.totalTRY)}</b></div>` : ""}<div><span>Net bugünkü maliyet</span><b>${money(c.pvTRY)}</b></div>`;
+  $("#q-live").innerHTML = `<div><span>Toplam</span><b>${money(c.total, draftQ.currency)}</b></div>${draftQ.currency !== "TRY" ? `<div><span>TL, ${OPEN.includes(r.status) && !kurKilitli(r) ? "güncel satış" : "sabit"} kur ${nfx.format(c.rate)}${OPEN.includes(r.status) && !kurKilitli(r) && liveRate(draftQ.currency, settings()) !== null && settings().ratesDate ? ` (${fmtDate(settings().ratesDate).slice(0, 5)})` : ""}</span><b>${money(c.totalTRY)}</b></div>` : ""}<div><span>Net bugünkü maliyet</span><b>${money(c.pvTRY)}</b></div>`;
 }
 
 /* ================= teklif isteği ================= */
@@ -1020,7 +1022,7 @@ function calcModal(r: PurchaseRequest, qid: string | undefined): void {
   const maxW = Math.max(0, ...ev.elig.map(y => parseNum(y.q.warrantyMonths) || 0));
   const line = (k: string, v: string, how: string, cls = "") => `<tr class="${cls}"><td>${k}${how ? `<div class="how">${how}</div>` : ""}</td><td class="r">${v}</td></tr>`;
   const items = (r.items || []).map(it => { const l = c.lines[it.id]; return line(esc(it.name), l ? money(l.line, cur) : '<span class="faint">teklif yok</span>', l ? `${numIn(parseNum(it.qty))} ${esc(it.unit)} × ${money(l.unit, cur)}` : ""); }).join("");
-  const rateHow = cur === "TRY" ? "" : OPEN.includes(r.status) ? "en üstteki güncel kur" : (r.award?.fx?.[cur] ? "sipariş günü sabitlenen kur" : "teklif günü kuru");
+  const rateHow = cur === "TRY" ? "" : kurKilitli(r) && r.award?.fx?.[cur] ? "onaya gönderimde sabitlenen kur" : OPEN.includes(r.status) ? "en üstteki güncel kur" : (r.award?.fx?.[cur] ? "sipariş günü sabitlenen kur" : "teklif günü kuru");
   const ld = parseNum(q.leadDays);
   const leadHow = ld === null ? "termin belirtilmemiş, 0 puan" : r.needDate ? (x.late ? `ihtiyaç tarihini ${x.late} gün kaçırıyor: 100 − ${x.late} × ${nf1.format(100 / 15)}` : "ihtiyaç tarihine yetişiyor: 100") : `en kısa termine göre ${ld - Math.min(...ev.elig.map(y => parseNum(y.q.leadDays)).filter((v): v is number => v !== null))} gün fazla: her gün ${nf1.format(100 / 30)} puan düşer`;
   const sup = S.suppliers[q.supplierId], sst = supplierStats()[q.supplierId];

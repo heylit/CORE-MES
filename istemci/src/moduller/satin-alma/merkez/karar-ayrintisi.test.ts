@@ -3,7 +3,10 @@ import type { PurchaseRequest, Quote } from './tipler.ts';
 import { DEFAULT_SETTINGS } from './constants.ts';
 import { S, bump } from './store.ts';
 import { evaluate, requiredApprover } from './calc.ts';
-import { kararAyrintisiHTML, odemeAyrintisi, onaylayanOzeti } from './karar-ayrintisi.ts';
+import { kararAyrintisiHTML, kurFarkiMetni, odemeAyrintisi, onaylayanOzeti } from './karar-ayrintisi.ts';
+import { money } from './util.ts';
+import { approvalFormHTML } from './docs.ts';
+import { guncelKurFarki } from './calc.ts';
 
 const q = (id: string, o: Partial<Quote> = {}): Quote => ({
   id, supplierId: id, supplierName: `ORN- ${id}`, date: '2026-11-01', validUntil: '', currency: 'TRY', fxRate: null, prices: { k1: 100 },
@@ -36,19 +39,67 @@ describe('karar ve onayda ödeme, kur ve faiz', () => {
     expect(b.yontem).toBe('Belirtilmedi');
   });
 
-  it('onaydaki kararda güncel kur kullanılır, karar anında sabitlenen kur ve faiz ayrıca yazılır', () => {
+  it('onaydaki kararda TL karşılığı onaya gönderimde sabitlenen kurla; bugünkü kurla karşılığı yalnız not (3799)', () => {
     ayar();
     const r = talep({
       quotes: [q('e', { currency: 'EUR', fxRate: 38 })],
       award: { mode: 'single', quoteId: 'e', reason: '', by: '', decidedAt: '2026-11-10', fx: { EUR: 39 }, kurKilidi: '2026-11-10T08:00:00Z', sabitFaiz: { EUR: 0.8 } },
     });
     const x = evaluate(r).all[0]!;
+    expect(x.c.rate).toBe(39);
+    expect(x.c.totalTRY).toBe(39000);
     const d = odemeAyrintisi(r, x);
-    expect(d).toMatchObject({ kur: 40, kurKaynagi: 'guncel', kararKuru: 39, aylikFaiz: 1, kararFaizi: 0.8 });
+    // Vade faizi de onaya gönderimde sabitlenendir (sunucunun kararKurlari'yla aynı).
+    expect(d).toMatchObject({ kur: 39, kurKaynagi: 'kilit', kararKuru: 39, aylikFaiz: 0.8, kararFaizi: 0.8 });
+    expect(kurFarkiMetni(r, x)).toBe(`Bugünkü kurla ${money(40000)} (+%2,6)`);
     const h = kararAyrintisiHTML(r, [x], new Set(['e']));
-    expect(h).toContain('karar anında 39');
+    expect(h).toContain('onaya gönderimde sabit, ');
+    expect(h).not.toContain('karar anında 39');
     expect(h).toContain('teklif günü 38');
-    expect(h).toContain('karar anında %0,8');
+    expect(h).toContain('Bugünkü kurla');
+    expect(h).not.toContain('karar anında %0,8');
+    expect(h).not.toContain('sipariş için yeniden onay gerekir');
+    // Kur sipariş sınırından (%3) çok oynadıysa uyarı fark notunun üstünde.
+    const cok = talep({ ...r, award: { ...r.award!, fx: { EUR: 38 } } });
+    bump();
+    expect(kararAyrintisiHTML(cok, [evaluate(cok).all[0]!], new Set(['e']))).toContain("Kur %3'ten çok oynadı: sipariş için yeniden onay gerekir");
+  });
+
+  it('kilitsiz onaydaki eski kararda güncel kur kalır; kur aynıysa fark notu çıkmaz', () => {
+    ayar();
+    const r = talep({ quotes: [q('e', { currency: 'EUR', fxRate: 38 })], award: { mode: 'single', quoteId: 'e', reason: '', by: '', decidedAt: '2026-11-10', fx: { EUR: 39 } } });
+    const x = evaluate(r).all[0]!;
+    expect(odemeAyrintisi(r, x)).toMatchObject({ kur: 40, kurKaynagi: 'guncel', kararKuru: null });
+    expect(kurFarkiMetni(r, x)).toBeNull();
+    const ayni = talep({ quotes: [q('e', { currency: 'EUR' })], award: { mode: 'single', quoteId: 'e', reason: '', by: '', decidedAt: '2026-11-10', fx: { EUR: 40 }, kurKilidi: '2026-11-10T08:00:00Z' } });
+    expect(kurFarkiMetni(ayni, evaluate(ayni).all[0]!)).toBeNull();
+    // Binde yarımdan küçük fark not çıkarmaz.
+    const yakin = talep({ quotes: [q('e', { currency: 'EUR' })], award: { mode: 'single', quoteId: 'e', reason: '', by: '', decidedAt: '2026-11-10', fx: { EUR: 39.99 }, kurKilidi: '2026-11-10T08:00:00Z' } });
+    expect(kurFarkiMetni(yakin, evaluate(yakin).all[0]!)).toBeNull();
+  });
+
+  it('kilitli onayda sabit faizi boş para birimi faiz girilmedi sayılır', () => {
+    ayar();
+    const r = talep({ quotes: [q('e', { currency: 'EUR' })], award: { mode: 'single', quoteId: 'e', reason: '', by: '', decidedAt: '2026-11-10', fx: { EUR: 39 }, kurKilidi: '2026-11-10T08:00:00Z', sabitFaiz: { EUR: null } } });
+    expect(evaluate(r).all[0]!.c.faizYok).toBe(true);
+  });
+
+  it('değerlendirmeye dönen talepte kilit kalsa da güncel kur kullanılır', () => {
+    ayar();
+    const r = talep({ status: 'eval', quotes: [q('e', { currency: 'EUR' })], award: { mode: 'single', quoteId: 'e', reason: '', by: '', decidedAt: '2026-11-10', fx: { EUR: 39 }, kurKilidi: '2026-11-10T08:00:00Z' } });
+    expect(evaluate(r).all[0]!.c.rate).toBe(40);
+    const x = evaluate(r).all[0]!;
+    expect(guncelKurFarki(r, x.q, x.c, S.settings!)).toBeNull();
+  });
+
+  it('onay formu kilitli kurda "onaya gönderimde sabitlenen kurla" yazar, güncel kur demez', () => {
+    ayar();
+    const r = talep({ title: 'ORN- talep', quotes: [q('e', { currency: 'EUR' })], award: { mode: 'single', quoteId: 'e', reason: 'ORN-', by: '', decidedAt: '2026-11-10', fx: { EUR: 39 }, kurKilidi: '2026-11-10T08:00:00Z' } });
+    const h = approvalFormHTML(r);
+    expect(h).toContain('onaya gönderimde sabitlenen kurla');
+    expect(h).not.toContain('güncel kurla');
+    expect(h).toContain('(onaya gönderimde sabit)');
+    expect(h).not.toContain('(teklif günü)');
   });
 
   it('sipariş verilmiş kararda kur sipariş günü sabit kurdur', () => {

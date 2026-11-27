@@ -4,8 +4,8 @@
  */
 import type { Award, PurchaseRequest, RequestItem } from "./tipler.ts";
 import { COMMITTED, OPEN } from "./constants.ts";
-import { S, V, backend, canWrite, saveRequest } from "./store.ts";
-import { approvalState, awardOrders, basamakFiyati, evaluate, itemCost, itemLineCost, miktarSayisi, supName, type EvalRow, type Evaluation } from "./calc.ts";
+import { S, V, backend, canWrite, saveRequest, settings } from "./store.ts";
+import { approvalState, awardOrders, basamakFiyati, evaluate, itemCost, itemLineCost, miktarSayisi, rateFor, supName, type EvalRow, type Evaluation } from "./calc.ts";
 import { $, $$, esc, isNum, kokIcinde, money, numIn, parseNum, todayStr } from "./util.ts";
 import { onaylayabilir } from "./roles.ts";
 import { render } from "./views.ts";
@@ -202,11 +202,13 @@ export function siparisKalemleriHTML(r: PurchaseRequest): string {
     const alinan = l?.received ?? null;
     // Mal kabul yoksa teslim alınan sıfırdır (bilinmiyor değil): sunucu teslimsiz satırda boş gönderir.
     const birim = l?.unit ?? it.unit;
+    // 3799: döviz tutarın altında TL karşılığı, talebin kuruyla (siparişte sabit kur).
+    const tl = (n: number) => `${money(n, o.q.currency)}${o.q.currency === "TRY" ? "" : `<span class="sub">${money(n * rateFor(r, o.q, settings()))}</span>`}`;
     return `<tr><td class="lead"><b>${esc(it.name)}</b>${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}</td>
       <td data-l="Tedarikçi">${esc(supName(o.q))}${o.orderNo ? `<span class="sub">${esc(o.orderNo)}</span>` : ""}</td>
       <td class="r num" data-l="Sipariş miktarı">${isNum(miktar) ? `${numIn(miktar)} ${esc(birim)}` : "–"}</td>
-      <td class="r num" data-l="Birim fiyat">${h ? money(h.unit, o.q.currency) : "–"}</td>
-      <td class="r num" data-l="Tutar">${h ? money(h.line, o.q.currency) : "–"}</td>
+      <td class="r num" data-l="Birim fiyat">${h ? tl(h.unit) : "–"}</td>
+      <td class="r num" data-l="Tutar">${h ? tl(h.line) : "–"}</td>
       <td class="r num" data-l="Teslim alınan">${ordered ? `${numIn(alinan ?? 0)} ${esc(birim)}` : "–"}</td>
       <td class="r num" data-l="Kalan">${ordered && isNum(miktar) ? `${numIn(Math.max(0, miktar - (alinan ?? 0)))} ${esc(birim)}` : "–"}</td>
       <td class="acts">${degistir ? `<button class="btn sm" data-act="order-item-change" data-item="${it.id}">Değiştir</button>` : ""}</td></tr>`;

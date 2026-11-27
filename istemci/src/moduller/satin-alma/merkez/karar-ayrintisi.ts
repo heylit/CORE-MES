@@ -3,14 +3,15 @@
  * ödeme yöntemi ve tahmini ödeme günleri, vadenin hesaplandığı aylık faiz, vade etkisi ve net maliyet.
  * Tutarlar karşılaştırmayla aynı hesaptan gelir (quoteCalc); burada yalnız ödeme günleri ve kaynak etiketleri türetilir.
  */
+import type { KUR_KILIDI } from "#paylasilan/sozlesme/satin-alma.ts";
 import type { PurchaseRequest, Quote } from "./tipler.ts";
 import { OPEN } from "./constants.ts";
 import { nameOf, settings } from "./store.ts";
-import { approvalState, liveRate, payText, requiredApprover, supName, type EvalRow } from "./calc.ts";
+import { approvalState, guncelKurFarki, kurKilitli, liveRate, payText, requiredApprover, supName, type EvalRow } from "./calc.ts";
 import { ODEME_SEKLI } from "./takip.ts";
 import { addDays, clamp, esc, fmtDate, fmtTs, isNum, money, nfx, parseNum, todayStr } from "./util.ts";
 
-export type KurKaynagi = "tl" | "guncel" | "teklif" | "sabit";
+export type KurKaynagi = "tl" | "guncel" | "teklif" | "kilit" | "sabit";
 export interface OdemeAyrintisi {
   qid: string;
   kur: number;
@@ -43,7 +44,8 @@ export function odemeAyrintisi(r: PurchaseRequest, x: EvalRow): OdemeAyrintisi {
   const kararFaizi = a?.kurKilidi ? a.sabitFaiz?.[q.currency] ?? null : null;
   let kurKaynagi: KurKaynagi = "tl";
   if (q.currency !== "TRY") {
-    if (OPEN.includes(r.status)) kurKaynagi = liveRate(q.currency, settings()) !== null ? "guncel" : "teklif";
+    if (kurKilitli(r) && isNum(a?.fx?.[q.currency])) kurKaynagi = "kilit";
+    else if (OPEN.includes(r.status)) kurKaynagi = liveRate(q.currency, settings()) !== null ? "guncel" : "teklif";
     else kurKaynagi = isNum(a?.fx?.[q.currency]) ? "sabit" : "teklif";
   }
   const siparisGunu = a?.orderDate || todayStr();
@@ -61,7 +63,33 @@ export function odemeAyrintisi(r: PurchaseRequest, x: EvalRow): OdemeAyrintisi {
   };
 }
 
-const KAYNAK: Record<KurKaynagi, string> = { tl: "", guncel: "güncel kur", teklif: "teklif günü kuru", sabit: "sipariş günü sabit kur" };
+const KAYNAK: Record<KurKaynagi, string> = { tl: "", guncel: "güncel kur", teklif: "teklif günü kuru", kilit: "onaya gönderimde sabit", sabit: "sipariş günü sabit kur" };
+
+/** Onaydaki talepte kurun sabitlendiği an ("onaya gönderimde sabit, 25.11.2026 14:20"); kilit yoksa boş. */
+export function kilitMetni(r: PurchaseRequest): string | null {
+  if (!kurKilitli(r)) return null;
+  const t = Date.parse(r.award!.kurKilidi!);
+  return Number.isFinite(t) ? `${KAYNAK.kilit}, ${fmtTs(t)}` : KAYNAK.kilit;
+}
+/** Sabit kurlu TL tutarının bugünkü kurla karşılığı: "Bugünkü kurla 45.925,00 ₺ (+%1,3)"; fark yoksa boş. */
+export function kurFarkiMetni(r: PurchaseRequest, x: EvalRow): string | null {
+  const f = guncelKurFarki(r, x.q, x.c, settings());
+  if (f === null) return null;
+  // Binde yarımdan küçük fark gösterilmez (kur aynı sayılır).
+  if (Math.abs(f.yuzde) < 0.05) return null;
+  const y = Math.round(f.yuzde * 10) / 10;
+  return `Bugünkü kurla ${money(f.tl)} (${y > 0 ? "+" : "−"}%${nfx.format(Math.abs(y))})`;
+}
+/** Sunucunun sipariş sınırı (KUR_KILIDI, 1096 a); değer istemciye zod'suz gelsin diye burada, tip sunucudakine bağlı (değişirse derlenmez). */
+const KAYMA_YUZDESI: (typeof KUR_KILIDI)["kaymaYuzdesi"] = 3;
+/** Hücrenin alt satırı: fark notu; kur sipariş sınırından (KUR_KILIDI) çok oynadıysa uyarı notun üstünde. */
+export function kurFarkiHTML(r: PurchaseRequest, x: EvalRow): string {
+  const metin = kurFarkiMetni(r, x);
+  if (metin === null) return "";
+  const f = guncelKurFarki(r, x.q, x.c, settings());
+  const asti = f !== null && Math.abs(f.yuzde) > KAYMA_YUZDESI;
+  return `${asti ? `<span class="sub"><span class="flag warn sa-kur-uyari">Kur %${KAYMA_YUZDESI}'ten çok oynadı: sipariş için yeniden onay gerekir</span></span>` : ""}<span class="sub">${esc(metin)}</span>`;
+}
 
 /** Karar ve onay adımındaki karşılaştırma tablosu; seçilen teklif başta ve işaretli. */
 export function kararAyrintisiHTML(r: PurchaseRequest, satirlar: EvalRow[], secilen: Set<string>): string {
@@ -79,13 +107,13 @@ export function kararAyrintisiHTML(r: PurchaseRequest, satirlar: EvalRow[], seci
     h += row("Kur", cols.map((x, i) => {
       const o = d[i]!;
       if (x.q.currency === "TRY") return "–";
-      const ek = [KAYNAK[o.kurKaynagi]];
-      if (o.kararKuru !== null) ek.push(Math.abs(o.kararKuru - o.kur) > 1e-6 ? `karar anında ${nfx.format(o.kararKuru)}` : "karar anında sabitlendi");
+      const ek = [o.kurKaynagi === "kilit" ? kilitMetni(r) ?? KAYNAK.kilit : KAYNAK[o.kurKaynagi]];
+      if (o.kararKuru !== null && o.kurKaynagi !== "kilit") ek.push(Math.abs(o.kararKuru - o.kur) > 1e-6 ? `karar anında ${nfx.format(o.kararKuru)}` : "karar anında sabitlendi");
       if (isNum(x.q.fxRate) && Math.abs(x.q.fxRate - o.kur) > 1e-6 && o.kurKaynagi !== "teklif") ek.push(`teklif günü ${nfx.format(x.q.fxRate)}`);
       return `${nfx.format(o.kur)}${sub(esc(ek.join(", ")))}`;
     }));
   }
-  h += row("TL karşılığı", cols.map(x => money(x.c.totalTRY)), "key");
+  h += row("TL karşılığı", cols.map(x => `${money(x.c.totalTRY)}${kurFarkiHTML(r, x)}`), "key");
   h += row("Ödeme koşulu", cols.map(x => esc(payText(x.q))), "wrap");
   h += row("Ödeme yöntemi", cols.map((_, i) => esc(d[i]!.yontem)));
   h += row("Avans ödemesi", cols.map((_, i) => { const o = d[i]!.avans; return o ? `${money(o.tl, "TRY", 0)}${sub(`%${nfx.format(o.yuzde)}, ${fmtDate(o.gun)} (sipariş günü)`)}` : "–"; }));
