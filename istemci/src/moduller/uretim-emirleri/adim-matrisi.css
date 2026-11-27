@@ -101,6 +101,7 @@
 .tc-am-panel { display: grid; gap: var(--b-3); padding: var(--b-4); background: var(--panel-solid); border: thin solid var(--edge); border-radius: var(--yari-2); align-content: start; min-inline-size: 0; }
 .tc-am-panel-ust { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--b-2); }
 .tc-am-panel-ust h3 { margin: 0; font-size: var(--yazi-m); overflow-wrap: anywhere; }
+.tc-am-emri-ac { justify-self: start; min-block-size: var(--dokunma); }
 .tc-am-ayrinti { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--b-2) var(--b-3); margin: 0; }
 .tc-am-ayrinti dt { color: var(--muted); }
 .tc-am-ayrinti dd { margin: 0; display: grid; gap: 0; overflow-wrap: anywhere; }

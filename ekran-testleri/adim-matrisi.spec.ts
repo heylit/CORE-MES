@@ -131,6 +131,11 @@ test('Çoklu seçimde panel kapanır; seçili şerit ve sonuç şeridi aynı yer
   await hucre.click();
   const panel = page.getByRole('complementary', { name: 'Adım ayrıntısı' });
   await expect(panel).toBeVisible();
+  // "Emri aç" başlığın hemen altında: geç yüklenen bölümler onu aşağı itmez; 44 px dokunma hedefi.
+  const emriAc = await panel.getByRole('link', { name: 'Emri aç' }).boundingBox();
+  const maddeBasligi = await panel.getByRole('heading', { name: 'Hazırlık maddeleri' }).boundingBox();
+  expect(emriAc !== null && maddeBasligi !== null && emriAc.y < maddeBasligi.y).toBe(true);
+  expect(emriAc?.height ?? 0).toBeGreaterThanOrEqual(44);
   if (telefon) {
     // 360: ayrıntı alttaki yapışan şeridin içinde, katlanır.
     expect(await panel.evaluate((e) => e.closest('.tc-am-seritlar') !== null)).toBe(true);
