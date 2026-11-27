@@ -53,7 +53,7 @@ const adaySutunlari: Sutun<Aday>[] = [
   { anahtar: 'zaman', baslik: 'Başlangıç', kirilmaz: true, hucre: (a) => gunSaatMetni(a.baslangic) },
   { anahtar: 'sure', baslik: 'Süre', hizala: 'sag', kirilmaz: true, hucre: (a) => <Kirilmaz>{sureMetni(a.saniye)}</Kirilmaz> },
   { anahtar: 'durum', baslik: 'Aday', hucre: (a) => <Rozet ton={SINIF[a.sinif].ton}>{SINIF[a.sinif].metin}</Rozet> },
-  { anahtar: 'metin', baslik: 'Alarm metni', kartTamSatir: true, hucre: (a) => a.metin },
+  { anahtar: 'metin', baslik: 'Alarm metni', kartTamSatir: true, hucre: (a) => a.metin ?? '' },
   { anahtar: 'is', baslik: 'Açık iş', mono: true, kirilmaz: true, hucre: (a) => <Kirilmaz>{a.isEmriNo}</Kirilmaz> },
 ];
 
@@ -65,7 +65,7 @@ function MakineDurusu({ m, v }: { m: Makine; v: Cevap }) {
       <p className="tc-tzb-ozet">
         <span>Toplam duruş <Kirilmaz>{sureMetni(m.toplamDurusSaniye)}</Kirilmaz></span>
         <span>Eşik altı {adetMetni(m.kisaDuruslar.adet)} kısa duruş, <Kirilmaz>{sureMetni(m.kisaDuruslar.saniye)}</Kirilmaz></span>
-        <span>{m.kayitsizDurusSaniye === null ? 'Terminal karşılaştırması: veri yok' : `Terminalde kaydı olmayan ${sureMetni(m.kayitsizDurusSaniye)}`}</span>
+        {m.kayitsizDurusSaniye !== null && <span>Terminalde kaydı olmayan <Kirilmaz>{sureMetni(m.kayitsizDurusSaniye)}</Kirilmaz></span>}
       </p>
       {m.alarmTani !== null && <p className="tc-tzb-not" role="note">Alarm okunmuyor: {m.alarmTani}</p>}
       <Tablo etiket={`${m.cihazAdi} duruş adayları`} sutunlar={adaySutunlari} satirlar={m.adaylar} satirAnahtari={(a) => a.baslangic} bosMesaj="Eşiği aşan duruş adayı yok." />

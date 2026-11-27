@@ -51,7 +51,7 @@ export const ORNEK_SAYIM = (): TezgahSayimCevabi => ({
 
 export const ORNEK_DURUS = (): TezgahDurusCevabi => ({
   pencere,
-  eksikler: ['terminal duruşları bu sürümde okunamıyor; terminal karşılaştırması yapılmadı'],
+  eksikler: ['Eşlenmemiş tezgâhta vardiya, iş ve terminal karşılaştırması yok.'],
   makineler: [
     {
       cihazAdi: 'ORN-T01', makine: M1, durusEsigiDk: 5,
@@ -71,7 +71,7 @@ export const ORNEK_DURUS = (): TezgahDurusCevabi => ({
         { baslangic: saat(13, 5), bitis: saat(13, 14), saniye: 540, sinif: 'olcum', metin: null, isEmriNo: 'ORN-IE-1043' },
         { baslangic: saat(14, 20), bitis: saat(14, 31), saniye: 660, sinif: 'neden-sorulacak', metin: null, isEmriNo: 'ORN-IE-1043' },
       ],
-      kisaDuruslar: { adet: 7, saniye: 1260 }, toplamDurusSaniye: 3180, kayitsizDurusSaniye: null, alarmTani: null,
+      kisaDuruslar: { adet: 7, saniye: 1260 }, toplamDurusSaniye: 3180, kayitsizDurusSaniye: 1440, alarmTani: null,
     },
     {
       cihazAdi: 'ORNM002', makine: null, durusEsigiDk: 5,

@@ -58,7 +58,7 @@ export function Esleme() {
     {
       anahtar: 'makine', baslik: 'CORE makinesi', kartTamSatir: true,
       hucre: (c) => (
-        <select className="tc-alan-kutu" aria-label={`${c.cihazAdi} makinesi`} value={taslak(c).makineId} onChange={(o) => degistir(c, { makineId: o.target.value })}>
+        <select className="tc-alan-kutu" aria-label={`${c.cihazAdi} makinesi`} title={secenekler.find((s) => s.deger === taslak(c).makineId)?.baslik} value={taslak(c).makineId} onChange={(o) => degistir(c, { makineId: o.target.value })}>
           <option value="">Eşlenmedi</option>
           {secenekler.map((s) => <option key={s.deger} value={s.deger}>{s.baslik}</option>)}
         </select>

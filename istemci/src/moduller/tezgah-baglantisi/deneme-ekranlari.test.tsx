@@ -90,7 +90,7 @@ describe('Tezgâh bağlantısı deneme ekranları (kart 3811)', () => {
   it('Duruş: dosya adı ve kod görünmez; zaman çizgisi özetli, saat eksenli ve parça başına başlıklıdır', async () => {
     ac(<Durus />);
     const cizgi = await screen.findByRole('img', { name: /^ORN-T01 zaman çizgisi, .+ toplam duruş 53 dk$/ });
-    expect(screen.getByText(/terminal duruşları bu sürümde okunamıyor/)).toBeTruthy();
+    expect(screen.getByText(/terminal karşılaştırması yok/)).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/BASKA-MODUL|\.md|\(M1\)/);
     expect(cizgi.querySelectorAll('rect > title')).toHaveLength(9);
     expect(cizgi.querySelector('rect > title')?.textContent).toMatch(/^Vardiya dışı: \d{2}\.\d{2} \d{2}:\d{2} – \d{2}\.\d{2} \d{2}:\d{2}$/);
