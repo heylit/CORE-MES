@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { UretimHazirligiCevabi } from '#paylasilan/sozlesme/stok.ts';
-import { MALZEME_TESLIM_AC, cevapla } from './baglanti.ts';
+import { ISTASYON_SECIMI_SURE_MS, MALZEME_TESLIM_AC, cevapla } from './baglanti.ts';
 import type { Istemci, IstekGirdisi } from './baglanti.ts';
 import { hazirlikMetni } from './kurallar.ts';
 import { adimCevabiUygula, adimYaz, tmiEmirId } from '../../../../arkon/web/src/data/tmi-adim.ts';
@@ -85,5 +85,32 @@ describe('başlatmadan önce eksik girdi', () => {
     const yok = istemciKur({ 'GET /istasyonlar/secim': SECIM });
     expect((await cevapla(yok.istemci, istek('POST', '/uretim-hazirligi', JSON.stringify({ emirId: 12, istasyon: 'FRZ-01' })))).govde).toEqual({ hazir: true, denetlenmedi: true });
     expect(yok.cagrilar.map((x) => x.yol)).toEqual(['/istasyonlar/secim']);
+  });
+
+  it('3783: art arda başlatmada istasyon listesi bir kez okunur; listede olmayan kod listeyi yeniden okutur', async () => {
+    const { istemci, cagrilar } = istemciKur({ 'GET /istasyonlar/secim': SECIM, 'POST /stok/uretim-hazirligi': { hazir: true, eksikler: [] } });
+    for (let i = 0; i < 3; i += 1) await cevapla(istemci, istek('POST', '/uretim-hazirligi', JSON.stringify({ emirId: 12, istasyon: 'TZG-04' })));
+    expect(cagrilar.filter((x) => x.yol === '/istasyonlar/secim')).toHaveLength(1);
+    expect(cagrilar.filter((x) => x.yol === '/stok/uretim-hazirligi')).toHaveLength(3);
+    await cevapla(istemci, istek('POST', '/uretim-hazirligi', JSON.stringify({ emirId: 12, istasyon: 'FRZ-01' })));
+    expect(cagrilar.filter((x) => x.yol === '/istasyonlar/secim')).toHaveLength(2);
+  });
+
+  it('3783: 5 dakika dolunca istasyon listesi yeniden okunur', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-11-27T08:00:00Z'));
+      const { istemci, cagrilar } = istemciKur({ 'GET /istasyonlar/secim': SECIM, 'POST /stok/uretim-hazirligi': { hazir: true, eksikler: [] } });
+      const baslat = () => cevapla(istemci, istek('POST', '/uretim-hazirligi', JSON.stringify({ emirId: 12, istasyon: 'TZG-04' })));
+      await baslat();
+      vi.setSystemTime(new Date(Date.now() + ISTASYON_SECIMI_SURE_MS - 1));
+      await baslat();
+      expect(cagrilar.filter((x) => x.yol === '/istasyonlar/secim')).toHaveLength(1);
+      vi.setSystemTime(new Date(Date.now() + 1));
+      await baslat();
+      expect(cagrilar.filter((x) => x.yol === '/istasyonlar/secim')).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
