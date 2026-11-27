@@ -316,3 +316,18 @@ describe('Geçmiş doluluğu göstergesi (kart 3680)', () => {
     expect(screen.queryByRole('tab', { name: /Takım tablosu/ })).toBeNull();
   });
 });
+
+describe('Örnek veri kararlılığı (kart 3822)', () => {
+  it('saat her okumada ilerlese de bir ayrıntıdaki alanların son değişmesi tek andır', () => {
+    let t = Date.parse('2026-04-10T10:00:00Z');
+    const saat = vi.spyOn(Date, 'now').mockImplementation(() => (t += 1));
+    try {
+      for (const a of [ORNEK_AYRINTI(), ORNEK_LSV2_AYRINTI()]) {
+        const anlar = new Set(a.alanlar.filter((x) => x.sonDegisme !== null).map((x) => x.sonDegisme));
+        expect(anlar.size).toBe(1);
+      }
+    } finally {
+      saat.mockRestore();
+    }
+  });
+});
