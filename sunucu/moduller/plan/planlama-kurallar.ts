@@ -334,7 +334,7 @@ export function durdurmaBekleyenler(durdurulan: readonly string[], kimlik: Reado
 }
 
 // 3803 N2: motorsuz yazılan iş (parça, kişi tezgâhı) motorun makine yerleriyle üç yazımda oturmadı; sıra denetimi aykırı adımı gösterir.
-export const YAKINSAMADI_UYARISI = 'Parça ve kişi tezgâhı yerleri üç yazımda oturmadı; bir adım öncülünden önce kalabilir, sıra denetimine bakın.';
+export const YAKINSAMADI_UYARISI = 'Parça ve kişi tezgâhı yerleri üç yazımda oturmadı, bir adım öncülünden önce kalabilir; canlıya aldıktan sonra sırayı kontrol edin.';
 
 // Kaydın kalıcı kilitleri (S.locks): planlamacının sabitlediği ya da elle taşıdığı işler. Motorun değerlendirmede koyduğu geçici kilit
 // (gecici) sayılmaz.
