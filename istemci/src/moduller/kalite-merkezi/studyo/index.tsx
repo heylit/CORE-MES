@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { KmParcaKaynagi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmMerkezBelgesi, KmNumune, KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
@@ -18,6 +18,7 @@ import { GrupPaneli } from './GrupPaneli.tsx';
 import { grupKodu } from './gruplar.ts';
 import { MerkezdenAl } from './MerkezdenAl.tsx';
 import { OkumaAyarlari, useOkumaAyari } from './OkumaAyarlari.tsx';
+import { SagTutamak } from './SagTutamak.tsx';
 import { useBalonPlaniYaz, useEmirNumuneleri, useMerkezdenEsitle, useOlcumYaz, usePlanKopyala, useResimAl, useResimKaldir, useStudyoParcasi } from './veri.ts';
 import './studyo.css';
 
@@ -35,6 +36,22 @@ function yanPanelOku(): boolean {
 }
 function yanPanelYaz(acik: boolean): void {
   try { window.localStorage.setItem(YAN_PANEL_ANAHTARI, acik ? 'acik' : 'kapali'); } catch { /* depolama yok: yalnız bu açılışta geçerli */ }
+}
+
+// Sağda çalışırken sol sütun simge şeridine iner, sağ sütun genişler; sağ sütunun kenarı sürüklenir (3796 b). Yalnız geniş ekranda
+// (1200 ve üstü) etkilidir; tercihler bu tarayıcıda tutulur, depolama yoksa varsayılan (sol açık, sağ varsayılan genişlik) geçerlidir.
+const SOL_DAR_ANAHTARI = 'kalite-merkezi:studyo-sol-dar';
+const SAG_GENIS_ANAHTARI = 'kalite-merkezi:studyo-sag-genis';
+function solDarOku(): boolean {
+  try { return window.localStorage.getItem(SOL_DAR_ANAHTARI) === 'dar'; } catch { return false; }
+}
+function sagGenisOku(): number | null {
+  try { const n = Number(window.localStorage.getItem(SAG_GENIS_ANAHTARI)); return n > 0 ? n : null; } catch { return null; }
+}
+function tercihYaz(anahtar: string, deger: string | null): void {
+  try {
+    if (deger === null) window.localStorage.removeItem(anahtar); else window.localStorage.setItem(anahtar, deger);
+  } catch { /* depolama yok: yalnız bu açılışta geçerli */ }
 }
 
 function NumuneSatiri({ n }: { n: KmNumune }) {
@@ -64,6 +81,27 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   const [secimAnahtari, secimAnahtariYaz] = useState(0);
   const [yanAcik, yanAcikYaz] = useState(yanPanelOku);
   const yanDegistir = () => { const y = !yanAcik; yanAcikYaz(y); yanPanelYaz(y); };
+  const [solDar, solDarYaz] = useState(solDarOku);
+  const [solAcilir, solAcilirYaz] = useState<string | null>(null);
+  const solDegistir = () => { const d = !solDar; solDarYaz(d); solAcilirYaz(null); tercihYaz(SOL_DAR_ANAHTARI, d ? 'dar' : null); };
+  const [sagGenis, sagGenisYaz] = useState(sagGenisOku);
+  const sagGenisDegistir = (px: number | null, bitti: boolean) => { sagGenisYaz(px); if (bitti) tercihYaz(SAG_GENIS_ANAHTARI, px === null ? null : String(px)); };
+  const kokRef = useRef<HTMLDivElement>(null);
+  const solRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const k = kokRef.current;
+    if (!k) return;
+    if (sagGenis === null) k.style.removeProperty('--km-st-sag'); else k.style.setProperty('--km-st-sag', `${String(sagGenis)}px`);
+  }, [sagGenis]);
+  // Şeritten açılan sol içerik resmin üstündedir: Esc ya da dışarı tıklama kapatır.
+  useEffect(() => {
+    if (!solAcilir) return;
+    const tus = (e: KeyboardEvent) => { if (e.key === 'Escape') solAcilirYaz(null); };
+    const tik = (e: PointerEvent) => { if (!(e.target instanceof Node && solRef.current?.contains(e.target))) solAcilirYaz(null); };
+    document.addEventListener('keydown', tus);
+    document.addEventListener('pointerdown', tik);
+    return () => { document.removeEventListener('keydown', tus); document.removeEventListener('pointerdown', tik); };
+  }, [solAcilir]);
 
   const parcaSec = (no: number) => {
     const y = new URLSearchParams(adres);
@@ -180,14 +218,25 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   const bos = malzemeNo === null ? 'Parça seçin' : parca.isPending ? 'Yükleniyor' : parca.isError ? undefined : 'Bu parçaya alınmış resim ya da model yok.';
 
   return (
-    <div className={`km-st km-st-m-${mobil}${yanAcik ? '' : ' km-st-genis'}`}>
+    <div ref={kokRef} className={`km-st km-st-m-${mobil}${yanAcik ? '' : ' km-st-genis'}${solDar ? ' km-st-sol-dar' : ''}${solDar && solAcilir !== null ? ' km-st-sol-acilir' : ''}`}>
       <div className="km-st-mseg" role="tablist" aria-label="Görünüm">
         {([['dosya', 'Parça'], ['resim', 'Resim'], ['gruplar', 'Gruplar'], ['plan', 'Plan']] as const).map(([k, ad]) => (
           <button key={k} type="button" role="tab" aria-selected={mobil === k} className={mobil === k ? 'on' : ''} onClick={() => { mobilYaz(k); }}>{ad}</button>
         ))}
       </div>
 
-      <aside id="km-st-sol" className="km-st-sol" aria-label="Parça ve resimler">
+      <aside ref={solRef} id="km-st-sol" className="km-st-sol" aria-label="Parça ve resimler">
+        {solDar && yanAcik ? (
+          <nav className="km-st-serit" aria-label="Sol panel">
+            <button type="button" onClick={solDegistir} aria-label="Sol paneli aç"><Simge ad="chev-right" boyut="k" /><span>Aç</span></button>
+            {([['box', 'Parça'], ['file', 'Resim'], ['clipboard-check', 'Emir']] as const).map(([s, ad]) => (
+              <button key={ad} type="button" aria-expanded={solAcilir === ad} aria-controls="km-st-sol-icerik" onClick={() => { solAcilirYaz((a) => (a === ad ? null : ad)); }}>
+                <Simge ad={s} boyut="k" /><span>{ad}</span>
+              </button>
+            ))}
+          </nav>
+        ) : null}
+        <div id="km-st-sol-icerik" className="km-st-sol-icerik">
         <section className="km-st-kart">
           <span className="km-st-baslik">Parça</span>
           {kart ? <div className="km-st-parca"><b className="km-st-kod">{kart.kod}</b><span>{kart.ad ?? '—'}</span></div>
@@ -239,6 +288,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
             {resim ? <Dugme tur="ikincil" simge="printer" onClick={() => { cmmYaz('plan'); }}>CMM ölçüm planı</Dugme> : null}
           </section>
         ) : null}
+        </div>
       </aside>
 
       <section className="km-st-orta" aria-label="Teknik resim">
@@ -251,8 +301,13 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
               {`Gruplar · ${String(resim.gruplar?.length ?? 0)}`}
             </Dugme>
           ) : null}
+          {yanAcik ? (
+            <Dugme tur="ikincil" simge={solDar ? 'chev-right' : 'chev-left'} className="km-st-sol-dugme" aria-expanded={!solDar} aria-controls="km-st-sol-icerik" onClick={solDegistir}>
+              {solDar ? 'Sol paneli aç' : 'Sol paneli daralt'}
+            </Dugme>
+          ) : null}
           <Dugme tur="ikincil" simge="gear" className="km-st-okuma-dugme" aria-expanded={okumaAcik} aria-controls="km-st-okuma" onClick={() => { okumaAcikYaz((a) => !a); }}>Okuma ayarları</Dugme>
-          {!yanAcik && kart ? <span className="km-st-soluk"><b className="km-st-kod">{kart.kod}</b>{resim ? ` · ${resim.ad}` : ''}{emir ? ` · ${emir.no ?? ''}` : ''}</span> : null}
+          {(!yanAcik || solDar) && kart ? <span className={`km-st-soluk${yanAcik ? ' km-st-sol-ozet' : ''}`}><b className="km-st-kod">{kart.kod}</b>{resim ? ` · ${resim.ad}` : ''}{emir ? ` · ${emir.no ?? ''}` : ''}</span> : null}
         </div>
         {taslak !== null ? (
           <div className="km-st-taslak" role="status">
@@ -274,6 +329,8 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
           {okumaAcik ? <OkumaAyarlari d={okuma} kapat={() => { okumaAcikYaz(false); }} degistirir={duzenler} dosyaVar={resim !== null} /> : null}
         </div>
       </section>
+
+      {yanAcik ? <SagTutamak govde={() => kokRef.current} sol={() => solRef.current} sutun={() => document.getElementById('km-st-gr')} genislik={sagGenis} yaz={sagGenisDegistir} /> : null}
 
       <aside id="km-st-gr" className="km-st-gr" aria-label="Balon grupları">
         {resim && resim.tur === 'resim' ? (

@@ -114,6 +114,66 @@ describe('Resim ve modeller stüdyosu (597 a)', () => {
     window.localStorage.removeItem('kalite-merkezi:studyo-yan-panel');
   });
 
+  it('3796 b: sol panel simge şeridine iner, şeritten açılan içerik Esc ile kapanır; tercih bu tarayıcıda hatırlanır', async () => {
+    window.localStorage.setItem('kalite-merkezi:studyo-yan-panel', 'acik');
+    window.localStorage.removeItem('kalite-merkezi:studyo-sol-dar');
+    kmAc('resimler?parca=7', MUAYENECI, {}, SECENEK);
+    const daralt = await screen.findByRole('button', { name: 'Sol paneli daralt' });
+    expect(daralt.closest('.km-st')?.classList.contains('km-st-sol-dar')).toBe(false);
+    fireEvent.click(daralt);
+    const kok = screen.getByRole('button', { name: 'Sol paneli aç', expanded: false }).closest('.km-st')!;
+    expect(kok.classList.contains('km-st-sol-dar')).toBe(true);
+    expect(window.localStorage.getItem('kalite-merkezi:studyo-sol-dar')).toBe('dar');
+    const serit = screen.getByRole('navigation', { name: 'Sol panel' });
+    expect(within(serit).getByRole('button', { name: 'Resim' })).toBeTruthy();
+    expect(within(serit).getByRole('button', { name: 'Emir' })).toBeTruthy();
+    fireEvent.click(within(serit).getByRole('button', { name: 'Parça' }));
+    expect(kok.classList.contains('km-st-sol-acilir')).toBe(true);
+    expect(within(serit).getByRole('button', { name: 'Parça' }).getAttribute('aria-expanded')).toBe('true');
+    expect(within(serit).getByRole('button', { name: 'Resim' }).getAttribute('aria-expanded')).toBe('false');
+    expect(await screen.findByText('DNM-07', { selector: '.km-st-sol-ozet b' })).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(kok.classList.contains('km-st-sol-acilir')).toBe(false);
+    fireEvent.click(within(serit).getByRole('button', { name: 'Sol paneli aç' }));
+    expect(kok.classList.contains('km-st-sol-dar')).toBe(false);
+    expect(window.localStorage.getItem('kalite-merkezi:studyo-sol-dar')).toBeNull();
+    window.localStorage.removeItem('kalite-merkezi:studyo-yan-panel');
+  });
+
+  it('3796 b: yan paneller gizliyken şerit ve kenar tutamağı çizilmez', async () => {
+    window.localStorage.removeItem('kalite-merkezi:studyo-yan-panel');
+    window.localStorage.setItem('kalite-merkezi:studyo-sol-dar', 'dar');
+    kmAc('resimler?parca=7', MUAYENECI, {}, SECENEK);
+    await screen.findByRole('button', { name: 'Yan panelleri göster' });
+    expect(screen.queryByRole('navigation', { name: 'Sol panel' })).toBeNull();
+    expect(screen.queryByRole('separator', { name: 'Sağ panel genişliği' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Sol paneli/ })).toBeNull();
+    window.localStorage.removeItem('kalite-merkezi:studyo-sol-dar');
+  });
+
+  it('3796 b: sağ panel kenarı klavyeyle genişler, tercih yazılır; Home varsayılana döner', async () => {
+    window.localStorage.setItem('kalite-merkezi:studyo-yan-panel', 'acik');
+    window.localStorage.removeItem('kalite-merkezi:studyo-sag-genis');
+    kmAc('resimler?parca=7', MUAYENECI, {}, SECENEK);
+    const kenar = await screen.findByRole('separator', { name: 'Sağ panel genişliği' });
+    const kok = kenar.closest<HTMLElement>('.km-st')!;
+    Object.defineProperty(kok, 'clientWidth', { configurable: true, value: 2000 });
+    const sol = screen.getByRole('complementary', { name: 'Parça ve resimler' });
+    sol.getBoundingClientRect = () => ({ width: 1990 }) as DOMRect;
+    // Sol sütun geniş olunca üst sınır resme yer bırakır: 2000 - 1990 = 10.
+    fireEvent.keyDown(kenar, { key: 'ArrowLeft' });
+    expect(kok.style.getPropertyValue('--km-st-sag')).toBe('10px');
+    sol.getBoundingClientRect = () => ({ width: 300 }) as DOMRect;
+    fireEvent.keyDown(kenar, { key: 'Home' });
+    fireEvent.keyDown(kenar, { key: 'ArrowLeft' });
+    expect(kok.style.getPropertyValue('--km-st-sag')).toBe('32px');
+    expect(window.localStorage.getItem('kalite-merkezi:studyo-sag-genis')).toBe('32');
+    fireEvent.keyDown(kenar, { key: 'Home' });
+    expect(kok.style.getPropertyValue('--km-st-sag')).toBe('');
+    expect(window.localStorage.getItem('kalite-merkezi:studyo-sag-genis')).toBeNull();
+    window.localStorage.removeItem('kalite-merkezi:studyo-yan-panel');
+  });
+
   it('açılışta yazma isteği gitmez', async () => {
     const { fetch } = kmAc('resimler?parca=7', MUAYENECI, {}, SECENEK);
     await screen.findByRole('button', { name: /Deneme resim/ });
