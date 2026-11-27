@@ -167,8 +167,8 @@ describe('3462 a: Taleplerim kalem termini ve üretim emri', () => {
         ihtiyacTarihi: null, uretimEmriId: null, uretimEmriNo: null },
     ])], toplam: 1 } satisfies TaleplerimCevabi)));
     sar(<Taleplerim tam />);
-    fireEvent.click(await screen.findByRole('button', { expanded: false }));
-    const satirlar = (await screen.findAllByRole('row')).slice(1);
+    fireEvent.click(await screen.findByRole('button', { name: /^Aç: / }));
+    const satirlar = within(await screen.findByRole('table', { name: /kalemleri$/ })).getAllByRole('row').slice(1);
     const hucre = (satir: HTMLElement, etiket: string) => satir.querySelector(`td[data-baslik="${etiket}"]`)!.textContent;
     expect(hucre(satirlar[0]!, 'Üretim emri')).toBe('UE-ORN-0412');
     expect(hucre(satirlar[0]!, 'Termin')).toMatch(/12\.2026|Ara/);

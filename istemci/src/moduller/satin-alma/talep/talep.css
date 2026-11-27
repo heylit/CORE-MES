@@ -40,14 +40,6 @@
 }
 
 /* 898 a: Taleplerim sayfası, ön talepler, ilerleme */
-.sa-talep-ozet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-2); }
-.sa-talep-ozet-kutu {
-  display: grid; gap: var(--b-1); text-align: left; min-height: var(--dokunma); padding: var(--b-2) var(--b-3); cursor: pointer;
-  color: var(--ink); background: var(--panel2); border: 1px solid var(--edge); border-radius: var(--yari-2); font: inherit;
-}
-.sa-talep-ozet-kutu b { font-family: var(--font-mono); font-size: var(--yazi-l); }
-.sa-talep-ozet-kutu span { color: var(--muted); font-size: var(--yazi-s); }
-.sa-talep-ozet-kutu:first-child { border-color: var(--hazard); }
 .sa-ot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--b-2) var(--b-3); align-items: start; padding: var(--b-3);
   border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); min-width: 0; overflow-wrap: anywhere; }
 .sa-ot-secili { border-color: var(--hazard); }
@@ -70,26 +62,25 @@
   background: var(--panel2); border-left: 3px solid var(--hazard); border-radius: var(--yari-1); font-size: var(--yazi-s); }
 .sa-talep-uygulanan { display: grid; gap: var(--b-2); min-width: 0; }
 .sa-talep-gonder { display: flex; flex-wrap: wrap; gap: var(--b-2); }
-.sa-talep-suzgec { display: grid; gap: var(--b-3); margin-bottom: var(--b-3); }
-.sa-talep-ac { all: unset; box-sizing: border-box; display: grid; gap: var(--b-1); width: 100%; cursor: pointer; min-width: 0; }
-.sa-talep-ac:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; border-radius: var(--yari-1); }
-.sa-talep-ok { margin-left: auto; color: var(--muted); display: inline-flex; }
-.sa-talep-adimlar { list-style: none; margin: var(--b-1) 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--b-1); }
-.sa-talep-adimlar > li { display: grid; gap: var(--b-1); color: var(--faint); font-size: var(--yazi-s); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sa-talep-adimlar > li::before { content: ''; display: block; height: 4px; border-radius: 2px; background: var(--edge2); }
-.sa-talep-adimlar > li[data-durum="bitti"] { color: var(--muted); }
-.sa-talep-adimlar > li[data-durum="bitti"]::before { background: var(--run); }
-.sa-talep-adimlar > li[data-durum="simdi"] { color: var(--ink); font-weight: 600; }
-.sa-talep-adimlar > li[data-durum="simdi"]::before { background: var(--hazard); }
-/* 520 px altında beş adım sütunu "Satın alma"yı sığdırmaz; kesmek yerine etiket iki satıra kırılır. */
-@media (max-width: 519px) {
-  .sa-talep-adimlar > li { white-space: normal; overflow: visible; overflow-wrap: anywhere; line-height: 1.2; align-content: start; }
-}
+/* Taleplerim tablosu: durum hücresinde rozetler ve beş parçalı ince ilerleme; talep hücresinde başlık ve kalem özeti. */
+.sa-taleplerim { min-width: 0; }
+.sa-talep-baslik { display: flex; flex-direction: column; gap: var(--cizgi-kalin); min-width: 0; }
+.sa-talep-baslik > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-kip="kart"] .sa-talep-baslik > b { white-space: normal; }
+.sa-talep-baslik > small { color: var(--muted); font-size: var(--yazi-xs); }
+.sa-talep-durum { display: flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); min-width: 0; }
+.sa-talep-rozetler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.sa-talep-durum-alt { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--b-2); row-gap: var(--b-1); }
+.sa-talep-uyari { color: var(--hold); font-size: var(--yazi-xs); font-weight: 600; }
+.sa-talep-ilerleme { display: grid; grid-template-columns: repeat(5, var(--b-5)); gap: var(--cizgi-kalin); }
+.sa-talep-ilerleme > span { height: var(--b-1); border-radius: var(--b-1); background: var(--edge2); }
+.sa-talep-ilerleme > span[data-durum="bitti"] { background: var(--run); }
+.sa-talep-ilerleme > span[data-durum="simdi"] { background: var(--hazard); }
+.sa-talep-gecikti { color: var(--stop); font-size: var(--yazi-xs); font-weight: 600; }
+.sa-talep-acik { display: grid; gap: var(--b-2); padding-top: var(--b-2); min-width: 0; }
+.sa-talep-acik > p { margin: 0; }
 .sa-talep-kalemler { list-style: none; margin: var(--b-2) 0 0; padding: 0; display: grid; gap: var(--b-2); }
 .sa-talep-kalemler > li { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); padding-top: var(--b-2); border-top: 1px solid var(--edge); }
-@media (min-width: 600px) {
-  .sa-talep-ozet { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
 @media (min-width: 900px) {
   .sa-ot { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
   .sa-ot-eylem { grid-column: auto; flex-wrap: nowrap; }
@@ -344,8 +335,3 @@
 .sa-talep-kalem-hucre { display: flex; flex-direction: column; gap: var(--cizgi-kalin); min-width: 0; }
 .sa-talep-kalem-hucre .sa-talep-not { font-size: var(--yazi-xs); }
 .sa-talep-kalem-tablo .tc-tablo-sag .sa-talep-kalem-hucre { align-items: flex-end; }
-/* Telefonda durum süzgeci tek satırda yana kayar; alt alta dizilince listeyi ekranın altına itiyordu. */
-@media (max-width: 767px) {
-  .sa-talep-suzgec .sa-talep-tur { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
-  .sa-talep-suzgec .sa-talep-tur > * { flex: none; }
-}
