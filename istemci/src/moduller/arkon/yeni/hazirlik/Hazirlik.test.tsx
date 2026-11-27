@@ -570,7 +570,10 @@ describe('A2 Hazırlık ekranı', () => {
     }));
     arkonAc('/arkon/hazirlik');
     const liste = await screen.findByRole('complementary', { name: 'İş paketleri' }, { timeout: 10000 });
-    expect(await within(liste).findByRole('button', { name: /^Çizim revizyonu eksik/ }, { timeout: 10000 })).toBeTruthy();
+    // 3816: iki emir var, operasyonlar kapalı gelir; emir satırı en kötü hâli söyler, açılınca operasyon satırı da söyler.
+    expect(await within(liste).findByRole('button', { name: /^IE-DENEME-73 Çizim rev: Çizim revizyonu eksik/ }, { timeout: 10000 })).toBeTruthy();
+    fireEvent.click(within(liste).getByRole('button', { name: 'IE-DENEME-73 operasyonlarını aç' }));
+    expect(within(liste).getByRole('button', { name: /^IE-DENEME-73 Op 20 Çizim rev: Çizim revizyonu eksik/ })).toBeTruthy();
     expect(sorulan).toEqual(['73']);
     const d = await ekran();
     fireEvent.click(within(liste).getAllByRole('row').find((r) => r.hasAttribute('data-paket'))!);

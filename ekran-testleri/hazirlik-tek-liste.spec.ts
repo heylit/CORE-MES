@@ -26,7 +26,7 @@ const tasma = (p: Page) => p.evaluate(() => document.documentElement.scrollWidth
 
 test.describe('3606-2 Hazırlık tek liste', () => {
   test.use({ hesap: 'ornek.yonetici' });
-  test('tek liste açılır; görünüm düğmesi yok; eksik madde satırda adıyla; çip paketi açar; süzgeçler sayılı; sayfa yatay taşmaz; yazma gitmez', async ({ page, ag, ac }, bilgi) => {
+  test('tek liste açılır; görünüm düğmesi yok; emir tek satır, eksik madde sütununda; operasyonlar açılır; hücre paketi açar; süzgeçler sayılı; sayfa yatay taşmaz; yazma gitmez', async ({ page, ag, ac }, bilgi) => {
     await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: ISLER.map((_, i) => ({ kimlik: paket(i).id, surum: 1, govde: paket(i) })) } }));
     await page.route('**/api/adimli-emirler/hazirlik-ozeti*', (r) => r.fulfill({ json: { emirler: ISLER.map((_, i) => ({ emirId: 9800 + i, hazirlik: hazirlik(i) })) } }));
     await page.route('**/api/adimli-emirler/98*/hazirlik', (r) => { const i = Number(/adimli-emirler\/(\d+)\//.exec(r.request().url())?.[1]) - 9800; return r.fulfill({ json: hazirlik(i) }); });
@@ -38,15 +38,20 @@ test.describe('3606-2 Hazırlık tek liste', () => {
     const klasor = process.env['TMIV2_EKRAN_GORUNTU']?.trim();
     const resim = async (ad: string, tam = false) => { if (klasor) await page.screenshot({ path: `${klasor}/${ad}-${bilgi.project.name}.png`, fullPage: tam }); };
     await resim('tek-liste');
-    // İlk işte üç madde eksik: iki ad satırda, üçüncüsü "+1".
+    // 3816: emir tek satır; operasyonlar kapalı gelir. Emir satırı her sütunda operasyonların en kötüsünü yazar.
+    await expect(liste.getByRole('button', { name: /^ORN-UE-050 Çizim rev: Çizim revizyonu eksik/ })).toBeVisible();
+    await expect(liste.getByRole('button', { name: /^Op 10 · Torna\s*ORN-TORNA-1/ })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Bütün operasyonları aç' }).click();
+    // İlk işte üç madde eksik: her biri kendi sütununda.
     const ilk = liste.locator('tr', { has: page.getByRole('button', { name: /^Op 10 · Torna\s*ORN-TORNA-1/ }) });
-    await expect(ilk.getByRole('button', { name: /^Çizim revizyonu eksik/ })).toBeVisible();
-    await expect(ilk.getByRole('button', { name: /^Malzeme \(girdi stoğu\) eksik/ })).toBeVisible();
-    await expect(ilk.getByRole('button', { name: /^1 eksik madde daha/ })).toBeVisible();
+    await expect(ilk.getByRole('button', { name: /Çizim rev: Çizim revizyonu eksik/ })).toBeVisible();
+    await expect(ilk.getByRole('button', { name: /Girdi stoğu: Malzeme \(girdi stoğu\) uyarılı/ })).toBeVisible();
+    await expect(ilk.getByRole('button', { name: /Takım: Takım hazırla uyarılı/ })).toBeVisible();
+    await resim('tek-liste-acik');
     // Paketsiz adım emrin bağlamı olarak kalır.
     await expect(liste.getByText('Op 30 · Taşlama')).toBeVisible();
-    // Emir başlığı hazır sayısını metinle söyler (renk tek başına anlam taşımaz).
-    await expect(liste.getByText(/^0\/2 hazır$/).first()).toBeVisible();
+    // Durum sütunu emrin hazırlığını metinle söyler (renk tek başına anlam taşımaz).
+    await expect(liste.getByText(/^Eksik · 1\/2$/).first()).toBeVisible();
     const durum = page.getByRole('group', { name: 'İş durumu' });
     await expect(durum.getByRole('button', { name: /^Durur 1$/ })).toBeVisible();
     await expect(durum.getByRole('button', { name: /^Uyarılı 1$/ })).toBeVisible();
@@ -90,7 +95,7 @@ test.describe('3606-2 Hazırlık tek liste', () => {
     await resim('tek-liste-suzgec');
     await page.getByRole('combobox', { name: 'Eksik madde' }).selectOption('');
     await sz.click();
-    await ilk.getByRole('button', { name: /^Çizim revizyonu eksik/ }).click();
+    await ilk.getByRole('button', { name: /Çizim rev: Çizim revizyonu eksik/ }).click();
     const duzen = page.getByRole('region', { name: 'İş paketi' });
     await expect(duzen.getByRole('heading', { name: /ORN-UE-050/ }).first()).toBeVisible();
     await expect(duzen.getByRole('button', { name: /Terminale gönder/ }).first()).toHaveAttribute('aria-current', 'step');
