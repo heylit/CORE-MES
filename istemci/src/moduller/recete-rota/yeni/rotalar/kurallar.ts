@@ -620,6 +620,8 @@ export function fasonaCevir(a: Adim, firmaId: string | null, op: Operasyon | und
   if (dis) {
     return {
       ...a, machineId: null, stationId: null, kisiId: null, alts: [], altTimes: {}, digerAdaylar: [], split: 'tek', minLot: null, fasonId: firmaId, fason: true,
+      // Fasonda tezgâh çevrimi yoktur; sunucuya 1 gider. Değer burada görünür biçimde 1'e döner, geri alınabilir.
+      ...(a.cevrimdeParca === undefined ? {} : { cevrimdeParca: 1 }),
     };
   }
   const b: Adim = { ...a, fasonId: null, fason: false, terminGun: null, kontrolTuru: 'gkk', muayeneSuresiSaat: null };

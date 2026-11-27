@@ -615,6 +615,14 @@ describe('2558-3 adımın erişilebilir adı', () => {
 // 3814 a: saklanan yalnız çevrimde parça ve işlem / adet; makine çevrimi türetilir.
 describe('çevrimde parça ve makine çevrimi', () => {
   const opBul = (id: string) => (id === '21' ? op('21') : undefined);
+  it('sıfır ve boş çevrimde parça 1 olur; fasona çevrilince çevrimde parça görünür biçimde 1e döner, iç üretime dönüş onu geri getirmez', () => {
+    expect(cevrimdeParca(cevrimdeParcaYaz(adim('a', 10), 0))).toBe(1);
+    expect(cevrimdeParca(cevrimdeParcaYaz(adim('a', 10), null))).toBe(1);
+    const f = fasonaCevir(cevrimdeParcaYaz(adim('a', 10), 4), '7', opBul('21'));
+    expect(f.cevrimdeParca).toBe(1);
+    expect(fasonaCevir(f, null, opBul('21')).cevrimdeParca).toBe(1);
+    expect(fasonaCevir(adim('a', 10), '7', opBul('21')).cevrimdeParca).toBe(adim('a', 10).cevrimdeParca);
+  });
   it('makine çevrimi yazılınca işlem / adet = çevrim ÷ k (4 ondalık); k değişince işlem / adet korunur, çevrim yeniden gösterilir', () => {
     const a = cevrimdeParcaYaz(adim('a', 10, { proc: 22 }), 4);
     expect(a.proc).toBe(22);

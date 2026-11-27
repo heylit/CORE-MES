@@ -124,7 +124,7 @@ function UretimYeri({ r, s, a, duzen }: { r: RotaEkrani; s: { urunId: string }; 
           <b>İç üretim</b>
         </button>
         <button type="button" className={`tc-rr1-depb${fason ? ' tc-rr1-on' : ''}`} aria-pressed={fason} disabled={!duzen} title="Fason firmada yapılır; termin gün olarak girilir."
-          onClick={() => { if (!fason) yaz((x) => fasonaCevir(x, null, op, true), 'Dış üretime alındı'); }}>
+          onClick={() => { if (!fason) yaz((x) => fasonaCevir(x, null, op, true), cevrimdeParca(a) > 1 ? `Dış üretime alındı; çevrimde parça ${String(cevrimdeParca(a))} → 1` : 'Dış üretime alındı'); }}>
           <b>Dış üretim (fason)</b>
         </button>
       </div>

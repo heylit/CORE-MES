@@ -18,12 +18,25 @@ const ESLESME = {
 
 const zamanAraligi = (i: Is) => `${gunSaatMetni(i.baslangic)} – ${i.bitis === null ? 'sürüyor' : gunSaatMetni(i.bitis)}`;
 
-const sutunlar: Sutun<Is>[] = [
+// 3814 a: emir adımı 1 derken tezgâh ayarı daha büyükse adım büyük olasılıkla girilmemiştir; adet k kat eksik sayılır (Risk notu).
+const cevrimUyarisi = (i: Is, tezgahK: number): string | null =>
+  i.cevrimdeParcaKaynagi === 'emir' && i.cevrimdeParca === 1 && tezgahK > 1 ? `tezgâhta ${String(tezgahK)}` : null;
+
+const sutunlar = (tezgahK: number): Sutun<Is>[] => [
   { anahtar: 'is', baslik: 'İş emri · OP', mono: true, kirilmaz: true, hucre: (i) => (i.isEmriNo === null ? YOK : <Kirilmaz>{`${i.isEmriNo} · OP ${i.op ?? YOK}`}</Kirilmaz>) },
   { anahtar: 'zaman', baslik: 'Başlangıç – bitiş', kirilmaz: true, hucre: zamanAraligi },
   {
     anahtar: 'cevrim', baslik: 'Çevrimde parça', hizala: 'sag', kirilmaz: true,
-    hucre: (i) => <span title={i.cevrimdeParcaKaynagi === 'emir' ? 'İş emri adımından' : 'Tezgâh eşlemesinden (iş emri adımı yok)'}>{i.cevrimdeParca} <span className="tc-tzb-alt">{i.cevrimdeParcaKaynagi === 'emir' ? 'emir' : 'tezgâh'}</span></span>,
+    hucre: (i) => {
+      const uyari = cevrimUyarisi(i, tezgahK);
+      return (
+        <>
+          <span className="tc-tzb-kirilmaz">{i.cevrimdeParca}</span>
+          <span className="tc-tzb-alt tc-tzb-not-satir">{i.cevrimdeParcaKaynagi === 'emir' ? 'emir adımı' : 'tezgâh ayarı (adım yok)'}</span>
+          {uyari !== null && <span className="tc-tzb-alt tc-tzb-eski tc-tzb-not-satir" title="Tezgâh ayarı 1'den büyük, emir adımı 1: rota adımında çevrimde parça girilmemiş olabilir; adet eksik sayılır."><Simge ad="flag" boyut="k" /><span>{uyari}</span></span>}
+        </>
+      );
+    },
   },
   {
     anahtar: 'tezgah', baslik: 'Tezgâh adedi', hizala: 'sag', kirilmaz: true, kartTamSatir: true,
@@ -89,7 +102,7 @@ function MakineSayimi({ m }: { m: Makine }) {
   return (
     <section className="tc-tzb-bolum" aria-label={makineMetni(m.makine, m.cihazAdi)}>
       <h3 className="tc-tzb-bolum-baslik"><Kirilmaz>{makineMetni(m.makine, m.cihazAdi)}</Kirilmaz><span className="tc-tzb-alt">Tezgâh ayarı: çevrimde {m.cevrimdeParca} parça</span></h3>
-      <Tablo etiket={`${m.cihazAdi} işleri`} sutunlar={sutunlar} satirlar={m.isler} satirAnahtari={(i) => i.baslangic} bosMesaj="Pencerede bu makinede terminalde açılmış iş yok." />
+      <Tablo etiket={`${m.cihazAdi} işleri`} sutunlar={sutunlar(m.cevrimdeParca)} satirlar={m.isler} satirAnahtari={(i) => i.baslangic} bosMesaj="Pencerede bu makinede terminalde açılmış iş yok." />
       <ProgramKullanimi m={m} />
     </section>
   );

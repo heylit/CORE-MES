@@ -195,7 +195,8 @@ export async function durus(db: Db, ad: DenemePenceresi, simdi = Date.now()): Pr
 }
 
 // Performans: işlerin standart süresi (terminal sayımının standart saniyesinden adet başına) × tezgâh adedi / çalışma. Kalite: terminal
-// sağlam / (sağlam + hurda + red).
+// sağlam / (sağlam + hurda + red). Standart çevrim, gerçek çevrim gibi çevrim başınadır: toplam standart süre / çevrim sayısı
+// (çevrim = tezgâh adedi / çevrimde parça).
 export async function oee(db: Db, kullanici: Kullanici, ad: DenemePenceresi, simdi = Date.now()): Promise<TezgahOeeCevabi> {
   const b = await baglamKur(db, ad, simdi);
   const eksikler: string[] = [];
@@ -217,7 +218,7 @@ export async function oee(db: Db, kullanici: Kullanici, ad: DenemePenceresi, sim
     const calismaSaniye = plan === null ? Math.round(sure(calisma) / 1000) : Math.round(sure(calisma.flatMap((p) => kes(plan, p))) / 1000);
     const isler = isSayimiOku(b, c);
     const sayimlar = b.sayimlar.get(c.cihazAdi) ?? [];
-    let standart = 0, standartCevrimToplami = 0, standartli = false, adet = 0;
+    let standart = 0, standartli = false, cevrimSayisi = 0;
     const isAraliklari = b.isler.get(c.cihazAdi) ?? [];
     isler.forEach((x, n) => {
       const ia = isAraliklari[n]!;
@@ -227,8 +228,7 @@ export async function oee(db: Db, kullanici: Kullanici, ad: DenemePenceresi, sim
       const stdSn = ss.reduce((t, y) => t + y.standartSaniye, 0);
       if (sureli > 0 && x.tezgahAdedi !== null) {
         standart += (stdSn / sureli) * x.tezgahAdedi;
-        standartCevrimToplami += (stdSn / sureli) * x.cevrimdeParca * x.tezgahAdedi;
-        adet += x.tezgahAdedi;
+        cevrimSayisi += x.tezgahAdedi / x.cevrimdeParca;
         standartli = true;
       }
     });
@@ -237,7 +237,7 @@ export async function oee(db: Db, kullanici: Kullanici, ad: DenemePenceresi, sim
     const performans = standartli ? bolum(standart, calismaSaniye) : null;
     const kalite = bolum(saglam, toplam);
     const gercek = gercekCevrim(b.artis.get(c.cihazAdi) ?? []);
-    const standartCevrim = standartli && adet > 0 ? standartCevrimToplami / adet : null;
+    const standartCevrim = standartli && cevrimSayisi > 0 ? standart / cevrimSayisi : null;
     let hiz: number | null = null;
     if (gecmisBasi < b.aralik.bit) {
       const kimlikler = (await s.tanimlariGetir(db, c.cihazAdi)).filter((t) => t.tur === 'PathFeedrateOverride' && (t.altTur === null || t.altTur === 'PROGRAMMED')).map((t) => t.kimlik);

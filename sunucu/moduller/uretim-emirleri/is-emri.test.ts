@@ -1055,6 +1055,18 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.deepEqual(sonuc.degisenler, ['OP 20 güncellendi (kaynak; istasyon; hazırlık 10 dk → 25 dk; birim süre 1,5 dk → 2,25 dk)']);
   });
 
+  test('3814 a emirlere uygula: bekleyen iş emrinde çevrimde parça rotadan güncellenir ve değişiklik listesine yazılır', async () => {
+    const { uretimEmriId: id } = await ac([adim(1, null), adim(2, null)]);
+    const k = async () => (await o().sahip.sorgu<{ k: number }>(
+      'SELECT cevrimde_parca AS k FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira', [id])).map((x) => x.k);
+    assert.deepEqual(await k(), [1, 1]);
+    const sonuc = await o().vt.tx((db) => isEmirleriniYenile(db, kim('planlama_proje'), id, {
+      kaynakRotaRevizyonId: rev2, isEmirleri: [adim(1, null), adim(2, null, { cevrimdeParca: 3 })],
+    }));
+    assert.deepEqual(sonuc.degisenler, ['OP 20 güncellendi (çevrimde parça 1 → 3)']);
+    assert.deepEqual(await k(), [1, 3]);
+  });
+
   test('279 a: iş emri silinince canlı plan satırı ve parçaları da silinir; kalan iş emrinin plan satırı kalır', async () => {
     const mk = { tur: 'makine' as const, id: await makineKur(await istasyonKur()) };
     const { uretimEmriId: id, isEmriIdleri } = await ac([adim(1, mk), adim(2, mk)]);

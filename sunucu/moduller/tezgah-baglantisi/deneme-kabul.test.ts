@@ -159,6 +159,7 @@ describe('Deneme sayfası kabul senaryosu (kart 3811, gerçek PostgreSQL)', () =
   let yoneticiId = 0;
   let parcaNo = '';
   let emirNo = '';
+  let ilkIsEmri = 0;
   const simdi = Date.parse('2026-04-11T12:00:00+03:00');
   const o = (): TestVeritabani => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
@@ -200,6 +201,7 @@ describe('Deneme sayfası kabul senaryosu (kart 3811, gerçek PostgreSQL)', () =
     }));
     const emir = (await ortam.sahip.tek<{ no: string; parca: string }>('SELECT emir_no AS no, parca_no AS parca FROM uretim_emri WHERE id = $1', [e]))!;
     emirNo = emir.no;
+    ilkIsEmri = i1!;
     parcaNo = emir.parca;
     const kullanim = (isEmriId: number, bas: string, bit: string) => ortam!.sahip.sorgu(
       `INSERT INTO uretim_emirleri_makine_kullanimi (emir_id, is_emri_id, istasyon_id, makine_id, kisi_id, baslama, bitis, kapatan_id)
@@ -286,5 +288,22 @@ describe('Deneme sayfası kabul senaryosu (kart 3811, gerçek PostgreSQL)', () =
     assert.deepEqual([olcut.get('esleme')?.tamam, olcut.get('is-eslesmesi')?.tamam, olcut.get('uyusmazlik')?.tamam, olcut.get('uyusmazlik')?.neden, g.hazir],
       [true, true, false, 'NC program alanı yok; ölçülemiyor', false]);
     assert.equal(olcut.get('sayac-farki')?.tamam, false, 'iki kapanan iş üçten az');
+  });
+
+  test('3814 a: çevrimde parça 2 ve 1 olan iki işte standart çevrim çevrim başına ağırlıklı ortalamadır', async () => {
+    await o().sahip.sorgu('UPDATE uretim_emirleri_is_emri SET cevrimde_parca = 2 WHERE id = $1', [ilkIsEmri]);
+    try {
+      const [sy, oe] = await o().vt.tx(async (db) => [
+        tezgahSayimCevabi.parse(await deneme.sayim(db, 'dun', simdi)),
+        tezgahOeeCevabi.parse(await deneme.oee(db, yonetici, 'dun', simdi)),
+      ] as const);
+      const m = sy.makineler.find((x) => x.cihazAdi === 'ORN-T1')!;
+      assert.deepEqual(m.isler.map((i) => [i.tezgahAdedi, i.cevrimdeParca, i.cevrimdeParcaKaynagi]), [[46, 2, 'emir'], [3, 1, 'emir']]);
+      const oo = oe.makineler.find((x) => x.cihazAdi === 'ORN-T1')!;
+      // İş 1: 23 çevrim x 2 parça x 60 sn; iş 2: 3 çevrim x 1 parça x 60 sn; (2760 + 180) / 26 çevrim.
+      assert.ok(Math.abs((oo.standartCevrimSaniye ?? 0) - 2940 / 26) < 1e-6, String(oo.standartCevrimSaniye));
+    } finally {
+      await o().sahip.sorgu('UPDATE uretim_emirleri_is_emri SET cevrimde_parca = 1 WHERE id = $1', [ilkIsEmri]);
+    }
   });
 });

@@ -1703,7 +1703,10 @@ export async function reworkAdimiYaz(db: Db, kullanici: Kullanici, emirId: numbe
     terminGun: r.terminGun, bagimlilik: adim.bagimlilik, devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
   };
   girdiDenetle([girdi]);
-  await bekleyeniGuncelle(db, adim.id, { ...(await yaziyaCevir(db, girdi, adim.sira, await tipKimlikleri(db))), tur: 'rework', ekAciklama: r.aciklama ?? adim.ekAciklama });
+  // Rework aynı adımı yeniden işler: bağlama (çevrimde parça) adımınki kalır (3814 a).
+  await bekleyeniGuncelle(db, adim.id, {
+    ...(await yaziyaCevir(db, girdi, adim.sira, await tipKimlikleri(db))), tur: 'rework', ekAciklama: r.aciklama ?? adim.ekAciklama, cevrimdeParca: adim.cevrimdeParca,
+  });
   if ((await s.surumArtir(db, emirId, e.surum)) === null) throw eskiSurum();
   await siradakiIstasyonuYaz(db, emirId);
   await isEmirleriDegistiBildir(db, { uretimEmriId: emirId, kisiId });
@@ -1826,7 +1829,8 @@ export async function rotasizAdimDuzenle(db: Db, kullanici: Kullanici, id: numbe
   const eskiBilesenler = await s.bilesenleriGetir(db, [i.id]);
   const aciklama = g.aciklama !== undefined ? g.aciklama || null : i.ekAciklama;
   // Güncelleme adayları, bileşenleri ve kontrol listesini siler; verilmeyenler yeniden yazılır (rotasız adımda aday ve liste yoktur).
-  await bekleyeniGuncelle(db, i.id, await rotasizAdimYazisi(db, yeni, i.sira, aciklama));
+  // Rotasız adım düzenlemesi çevrimde parçayı taşımaz: kayıtlı değer kalır (3814 a).
+  await bekleyeniGuncelle(db, i.id, { ...(await rotasizAdimYazisi(db, yeni, i.sira, aciklama)), cevrimdeParca: i.cevrimdeParca });
   if (i.tur === 'ek') await s.isEmriEkAciklamasiYaz(db, i.id, aciklama);
   if (g.bilesenler !== undefined) await bilesenleriYaz(db, i.id, g.bilesenler);
   else for (const b of eskiBilesenler) await s.bilesenEkle(db, i.id, b);
