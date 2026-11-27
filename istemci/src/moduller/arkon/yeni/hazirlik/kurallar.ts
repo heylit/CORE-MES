@@ -429,12 +429,13 @@ export interface TakipSatiri {
 export interface TakipEmri { anahtar: string; no: string; urun: string; rev: string; acil: boolean; termin: string; dilimler: AdimDilimi[]; biten: number; satirlar: TakipSatiri[]; bekletme: string | null }
 // 3606-2: tek liste. Durum süzgeci paketin durumu (Açık, Terminalde, Bitenler), hazırlık durumu (Durur, Uyarılı) ya da paketsiz adımdır.
 // Durur ve Uyarılı açık işlerin hazırlığına göre süzülür; bu hesap hazırlık cevabını ister ve TakipTablosu'nda yapılır (ek süzgeç).
-export type TakipSuzgeci = 'acik' | 'durur' | 'uyari' | 'yayinda' | 'paketsiz' | 'bitti';
+export type TakipSuzgeci = 'acik' | 'durur' | 'uyari' | 'kmBagsiz' | 'yayinda' | 'paketsiz' | 'bitti';
 export const TAKIP_SUZGECLERI: readonly (readonly [TakipSuzgeci, string])[] = [
-  ['acik', 'Açık işler'], ['durur', 'Durur'], ['uyari', 'Uyarılı'], ['yayinda', 'Terminalde'], ['paketsiz', 'Paket yok'], ['bitti', 'Bitenler'],
+  ['acik', 'Açık işler'], ['durur', 'Durur'], ['uyari', 'Uyarılı'], ['kmBagsiz', 'Plan bağsız'], ['yayinda', 'Terminalde'], ['paketsiz', 'Paket yok'], ['bitti', 'Bitenler'],
 ];
 const SUZGEC_DURUMLARI: Readonly<Record<Exclude<TakipSuzgeci, 'paketsiz'>, readonly PaketDurumu[]>> = {
   acik: ['draft', 'review', 'published', 'production'], durur: ['draft', 'review', 'published', 'production'], uyari: ['draft', 'review', 'published', 'production'],
+  kmBagsiz: ['draft', 'review', 'published', 'production'],
   yayinda: ['published', 'production'], bitti: ['done'],
 };
 export const takipSuzgeciOku = (d: unknown): TakipSuzgeci => (TAKIP_SUZGECLERI.some(([k]) => k === d) ? d as TakipSuzgeci : 'acik');

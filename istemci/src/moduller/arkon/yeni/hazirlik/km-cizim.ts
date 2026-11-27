@@ -112,6 +112,47 @@ const KM_BOS_KISA: Readonly<Record<KmBosNedeni, string>> = { resimsiz: 'parçan�
 export const kmTopluPlani = (hedefler: readonly Pkg[], veri: ReadonlyMap<number, KmParcaVerisi>): KmTopluSatiri[] =>
   hedefler.map((hedef) => ({ hedef, ...kmTopluNedeni(hedef, typeof hedef.malzemeNo === 'number' ? veri.get(hedef.malzemeNo) : undefined) }));
 
+// 3795 (3689-2 a): plan Kalite Merkezi'ne bağlı sayılır ancak her satırı bir balonu taşıyorsa (sunucu km-plan-ceviri.ts `kmPlaniBagli` ile aynı).
+export const kmPlaniBagli = (plan: readonly PlanItem[]): boolean =>
+  plan.every((x) => typeof x['kmBalon'] === 'number' && Number.isSafeInteger(x['kmBalon']) && (x['kmBalon'] as number) > 0);
+// Planı dolu ama Kalite Merkezi'ne (tam) bağlı olmayan paket: takip tablosunda işaretlenir, "Kalite Merkezi'nden yenile" bunları değiştirir.
+export const kmPlanBagsiz = (p: Readonly<Pick<Pkg, 'malzemeNo' | 'plan'>>): boolean => kmSahibi(p) && p.plan.length > 0 && !kmPlaniBagli(p.plan);
+
+// Önizleme: balon numarası (plan maddesi kimliği) üzerinden eski ve yeni satır; ölçü nominal ve sınırlarıyla yazılır.
+export interface KmPlanFarki { eski: number; yeni: number; degisen: { no: number; once: string | null; sonra: string | null }[] }
+const olcuMetni = (x: PlanItem): string => (x.gauge || (x.min === 0 && x.max === 0) ? `${x.nom} (mastar)` : `${x.nom} [${String(x.min)} … ${String(x.max)}]`);
+export function kmPlanFarki(eski: readonly PlanItem[], yeni: readonly PlanItem[]): KmPlanFarki {
+  const once = new Map(eski.map((x) => [x.id, olcuMetni(x)]));
+  const sonra = new Map(yeni.map((x) => [x.id, olcuMetni(x)]));
+  const nolar = [...new Set([...once.keys(), ...sonra.keys()])].sort((a, b) => a - b);
+  return {
+    eski: eski.length, yeni: yeni.length,
+    degisen: nolar.flatMap((no) => { const a = once.get(no) ?? null, b = sonra.get(no) ?? null; return a === b ? [] : [{ no, once: a, sonra: b }]; }),
+  };
+}
+
+// 3795: toplu "Kalite Merkezi'nden yenile". Yalnız taslak, dolu ve bağsız plan; tek aday balonlu resim gerekir. Elle girilmiş plan ('el')
+// listede ayrıca durur ve yalnız açık onayla değişir; yayındaki paket atlanır (terminaldeki iş sessizce değişmesin).
+export interface KmYenileSatiri { hedef: Pkg; resim: KmResim | null; neden: string | null; elle: boolean; fark: KmPlanFarki | null }
+export function kmYenileNedeni(p: Readonly<Pkg>, veri: KmParcaVerisi | undefined): Omit<KmYenileSatiri, 'hedef'> {
+  const elle = otoKaynakOku(p, 'plan')?.kaynak === 'el';
+  const yok = (neden: string) => ({ resim: null, neden, elle, fark: null });
+  if (!kmSahibi(p)) return yok('paket malzeme kartına bağlı değil');
+  if (p.plan.length === 0) return yok('kontrol planı boş; “Kalite Merkezi’nden doldur” kullanın');
+  if (kmPlaniBagli(p.plan)) return yok('zaten Kalite Merkezi’ne bağlı');
+  if (p.status !== 'draft') return yok('yayında; terminaldeki iş değişmesin diye atlandı, önce geri çekin');
+  if (veri === 'yetkisiz') return yok('Kalite Merkezi’ni okuma yetkisi yok');
+  if (veri === 'hata') return yok('Kalite Merkezi okunamadı');
+  if (veri === undefined || veri === 'bekliyor') return yok('Kalite Merkezi okunuyor');
+  const adaylar = kmAdayResimleri(veri.resimler);
+  if (adaylar.length > 1) return yok(`balonlu ${String(adaylar.length)} resim var, önce resmi seçin`);
+  if (adaylar.length === 0) return yok(KM_BOS_KISA[etkinResimler(veri.resimler).some((r) => r.eski !== true && r.tur === 'resim') ? 'balonsuz' : 'resimsiz']);
+  const resim = adaylar[0]!;
+  return { resim, neden: null, elle, fark: kmPlanFarki(p.plan, kmPlani(resim, typeof p.tmi?.opNo === 'number' ? p.tmi.opNo : null)) };
+}
+export const kmYenilePlani = (hedefler: readonly Pkg[], veri: ReadonlyMap<number, KmParcaVerisi>): KmYenileSatiri[] =>
+  hedefler.map((hedef) => ({ hedef, ...kmYenileNedeni(hedef, typeof hedef.malzemeNo === 'number' ? veri.get(hedef.malzemeNo) : undefined) }));
+
 // Hedef paket Kalite Merkezi'nden dolduysa benzer paketin resmi ve planı varsayılan olarak alınmaz (üzerine yazılır).
 export const kmDolduruldu = (p: Readonly<Record<string, unknown>>): boolean => kmBagi(p) !== null;
 

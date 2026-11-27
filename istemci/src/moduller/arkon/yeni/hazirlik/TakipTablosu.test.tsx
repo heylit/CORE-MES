@@ -14,8 +14,8 @@ const paket = (id: string, no: string, opNo: number, isEmriId: number): Pkg => (
   due: '', priority: 'normal', material: '', note: '', files: [], primary: null, plan: [], steps: [], status: 'published', version: 1, dirty: false,
   createdAt: 1, updatedAt: 2, by: 'ORN', publishedAt: 2, tmi: { emirId: 7, isEmriId, opNo },
 } as Pkg);
-function kur(d: Deneme, ek: string, perms?: unknown, ozet?: unknown) {
-  const a = paket(`tmi-ie-${ek}1`, `ORN-UE-${ek}`, 10, 1), b = paket(`tmi-ie-${ek}2`, `ORN-UE-${ek}`, 20, 2);
+function kur(d: Deneme, ek: string, perms?: unknown, ozet?: unknown, ekA: Partial<Pkg> = {}) {
+  const a = { ...paket(`tmi-ie-${ek}1`, `ORN-UE-${ek}`, 10, 1), ...ekA } as Pkg, b = paket(`tmi-ie-${ek}2`, `ORN-UE-${ek}`, 20, 2);
   const istekler = sunucuKur(d, {
     belgeler: {
       pkgs: [a, b].map((p) => ({ kimlik: p.id, surum: 1, govde: p })),
@@ -60,6 +60,17 @@ describe('3111 Hazırlık takip tablosu', () => {
     fireEvent.click(cip);
     const d = await screen.findByRole('region', { name: 'İş paketi' }, { timeout: 10000 });
     expect(within(d).getByRole('button', { name: /Terminale gönder/ }).getAttribute('aria-current')).toBe('step');
+  }, 40000);
+
+  it('3795: Kalite Merkezi’ne bağsız planlı paket işaretlenir; işaret "Plan bağsız" süzgecini açar', async () => {
+    kur(YONETICI, 'K', undefined, undefined, { malzemeNo: 5, plan: [{ id: 1, nom: '4.7', min: 4.6, max: 4.8 }] } as Partial<Pkg>);
+    const t = await tablo();
+    const g = screen.getByRole('group', { name: 'İş durumu' });
+    expect(await within(g).findByRole('button', { name: /^Plan bağsız 1$/ }, { timeout: 10000 })).toBeTruthy();
+    fireEvent.click(within(t).getByRole('button', { name: /kontrol planı Kalite Merkezi’ne bağlı değil/ }));
+    expect(within(g).getByRole('button', { name: /^Plan bağsız/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(t).getByRole('button', { name: /^Op 10/ })).toBeTruthy();
+    expect(within(t).queryByRole('button', { name: /^Op 20/ })).toBeNull();
   }, 40000);
 
   it('3606-2: durum çipleri sayılı; Durur yalnız durduran maddesi eksik işi gösterir', async () => {
