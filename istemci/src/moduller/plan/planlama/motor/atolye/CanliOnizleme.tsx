@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CanliyaAlOnizlemesiCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
+import { OnayPenceresi, Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../../../ortak/veri/api.ts';
 import { useEmirNo } from '../../ortak/emir-no.ts';
 import { altEkranAdresi, type PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { kisitAdi, saatYaz, simdiSaati, type OkunanPlan } from '../kurallar.ts';
-import { adimAdi, careCumlesi, gunSaat, itilenSatiri, kaydirmaDugmesi, kaydirmaIsleri, kapaliListeFarkli, KaydirmaHatasi, oneriYokMetni, kilitleriKaydir, komsuAdi, komsuKilitKaymalari, nedenCumlesi, yazilanOneri, type Ihlal, type OnizlemeDurumu } from './canli-onizleme.ts';
+import { adimAdi, careCumlesi, gunSaat, itilenSatiri, kaydirmaDugmesi, kaydirmaIsleri, kapaliListeFarkli, KaydirmaHatasi, kilidiKaldir, kilitCakismasiAyir, kilitCakismasiIsi, kilitCakismasiNedeni, oneriYokMetni, kilitleriKaydir, komsuAdi, komsuKilitKaymalari, nedenCumlesi, yazilanOneri, type Ihlal, type OnizlemeDurumu } from './canli-onizleme.ts';
 
 // 3669: onay sayfasında gönderme öncesi iki parça. Kalıcı satır: kapalı kısıt varken plan o kısıtları saymadan çözülür (canlıya çıkacak saatler
 // de öyle). Uyarı kartı: sunucunun yazacağı yerleşimde sıraya aykırı adım varsa gönderilmeden önce söyler; kilitli adım için kaydırma önerir
@@ -85,6 +85,75 @@ function Oneri({ oneri, yaklasik = false }: { oneri: NonNullable<CanliyaAlOnizle
   );
 }
 
+// 3793-2 (madde 8): kilitli adım canlıda yerinde kalan işle üst üste. Düğme kendiliğinden bir şey yapmaz; onay penceresi ne olacağını söyler.
+// Taşıma Kokpit'in taşıma komutuyla gider (kilitli kalır, ardılları gerekiyorsa itilir), kaldırma kayıtlı çalışmada tek adımdır; ikisi de Geri al ile döner.
+function KilitCakismasiKarti({ o, c, ileti, emirNo }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; ileti: string; emirNo: (id: string) => string }) {
+  const { bildir } = useBildirim();
+  const [onay, setOnay] = useState<'tasi' | 'kaldir' | null>(null);
+  const [gidiyor, setGidiyor] = useState(false);
+  const [yapildi, setYapildi] = useState<string | null>(null);
+  const x = kilitCakismasiAyir(ileti);
+  const komut = o.komut;
+  const kilitYetkisi = o.yetki.islemVar('plan.kilitle');
+  const isi = x === null ? null : kilitCakismasiIsi(c, x, emirNo, simdiSaati(c, Date.now()));
+  if (x === null) return null;
+  const ad = `${x.emirNo} ${adimAdi(x)}`;
+  const saat = isi === null ? '' : saatYaz(c.D, isi.S);
+  const kapali = gidiyor || komut === null || isi === null || !kilitYetkisi;
+  const tasi = async (): Promise<void> => {
+    if (komut === null || isi === null) return;
+    setGidiyor(true);
+    try {
+      await kilitleriKaydir(komut, c, [isi], 'Kilit çakışan işin arkasına alındı');
+      setYapildi(`${ad} ${saat} saatine taşındı ve kilitli; sıra denetimi yeniden yapılıyor.`);
+      bildir('tamam', `${ad} çakışan işin arkasına alındı; plan yeniden diziliyor.`);
+      o.yenile();
+    } catch (h) { bildir('hata', h instanceof KaydirmaHatasi ? h.message : hataIletisi(h, 'Kilit taşınamadı; sayfayı yenileyip yeniden deneyin.')); } finally { setGidiyor(false); }
+  };
+  const kaldir = (): void => {
+    if (komut === null || isi === null) return;
+    if (kilidiKaldir(komut, isi.k, ad)) { setYapildi(`${ad} kilidi kaldırıldı; plan yeniden dizilince sıra denetimi yapılır.`); bildir('tamam', `${ad} kilidi kaldırıldı; Geri al ile döner.`); }
+    else bildir('hata', 'Kilit kaldırılamadı; plan bu arada değişti.');
+  };
+  const geriAl = (): void => {
+    if (komut?.geriAl()) { setYapildi(null); bildir('tamam', 'Geri alındı.'); } else bildir('hata', 'Geri alınamadı; plan bu arada değişti.');
+  };
+  return (
+    <div className="tc-pym-pa-ihlal-kart" role="group" aria-label="Kilit çakışması">
+      <h3><Simge ad="lock" boyut="k" />{' Canlıya alınamıyor: kilitli adım yerinde kalan işle üst üste'}</h3>
+      <p className="tc-pym-pa-kucuk">{`${ad} kilitli saatinde ${x.kaynak} üzerinde ${kilitCakismasiNedeni(x)}`}</p>
+      {yapildi === null ? (
+        <div className="tc-pym-pa-dugmeler">
+          <button type="button" className="tc-dugme tc-dugme-birincil" disabled={kapali} onClick={() => { setOnay('tasi'); }}>
+            <Simge ad="clock" boyut="k" />{isi === null ? 'Arkasına al' : `Arkasına al (${saat})`}
+          </button>
+          <button type="button" className="tc-dugme" disabled={kapali} onClick={() => { setOnay('kaldir'); }}><Simge ad="lock" boyut="k" />Kilidi kaldır</button>
+          {!kilitYetkisi && <span className="tc-pym-pa-kucuk">Kilidi taşımak ya da kaldırmak plan kilitleme yetkisi ister.</span>}
+          {kilitYetkisi && isi === null && <span className="tc-pym-pa-kucuk">{"Bu kilit Kokpit çalışmasında bulunamadı; Kokpit'te elle taşıyın."}</span>}
+        </div>
+      ) : (
+        <p className="tc-pym-pa-kucuk" role="status">
+          <Simge ad="check" boyut="k" />{` ${yapildi} `}
+          {komut?.geriAlinabilir() === true && <button type="button" className="tc-dugme tc-pym-kucuk" onClick={geriAl}><Simge ad="back" boyut="k" />Geri al</button>}
+        </p>
+      )}
+      <OnayPenceresi
+        acik={onay !== null} yukleniyor={gidiyor}
+        baslik={onay === 'kaldir' ? `${ad} kilidini kaldır?` : `${adimAdi(x)}'i ${saat} saatine taşı ve kilitli tut?`}
+        onayMetni={onay === 'kaldir' ? 'Kilidi kaldır' : 'Taşı'}
+        vazgec={() => { setOnay(null); }}
+        onayla={() => { const n = onay; setOnay(null); if (n === 'kaldir') kaldir(); else void tasi(); }}
+      >
+        <ul className="tc-pym-pa-oneri">
+          <li>Kokpit çalışmasına yazılır; Geri al ile döner.</li>
+          <li>Sıra denetimi yeniden yapılır; canlıya alma ayrıca onaylanır.</li>
+          <li>{onay === 'kaldir' ? `${adimAdi(x)} plan yeniden dizilince motorun bulduğu yere gider.` : `${adimAdi(x)}'in ardılları gerekiyorsa arkasına itilir.`}</li>
+        </ul>
+      </OnayPenceresi>
+    </div>
+  );
+}
+
 export function CanliOnizleme({ o, c, p, durum, yenidenDene, etkin = true }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; p: OkunanPlan | null; durum: OnizlemeDurumu; yenidenDene: () => void; etkin?: boolean }) {
   const { bildir } = useBildirim();
   const [gidiyor, setGidiyor] = useState(false);
@@ -138,7 +207,8 @@ export function CanliOnizleme({ o, c, p, durum, yenidenDene, etkin = true }: { o
   return (
     <section className="tc-pym-pa-bolum tc-pym-pa-onizleme" aria-label="Sıra denetimi" aria-busy={eski}>
       <KapaliKisitSatiri c={c} sunucu={veri?.kapali ?? null} />
-      {durum.tur === 'hata' && (
+      {durum.tur === 'hata' && kilitCakismasiAyir(durum.ileti) !== null && <KilitCakismasiKarti key={durum.ileti} o={o} c={c} ileti={durum.ileti} emirNo={emirNo} />}
+      {durum.tur === 'hata' && kilitCakismasiAyir(durum.ileti) === null && (
         <p className="tc-pym-pa-kucuk" role="status">
           <Simge ad="alert" boyut="k" />{` Sıra denetimi alınamadı: ${durum.ileti}. Düğmeler denetim yapılana kadar kapalı. `}
           <button type="button" className="tc-dugme tc-pym-kucuk" onClick={yenidenDene}><Simge ad="rotate" boyut="k" />Yeniden dene</button>

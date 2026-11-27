@@ -61,6 +61,7 @@ import { BastanKur } from './BastanKur.tsx';
 import { BastanKurSonucu } from './BastanKurSonucu.tsx';
 import { ilkSecim, kilitIhlaliAyir, type BastanKurKapsami } from './bastan-kur.ts';
 import { KilitIhlali } from './KilitIhlali.tsx';
+import { kilitKaydi, KilitKaydiSatiri } from './KilitKaydi.tsx';
 import './kokpit.css';
 
 // Kokpit (kart 3151, 3282, 3297): planın tek yeri. Gövde yukarıdan aşağı akar (3297 a): 1 sipariş kartları sırasıyla (3297-5 a), 2 seçilen kartın emirleri
@@ -265,6 +266,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // 3600: Baştan kur penceresi; açılış kapsamı menüden gelir (Seçili siparişi baştan kur: o sipariş işaretli).
   // Son baştan kurun kalıcı Geri al satırı (Arayüz Y9): sonraki plan değişikliğine ya da Kapat'a dek durur; kısa ömürlü bildirim yetmez.
   const [sonBastanKur, setSonBastanKur] = useState<{ ileti: string; onceki: number; genis: boolean } | null>(null);
+  // 3793-2: son bırakılan işin istenen saati; Kokpit onu yerinde kalan işin arkasına aldıysa bilgi satırı çıkar (bu taşıma son değişiklikken).
+  const [sonTasima, setSonTasima] = useState<{ isId: string; istenen: number; onceki: number } | null>(null);
   const [kilitIhlaliKapali, setKilitIhlaliKapali] = useState(false);
   const [bastanKur, setBastanKur] = useState<{ kapsam: BastanKurKapsami; secili: string[] } | null>(null);
   // Görünüm ve ölçek seçenekleri bir düğmenin ardındadır (3414); tahta dışı bir görünüm seçiliyken açık durur.
@@ -275,6 +278,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const yazabilir = yetki.planYaz && komut !== null && taslak !== null;
   const uyarYaz = useCallback((ileti: string) => { bildir('bilgi', ileti); }, [bildir]);
   const tOzet = taslakOzeti(taslak?.cevap?.taslak ?? null);
+  const adimRef = useRef(tOzet.n);
+  adimRef.current = tOzet.n;
   const taslakVar = (taslak?.cevap?.taslak ?? null) !== null;
   // Taslak varken (ya da henüz okunmadıysa) ortak çalışma kendiliğinden yeniden dizilmez: taslağın dizmesi bayatlar, kişi kendi planını
   // görürken ortak plan oynar. Sürüm verilmez ki dizme isteği düşmesin; taslak kalkınca çalışır.
@@ -346,7 +351,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     if (yonYaz && a.planaAl !== undefined && !(await taslak.yaz({ tur: 'yon', emirId: a.planaAl, yon: 'geri' }, false))) return false;
     const k: TaslakKomutu = a.planaAl === undefined ? { tur: 'tasi', isId: a.isId, tezgah: a.tezgah, baslangic: a.baslangic }
       : { tur: 'plana-al', emirId: a.planaAl, tezgah: a.tezgah, baslangic: a.baslangic, ...(a.adimlar && a.adimlar.length > 0 ? { adimlar: a.adimlar } : {}) };
+    const onceki = adimRef.current;
     const tamam = await taslak.yaz(k);
+    if (tamam && k.tur === 'tasi') setSonTasima({ isId: k.isId, istenen: k.baslangic, onceki });
     // Yön geri alınamazsa (araya başka değişiklik girdiyse) taslakta kalır; kişiye söylenir.
     if (!tamam && yonYaz && !(await taslak.geriAl(true, false))) bildir('hata', 'Emir yerleştirilemedi; yön değişikliği kaldı. Geri al ile alabilirsiniz.');
     if (tamam && a.planaAl === undefined && grup.current?.bekleyen.has(a.isId)) { grup.current.yazilan += 1; return tamam; }
@@ -833,8 +840,16 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const kilitIhlali = canliHata !== null && !kilitIhlaliKapali ? kilitIhlaliAyir(canliHata) : null;
   const ihlalEmri = kilitIhlali === null ? undefined : m.emirler.find((e) => e.no === kilitIhlali.emirNo);
   const bastanKurSonucu = sonBastanKur !== null && tOzet.n === sonBastanKur.onceki + 1 && !tur;
+  const kayanKilit = sonTasima !== null && tOzet.n === sonTasima.onceki + 1 && !tur && !mesgul ? kilitKaydi(m, sonTasima.isId, sonTasima.istenen) : null;
+  const kayanEmir = kayanKilit === null ? undefined : m.emirler.find((e) => e.id === m.isler[kayanKilit.isId]?.job);
   const sonucCubugu = (guncellemeSonucu && !tur && (
     <GuncellemeSonucu e={guncellemeSonucu} m={m} zaman={zaman} geriAl={komut ? guncellemeyiGeriAl : null} kapat={() => { setGuncelleme(null); }} />
+  )) || (kayanKilit !== null && (
+    <KilitKaydiSatiri
+      k={kayanKilit} m={m} zaman={zaman} tamam={() => { setSonTasima(null); }}
+      kilidiKaldir={kayanEmir && yazabilir && yetki.islemVar('plan.kilitle') ? () => { setSonTasima(null); void yenidenPlanla([kayanEmir.id], `${kayanEmir.no}: kilit kaldırılıp yeniden dizildi.`, true); } : null}
+      geriAl={mesgul ? null : () => { setSonTasima(null); geri(); }}
+    />
   )) || (kilitIhlali !== null && canliHata !== null && !tur && (
     <KilitIhlali
       ileti={canliHata} emirNo={kilitIhlali.emirNo} kilitYetkisi={yetki.islemVar('plan.kilitle')} kapat={() => { setKilitIhlaliKapali(true); }}
