@@ -40,7 +40,7 @@ export interface TaslakDenetimi {
 export function taslakHatasi(t: TaslakDenetimi): string | null {
   if (t.yeni) {
     const op = sayi(t.opNo);
-    if (op === null) return 'Rota operasyon no girilmeli.';
+    if (op === null) return 'Operasyon seçilmeli.';
     if (!Number.isInteger(op) || op <= 0) return 'Rota operasyon no 0\'dan büyük tam sayı olmalı.';
   }
   const baslangic = sayi(t.baslangicSirasi);

@@ -8,7 +8,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { aramaSade, basDeseni, icindeDeseni, KAYIT_TURLERI } from '#paylasilan/kayit-aramasi.ts';
 import { kayitYoluMu } from '#paylasilan/sayfa-tanimi.ts';
-import { birimAyrintisiCevabi, birimSemasi, emirOzetiCevabi, tanimSemasi } from '#paylasilan/sozlesme/markalama.ts';
+import { birimAyrintisiCevabi, birimSemasi, emirAraCevabi, emirOzetiCevabi, isTanimiCevabi, operasyonlarCevabi, tanimSemasi } from '#paylasilan/sozlesme/markalama.ts';
 import type { MarkalamaBirimi, MarkalamaTanimi } from '#paylasilan/sozlesme/markalama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -98,10 +98,10 @@ describe('markalama (gerçek PostgreSQL)', () => {
     return b;
   }
 
-  async function emirAc(malzemeNo: number): Promise<number> {
+  async function emirAc(malzemeNo: number, harf = 'ZZ'): Promise<number> {
     const revizyonId = (await o().sahip.tek<{ id: number }>(
-      "INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme) VALUES ($1, 'mamul', 'ZZ', 'iptal', $2, $2, now()) RETURNING id",
-      [malzemeNo, yoneticiId]))!.id;
+      "INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme) VALUES ($1, 'mamul', $3, 'iptal', $2, $2, now()) RETURNING id",
+      [malzemeNo, yoneticiId, harf]))!.id;
     const makineId = await makineKur();
     return o().vt.tx(async (db) => {
       const k = await kullaniciYukle(db, yoneticiId);
@@ -115,6 +115,17 @@ describe('markalama (gerçek PostgreSQL)', () => {
       });
       return e.uretimEmriId;
     });
+  }
+
+  // 3755: emre parçanın çizim revizyonu sabitlenir (kod Belge Merkezi'nin gösterdiği biçimde, "Rev B" gibi).
+  async function emreRevizyonSabitle(emirId: number, malzemeNo: number, kod: string): Promise<void> {
+    const ozet = randomUUID().replaceAll('-', '').padEnd(64, '0');
+    await o().sahip.sorgu("INSERT INTO dosya (ozet, boyut, tur, ilk_yukleyen_id) VALUES ($1, 1, 'pdf', $2)", [ozet, yoneticiId]);
+    const belge = await malzemeBelgesi(malzemeNo);
+    const rev = (await o().sahip.tek<{ id: number }>(
+      `INSERT INTO belge_merkezi_revizyon (belge_id, sira, ozet, dosya_turu, "not", antet_rev, yukleyen_id) VALUES ($1, 1, $2, 'pdf', NULL, $3, $4) RETURNING id`,
+      [belge, ozet, kod, yoneticiId]))!.id;
+    await o().sahip.sorgu('UPDATE uretim_emri SET parca_revizyon_kodu = $2, parca_cizim_belge_id = $3, parca_cizim_revizyon_id = $4 WHERE id = $1', [emirId, kod, belge, rev]);
   }
 
   const seriAlani = { ad: 'Seri no', icerik: 'seri', yontem: 'lazer', kodTuru: 'datamatrix', yaziYuksekligiMm: 3 };
@@ -555,6 +566,97 @@ describe('markalama (gerçek PostgreSQL)', () => {
     } finally {
       markalamaOperasyonCozucusu(onceki);
     }
+  });
+
+  test('MRK-U17 (3788): emir araması ve emrin adımları; tanım emre özel, emrin revizyonu, revizyonsuz genel sırasıyla seçilir', async () => {
+    const m = await malzemeAc();
+    const e1 = await emirAc(m);
+    const e2 = await emirAc(m, 'ZY');
+    await emreRevizyonSabitle(e1, m, 'Rev B');
+    await emreRevizyonSabitle(e2, m, 'C');
+    const emirNo = (await o().sahip.tek<{ emir_no: string }>('SELECT emir_no FROM uretim_emri WHERE id = $1', [e1]))!.emir_no;
+
+    const ara = await istek('operator', 'GET', `/markalama/emir-ara?metin=${encodeURIComponent(emirNo.toLowerCase())}`);
+    assert.equal(ara.durum, 200, JSON.stringify(ara.govde));
+    const bulunan = emirAraCevabi.parse(ara.govde).emirler;
+    assert.equal(bulunan[0]?.id, e1, 'tam eşleşme önde, harften bağımsız');
+    assert.equal(bulunan[0]?.cizimRevizyonKodu, 'B', 'revizyon gösterim kuralıyla');
+    assert.equal(bulunan[0]?.malzemeId, m);
+    assert.equal((await istek('yetkisiz', 'GET', `/markalama/emir-ara?metin=${emirNo}`)).durum, 403);
+
+    const ops = await istek('operator', 'GET', `/markalama/emirler/${e1}/operasyonlar`);
+    assert.equal(ops.durum, 200, JSON.stringify(ops.govde));
+    assert.deepEqual(operasyonlarCevabi.parse(ops.govde).operasyonlar.map((x) => [x.opNo, x.markalama]), [[40, true]], 'markalama istasyonundaki adım işaretli');
+    assert.equal((await istek('operator', 'GET', '/markalama/emirler/2147483647/operasyonlar')).durum, 404);
+    const mops = await istek('operator', 'GET', `/markalama/malzemeler/${m}/operasyonlar`);
+    assert.equal(mops.durum, 200, JSON.stringify(mops.govde));
+    assert.deepEqual(operasyonlarCevabi.parse(mops.govde).operasyonlar, [], 'yürürlükte rotası olmayan malzemede liste boş');
+    assert.equal((await istek('yetkisiz', 'GET', `/markalama/malzemeler/${m}/operasyonlar`)).durum, 403);
+
+    const is = async (emirId: number) => {
+      const c = await istek('operator', 'GET', `/markalama/emirler/${emirId}/tanim?opNo=40`);
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return isTanimiCevabi.parse(c.govde);
+    };
+    assert.equal((await is(e1)).durum, 'tanim-yok');
+
+    const revC = await tanimAc(m, {}, { seriSablonu: 'C{PARCA}-{SEQ:5}', cizimRevizyonKodu: 'Rev C' });
+    assert.equal(revC.cizimRevizyonKodu, 'C', 'revizyon gösterim kuralıyla saklanır');
+    assert.equal(revC.uretimEmriId, null);
+    const e1Rev = await is(e1);
+    assert.deepEqual([e1Rev.durum, e1Rev.tanim], ['revizyon-tanimi-yok', null], 'başka revizyonun tanımı kullanılmaz');
+    assert.equal((await markala('operator', revC.id, e1)).durum, 422, 'MRK-16: başka revizyonlu emirde seri verilmez');
+    assert.equal((await is(e2)).tanim?.id, revC.id);
+
+    const genel = await tanimAc(m, {}, { seriSablonu: 'G{PARCA}-{SEQ:5}' });
+    assert.equal((await is(e1)).tanim?.id, genel.id, 'revizyonsuz genel geçer');
+    assert.equal((await is(e2)).tanim?.id, revC.id, 'emrin revizyonu genelden önce');
+    const ayniRev = await istek('yonetici', 'POST', '/markalama/tanimlar/ekle', { malzemeId: m, opNo: 40, seriSablonu: 'D{PARCA}-{SEQ}', cizimRevizyonKodu: ' c ', alanlar: [seriAlani] });
+    assert.equal(ayniRev.durum, 409, 'aynı revizyona ikinci tanım, büyük-küçük harf ayırmadan');
+
+    const ozel = await tanimAc(m, {}, { seriSablonu: 'O{PARCA}-{SEQ:5}', uretimEmriId: e1 });
+    assert.deepEqual([ozel.uretimEmriId, ozel.emirNo, ozel.cizimRevizyonKodu], [e1, emirNo, 'B'], 'emre özel tanımın revizyonu emirden');
+    const e1Ozel = await is(e1);
+    assert.deepEqual([e1Ozel.durum, e1Ozel.tanim?.id], ['bulundu', ozel.id]);
+    assert.equal((await is(e2)).tanim?.id, revC.id, 'başka emrin özel tanımı geçmez');
+    assert.equal((await markala('operator', ozel.id, e2)).durum, 422, 'MRK-16: emre özel tanım başka emirde seri vermez');
+    const b = await markala('operator', ozel.id, e1);
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    assert.match(b.govde.seriNo, /^OMK-DNM-/);
+
+    const baskaRev = await istek<{ alan?: string }>('yonetici', 'POST', '/markalama/tanimlar/ekle', {
+      malzemeId: m, opNo: 40, seriSablonu: 'E{PARCA}-{SEQ}', uretimEmriId: e2, cizimRevizyonKodu: 'B', alanlar: [seriAlani],
+    });
+    assert.equal(baskaRev.durum, 400, 'MRK-15: emre özel tanım emrin revizyonundan başkasıyla yazılmaz');
+    assert.equal(baskaRev.govde.alan, 'cizimRevizyonKodu');
+    const baskaMalzeme = await istek<{ alan?: string }>('yonetici', 'POST', '/markalama/tanimlar/ekle', {
+      malzemeId: await malzemeAc(), opNo: 40, seriSablonu: '{PARCA}-{SEQ}', uretimEmriId: e1, alanlar: [seriAlani],
+    });
+    assert.equal(baskaMalzeme.durum, 400);
+    assert.equal(baskaMalzeme.govde.alan, 'uretimEmriId');
+    const ikinciOzel = await istek('yonetici', 'POST', '/markalama/tanimlar/ekle', { malzemeId: m, opNo: 40, seriSablonu: 'F{PARCA}-{SEQ}', uretimEmriId: e1, alanlar: [seriAlani] });
+    assert.equal(ikinciOzel.durum, 409, 'aynı emre aynı operasyonda ikinci tanım');
+
+    // Göç: tekillik veritabanında da revizyonu boşluk ve harften bağımsız karşılaştırır.
+    await assert.rejects(
+      o().sahip.sorgu("UPDATE markalama_tanimi SET cizim_revizyon_kodu = ' c ' WHERE id = $1", [genel.id]),
+      (h: Error & { constraint?: string }) => h.constraint === 'markalama_tanimi_anahtar_tekil',
+    );
+    await assert.rejects(o().sahip.sorgu("UPDATE markalama_tanimi SET cizim_revizyon_kodu = '  ' WHERE id = $1", [genel.id]), /markalama_tanimi_cizim_revizyon_bicimi/);
+  });
+
+  test('MRK-U18 (3788): pasif emre özel tanım genele düşer; tanımsız operasyon tanim-yok, olmayan emir 404', async () => {
+    const m = await malzemeAc();
+    const e = await emirAc(m);
+    const genel = await tanimAc(m);
+    const ozel = await tanimAc(m, {}, { seriSablonu: 'O{PARCA}-{SEQ:5}', uretimEmriId: e });
+    const pasif = await istek('yonetici', 'POST', `/markalama/tanimlar/${ozel.id}/aktiflik`, { aktif: false, surum: ozel.surum });
+    assert.equal(pasif.durum, 200);
+    const c = await istek('operator', 'GET', `/markalama/emirler/${e}/tanim?opNo=40`);
+    assert.equal(isTanimiCevabi.parse(c.govde).tanim?.id, genel.id);
+    assert.equal((await istek('operator', 'GET', `/markalama/emirler/${e}/tanim?opNo=50`)).durum, 200, 'tanımsız operasyon hata değil');
+    assert.equal(isTanimiCevabi.parse((await istek('operator', 'GET', `/markalama/emirler/${e}/tanim?opNo=50`)).govde).durum, 'tanim-yok');
+    assert.equal((await istek('operator', 'GET', '/markalama/emirler/2147483647/tanim?opNo=40')).durum, 404);
   });
 
   test('MRK-U6: birim olay defteri yalnız eklenir', async () => {

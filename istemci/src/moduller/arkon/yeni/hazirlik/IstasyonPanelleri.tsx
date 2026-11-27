@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType, type FormEvent } from 'react';
 import { Dugme, Qr, Simge } from '../../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
-import { useTerminalMarkalama, type TerminalMarkalamaIsi } from '../../../markalama/disari.ts';
+import { IS_TANIMI_YOK_ILETISI, tanimOzeti, useTerminalMarkalama, type TerminalMarkalamaIsi } from '../../../markalama/disari.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { YOK, sayi } from '../cekirdek/bicim.ts';
 import { bip } from '../cekirdek/ses.ts';
@@ -170,10 +170,9 @@ function ToplamaPaneli({ api }: PanelOzellikleri) {
   );
 }
 
-const YONTEMLER: Readonly<Record<string, string>> = { lazer: 'Lazer', damga: 'Damga / nokta vuruş', etiket: 'Etiket' };
 // 2028: seri, sayaç ve doğrulama Markalama modülünün sunucusundadır; panel yalnız görünümü çizer. Arkon iş kaydına (sr) seri
 // yazılmaz; yalnız işin iyi ve hurda sayısı sessizce artar (seri geri alınamaz, sayım da geri alınabilir kayıt olmaz).
-function markalamaIsi(paket: Pkg): TerminalMarkalamaIsi | null {
+export function markalamaIsi(paket: Pkg): TerminalMarkalamaIsi | null {
   const bag = paket.tmi;
   if (!bag || paket.malzemeNo == null || !paket.machine) return null;
   return { uretimEmriId: bag.emirId, opNo: bag.opNo, malzemeId: paket.malzemeNo, istasyonKodu: String(paket.machine) };
@@ -181,7 +180,7 @@ function markalamaIsi(paket: Pkg): TerminalMarkalamaIsi | null {
 const saatMetni = (zaman: string) => new Date(zaman).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 export function MarkaPaneli({ api }: PanelOzellikleri) {
-  const { ayar, paket } = api;
+  const { paket } = api;
   const is = markalamaIsi(paket);
   const m = useTerminalMarkalama(is);
   if (is === null) return <div className="tc-ay2-panel tc-ay2-marka"><p className="tc-ay2-soluk">Bu iş CORE emrine bağlı değil; seri verilmez.</p></div>;
@@ -190,8 +189,12 @@ export function MarkaPaneli({ api }: PanelOzellikleri) {
     return <div className="tc-ay2-panel tc-ay2-marka"><p className="tc-ay2-soluk" role="alert">{hataIletisi(m.okumaHatasi, 'Markalama bilgisi okunamadı.')}</p></div>;
   }
   const v = m.veri;
-  if (v.tanim === null) return <div className="tc-ay2-panel tc-ay2-marka"><p className="tc-ay2-soluk">Bu parça ve operasyon için markalama tanımı yok; seri verilmez.</p></div>;
+  if (v.tanim === null || v.durum !== 'bulundu') {
+    return <div className="tc-ay2-panel tc-ay2-marka"><p className="tc-ay2-soluk" role="alert">{IS_TANIMI_YOK_ILETISI[v.durum === 'bulundu' ? 'tanim-yok' : v.durum]}</p></div>;
+  }
   const tanim = v.tanim;
+  // 3788: yöntem ve yer markalama tanımındandır; Hazırlık'taki eski seri ayarı kullanılmaz.
+  const oz = tanimOzeti(tanim);
   const sn = v.siradakiler[0] ?? null;
   const sonIyi = v.sonSeriler.find((b) => b.durum !== 'hurda') ?? null;
   const markala = (ok: boolean) => {
@@ -219,8 +222,10 @@ export function MarkaPaneli({ api }: PanelOzellikleri) {
           <span className="tc-ay2-ust-yazi">Şimdi markalanacak</span><b className="tc-ay2-mono">{sn ?? YOK}</b>
           <small>Sonraki: <span className="tc-ay2-mono">{v.siradakiler[1] ?? YOK}</span></small>
           <div className="tc-ay2-marka-meta">
-            <Cip ton="done">{YONTEMLER[ayar.method] || ayar.method}</Cip>
-            {ayar.pos ? <span className="tc-ay2-marka-yer"><Simge ad="target" boyut="k" />{ayar.pos}</span> : null}
+            {oz.yontem !== null ? <Cip ton="done">{oz.yontem}</Cip> : null}
+            {oz.revizyon !== null ? <Cip ton="run">{'Rev ' + oz.revizyon}</Cip> : null}
+            {oz.emreOzel ? <Cip ton="hold">Emre özel</Cip> : null}
+            {oz.yer !== null ? <span className="tc-ay2-marka-yer"><Simge ad="target" boyut="k" />{oz.yer}</span> : null}
           </div>
         </div>
         {sn !== null ? <Qr metin={sn} boyut={150} /> : null}
@@ -229,7 +234,7 @@ export function MarkaPaneli({ api }: PanelOzellikleri) {
         <Dugme boyut="ana" simge="check" disabled={kapali} yukleniyor={m.markalaniyor === 'iyi'} onClick={() => markala(true)}>Markalandı</Dugme>
         <Dugme boyut="ana" tur="tehlike" simge="trash" disabled={kapali} yukleniyor={m.markalaniyor === 'hatali'} onClick={() => markala(false)}>Hatalı · hurda</Dugme>
         {tanim.dogrulama ? <Dugme boyut="ana" tur="ikincil" simge="scan" disabled={!m.yazabilir || m.dogrulaniyor} onClick={dogrula}>Doğrula</Dugme> : null}
-        <Dugme boyut="ana" tur="ikincil" simge="download" disabled={sonIyi === null} onClick={() => { if (sonIyi) etiketYazdir([etiketSvg(sonIyi.seriNo, paket, ayar.pos)]); }}>Etiket</Dugme>
+        <Dugme boyut="ana" tur="ikincil" simge="download" disabled={sonIyi === null} onClick={() => { if (sonIyi) etiketYazdir([etiketSvg(sonIyi.seriNo, paket, oz.yer ?? '')]); }}>Etiket</Dugme>
       </div>
       {!m.yazabilir ? <p className="tc-ay2-soluk">Seri vermek için markalama yetkisi gerekir.</p> : null}
       {m.yazabilir && v.istasyonId === null ? <p className="tc-ay2-soluk">Bu terminalin istasyonu bulunamadı; seri yalnız markalama istasyonunda verilir.</p> : null}

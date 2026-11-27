@@ -144,3 +144,34 @@ export function hurdaNedeniHatasi(komut: DurumKomutu, hurdaNedeniId: number | nu
   if (komut !== 'hurda' && hurdaNedeniId !== null) return 'Hurda nedeni yalnız hurda kaydında yazılır.';
   return null;
 }
+
+// MRK-13 (3788): teknik resim revizyon kodu boşluk ve büyük-küçük harf ayırmadan karşılaştırılır ("c" ile "C" aynı revizyondur).
+// Kod servise Üretim Emirleri'nin gösterim kuralıyla ("Rev C" -> "C") gelir; burada yalnız harf büyüklüğü eşitlenir.
+export const revizyonAnahtari = (kod: string | null): string | null => (kod === null ? null : kod.trim().toLocaleUpperCase('tr'));
+
+export interface TanimAdayi { id: number; aktif: boolean; uretimEmriId: number | null; cizimRevizyonKodu: string | null }
+export type TanimSecimi = { durum: 'bulundu'; id: number } | { durum: 'tanim-yok' | 'revizyon-tanimi-yok' };
+
+// MRK-14 (3788): işin tanımı, aynı malzeme ve operasyonun aktif tanımlarından şu sırayla: bu emre özel, emrin teknik resim
+// revizyonuna ait (emre özel olmayan), revizyonsuz genel. Başka revizyonun tanımı kullanılmaz: biçim revizyonla değişebilir.
+// Emrin revizyonu sabitlenmemişse yalnız revizyonsuz genel tanım geçer. Başka revizyona ait aktif tanım varsa neden ayrıdır.
+export function tanimSec(adaylar: readonly TanimAdayi[], emirId: number, emirRevizyonu: string | null): TanimSecimi {
+  const aktif = adaylar.filter((a) => a.aktif && (a.uretimEmriId === null || a.uretimEmriId === emirId));
+  const rev = revizyonAnahtari(emirRevizyonu);
+  const emreOzel = aktif.find((a) => a.uretimEmriId === emirId);
+  if (emreOzel !== undefined) return { durum: 'bulundu', id: emreOzel.id };
+  const genel = aktif.filter((a) => a.uretimEmriId === null);
+  const revizyonlu = rev === null ? undefined : genel.find((a) => revizyonAnahtari(a.cizimRevizyonKodu) === rev);
+  if (revizyonlu !== undefined) return { durum: 'bulundu', id: revizyonlu.id };
+  const revizyonsuz = genel.find((a) => a.cizimRevizyonKodu === null);
+  if (revizyonsuz !== undefined) return { durum: 'bulundu', id: revizyonsuz.id };
+  return { durum: genel.length > 0 ? 'revizyon-tanimi-yok' : 'tanim-yok' };
+}
+
+// MRK-15 (3788): emre özel tanım o emrin malzemesinde açılır ve revizyonu emrin sabitlenmiş revizyonudur; başka revizyon yazılamaz.
+export function emreOzelRevizyonHatasi(govdedeki: string | null, emrinki: string | null): string | null {
+  if (govdedeki === null || revizyonAnahtari(govdedeki) === revizyonAnahtari(emrinki)) return null;
+  return emrinki === null
+    ? 'Bu emre teknik resim revizyonu sabitlenmemiş; emre özel tanım revizyonsuz yazılır.'
+    : `Emrin teknik resim revizyonu ${emrinki}; emre özel tanım başka revizyonla yazılamaz.`;
+}

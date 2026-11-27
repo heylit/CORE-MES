@@ -1,8 +1,13 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Dugme, Qr, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { hataIletisi } from '../../../../ortak/veri/api.ts';
+import { IS_TANIMI_YOK_ILETISI, tanimOzeti, useTerminalMarkalama } from '../../../markalama/disari.ts';
+import { YOK } from '../cekirdek/bicim.ts';
+import { markalamaIsi } from './IstasyonPanelleri.tsx';
 import { aqlPlani } from '../../../../../../arkon/web/src/data/muayene-lotu.ts';
 import { tmiPaketiMi } from '../../../../../../arkon/web/src/data/yeni-paket.ts';
-import { Anahtar, Bolmeli, KartBasligi, Sayi } from './denetimler.tsx';
+import { Bolmeli, KartBasligi, Sayi } from './denetimler.tsx';
 import {
   IS_TURLERI, RAL, depoElleYama, depoKaynakSatiri, depoYenidenUygula, eksikDepoKalemleri, isTuru, istasyonAyari, seriNo, yapistirilanKalemler, yeniKimlik,
   type DepoKalemi, type IstasyonAyari, type MontajKalemi, type TorkAdimi,
@@ -25,8 +30,45 @@ export function TurSecici({ deger, degistir, kilitli }: { deger: OpType; degisti
   );
 }
 
+// 3788: seri numarası, sayaç, yöntem ve yer Markalama modülündeki tanımdandır (emre özel, emrin teknik resim revizyonu, revizyonsuz
+// genel sırasıyla); burada yalnız gösterilir. Eski paket ayarındaki şablon ve başlangıç silinmez, kullanılmaz.
+function MarkalamaTanimiOzeti({ paket }: { paket: Pkg }) {
+  const is = markalamaIsi(paket);
+  const m = useTerminalMarkalama(is === null ? null : { ...is });
+  const v = m.veri;
+  const oz = v?.tanim ? tanimOzeti(v.tanim) : null;
+  return (
+    <div className="tc-ay2-kurallar">
+      <section className="tc-ay2-kart" aria-label="Seri numarası">
+        <KartBasligi simge={<Simge ad="lock" />} ton="hazard" baslik="Seri numarası" aciklama="Markalama tanımından okunur · değiştirmek için tanımı açın" />
+        {is === null ? <p className="tc-ay2-soluk">Bu iş CORE emrine bağlı değil; seri verilmez.</p>
+          : m.okunuyor ? <p className="tc-ay2-soluk">Markalama tanımı okunuyor…</p>
+            : m.okumaHatasi != null || v === undefined ? <p className="tc-ay2-soluk" role="alert">{hataIletisi(m.okumaHatasi, 'Markalama tanımı okunamadı.')}</p>
+              : oz === null ? <p className="tc-ay2-soluk" role="alert">{IS_TANIMI_YOK_ILETISI[v.durum === 'bulundu' ? 'tanim-yok' : v.durum]}</p>
+                : (
+                  <dl className="tc-ay2-tanim-ozeti">
+                    <dt>Tanım</dt><dd>{'OP' + is.opNo}{oz.revizyon !== null ? ' · Rev ' + oz.revizyon : ' · bütün revizyonlar'}{oz.emreOzel ? ' · bu emre özel' : ''}</dd>
+                    <dt>Şablon</dt><dd className="tc-ay2-mono">{oz.sablon}</dd>
+                    <dt>Yöntem</dt><dd>{oz.yontem ?? YOK}</dd>
+                    <dt>Yer</dt><dd>{oz.yer ?? YOK}</dd>
+                  </dl>
+                )}
+        <Link className="tc-ay2-baglanti" to="/markalama"><Simge ad="chev-right" boyut="k" />Tanımı aç</Link>
+      </section>
+      {v && v.siradakiler.length > 0 && (
+        <section className="tc-ay2-kart" aria-label="Önizleme">
+          <KartBasligi simge={<Simge ad="scan" />} ton="run" baslik="Önizleme" aciklama="Sıradaki numaralar · önizleme, ayrılmaz" />
+          <div className="tc-ay2-seri-onizleme">
+            <Qr metin={v.siradakiler[0] ?? ''} boyut={120} />
+            <div>{v.siradakiler.map((n) => <b key={n} className="tc-ay2-mono">{n}</b>)}</div>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
 type Yama = (ch: Partial<Pkg>) => void;
-const SERI_PARCALARI = ['{PARCA}', '{IE}', '{REV}', '{YY}', '{YYYY}', '{MM}', '{WW}', '{DD}', '{SEQ:4}', '{SEQ:5}'];
 
 // İstasyona özel düzenleyici (StEditor): depo, markalama, boya, montaj, tesviye ve kalite; talaşlıda düzenleyici yoktur.
 export function IstasyonDuzenleyici({ paket, yama }: { paket: Pkg; yama: Yama }) {
@@ -90,39 +132,7 @@ export function IstasyonDuzenleyici({ paket, yama }: { paket: Pkg; yama: Yama })
       </div>
     );
   }
-  if (t === 'mark') {
-    return (
-      <div className="tc-ay2-kurallar">
-        <section className="tc-ay2-kart" aria-label="Seri numarası">
-          <KartBasligi simge={<Simge ad="tag" />} ton="hazard" baslik="Seri numarası" aciklama="Her markalamada sıradaki numara verilir · operatör ekranında QR ile gösterilir" />
-          <label className="tc-ay2-alan">
-            <span className="tc-ay2-ust-yazi">Şablon</span>
-            <input className="tc-ay2-mono" value={c.fmt} onChange={(e) => yaz({ fmt: e.target.value })} />
-          </label>
-          <div className="tc-ay2-hazirlar">
-            {SERI_PARCALARI.map((k) => <button key={k} type="button" className="tc-ay2-hazir" data-ton="done" onClick={() => yaz({ fmt: c.fmt + k })}><i aria-hidden="true" />{k}</button>)}
-          </div>
-          <div className="tc-ay2-satir"><span>Başlangıç sırası</span><Sayi deger={c.start} etiket="Başlangıç sırası" degistir={(start) => yaz({ start })} /></div>
-          <div className="tc-ay2-alan">
-            <span className="tc-ay2-ust-yazi">Yöntem</span>
-            <Bolmeli etiket="Yöntem" deger={c.method} secenekler={[['lazer', 'Lazer'], ['damga', 'Damga / nokta vuruş'], ['etiket', 'Etiket']]} degistir={(method) => yaz({ method })} />
-          </div>
-          <label className="tc-ay2-alan">
-            <span className="tc-ay2-ust-yazi">Markalama yeri</span>
-            <input value={c.pos} placeholder="örn. Flanş dış yüzü, saat 12 yönü, 3 mm yazı" onChange={(e) => yaz({ pos: e.target.value })} />
-          </label>
-          <Anahtar acik={c.verify} degistir={(verify) => yaz({ verify })} baslik="QR ile doğrulama" aciklama="Operatör markalanan parçayı okutup seri numarasını doğrular" />
-        </section>
-        <section className="tc-ay2-kart" aria-label="Önizleme">
-          <KartBasligi simge={<Simge ad="scan" />} ton="run" baslik="Önizleme" aciklama="İlk üç numara" />
-          <div className="tc-ay2-seri-onizleme">
-            <Qr metin={seriNo(c.fmt, c.start, paket)} boyut={120} />
-            <div>{[0, 1, 2].map((i) => <b key={i} className="tc-ay2-mono">{seriNo(c.fmt, (+c.start || 1) + i, paket)}</b>)}</div>
-          </div>
-        </section>
-      </div>
-    );
-  }
+  if (t === 'mark') return <MarkalamaTanimiOzeti paket={paket} />;
   if (t === 'boya') {
     return (
       <div className="tc-ay2-kurallar">

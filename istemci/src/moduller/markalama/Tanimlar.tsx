@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Vector3 } from 'three';
 import type {
-  AlanGovdesi, MarkalamaTanimi, OnizlemeCevabi, SayacKapsami, TanimAktiflikGovdesi, TanimEkleGovdesi, TanimKaydetGovdesi, TanimlarCevabi,
+  AlanGovdesi, EmirSecimi, MarkalamaTanimi, OnizlemeCevabi, SayacKapsami, TanimAktiflikGovdesi, TanimEkleGovdesi, TanimKaydetGovdesi, TanimlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
 import type { MalzemeAraCevabi } from '#paylasilan/sozlesme/rota.ts';
 import {
@@ -15,6 +15,7 @@ import {
   YAZI_TIPLERI, YONTEM_ADLARI, YONTEMLER,
 } from './adlar.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { EmirArama, OperasyonListesi } from './IsSecimi.tsx';
 import { ModelPaneli } from './ModelPaneli.tsx';
 import { yerOlustur } from './sahne.ts';
 import { olcuMetni, sayi, taslakHatasi } from './taslak.ts';
@@ -26,6 +27,12 @@ interface Taslak {
   malzemeId: number | null;
   malzemeKodu: string | null;
   opNo: string;
+  // 3788: yeni tanımın çıktığı emir (malzeme ve revizyon ondan); emreOzel ise tanım yalnız bu emirde geçer.
+  kaynakEmir: EmirSecimi | null;
+  emreOzel: boolean;
+  emirNo: string | null;
+  // Boş: bütün teknik resim revizyonları.
+  cizimRevizyonKodu: string;
   seriSablonu: string;
   sayacKapsami: SayacKapsami;
   baslangicSirasi: string;
@@ -41,12 +48,13 @@ const yeniAlan = (sira: number): AlanGovdesi => ({
 });
 
 const YENI: Taslak = {
-  id: null, surum: null, malzemeId: null, malzemeKodu: null, opNo: '', seriSablonu: '{PARCA}-{YY}{WW}-{SEQ:5}', sayacKapsami: 'malzeme',
+  id: null, surum: null, malzemeId: null, malzemeKodu: null, opNo: '', kaynakEmir: null, emreOzel: false, emirNo: null, cizimRevizyonKodu: '', seriSablonu: '{PARCA}-{YY}{WW}-{SEQ:5}', sayacKapsami: 'malzeme',
   baslangicSirasi: '1', dogrulama: true, aktif: true, model: null, alanlar: [yeniAlan(0)],
 };
 
 const taslakYap = (t: MarkalamaTanimi): Taslak => ({
-  id: t.id, surum: t.surum, malzemeId: t.malzemeId, malzemeKodu: t.malzemeKodu, opNo: String(t.opNo), seriSablonu: t.seriSablonu,
+  id: t.id, surum: t.surum, malzemeId: t.malzemeId, malzemeKodu: t.malzemeKodu, opNo: String(t.opNo), kaynakEmir: null, emreOzel: t.uretimEmriId !== null,
+  emirNo: t.emirNo, cizimRevizyonKodu: t.cizimRevizyonKodu ?? '', seriSablonu: t.seriSablonu,
   sayacKapsami: t.sayacKapsami, baslangicSirasi: String(t.baslangicSirasi), dogrulama: t.dogrulama, aktif: t.aktif, model: t.model,
   alanlar: t.alanlar.map(({ sira: _sira, ...a }) => a),
 });
@@ -58,6 +66,8 @@ const secenekler = <T extends string>(degerler: readonly T[], adlar: Readonly<Re
 const SUTUNLAR: readonly Sutun<MarkalamaTanimi>[] = [
   { anahtar: 'malzeme', baslik: 'Malzeme', mono: true, hucre: (t) => t.malzemeKodu ?? `#${t.malzemeId}` },
   { anahtar: 'op', baslik: 'Op', mono: true, hucre: (t) => t.opNo },
+  { anahtar: 'rev', baslik: 'Teknik resim', hucre: (t) => (t.cizimRevizyonKodu === null ? 'Bütün revizyonlar' : <span className="mono">Rev {t.cizimRevizyonKodu}</span>) },
+  { anahtar: 'emir', baslik: 'Emir', hucre: (t) => (t.uretimEmriId === null ? 'Bütün emirler' : <Rozet ton="uyari">{t.emirNo ?? `#${t.uretimEmriId}`}</Rozet>) },
   { anahtar: 'sablon', baslik: 'Seri şablonu', mono: true, hucre: (t) => t.seriSablonu },
   { anahtar: 'marka', baslik: 'Marka', hucre: (t) => t.alanlar.length },
   { anahtar: 'model', baslik: '3B', hucre: (t) => (t.model ? <Rozet ton="tamam">Model var</Rozet> : <Rozet ton="pasif">Yok</Rozet>) },
@@ -186,7 +196,79 @@ function Onizleme({ tanimId }: { tanimId: number }) {
   );
 }
 
-function Duzenleyici({ ilk, yazabilir, kaydedildi }: { ilk: Taslak; yazabilir: boolean; kaydedildi: (id: number) => void }) {
+// 3B model teknik resimle aynı revizyonda olmalı: yer modelde işaretlenir, biçim çizimden gelir. Farklıysa kayıt durmaz, uyarılır.
+function revizyonUyarisi(t: Taslak): string | null {
+  const rev = t.cizimRevizyonKodu.trim();
+  if (t.model === null || rev === '' || t.model.revizyon.toLocaleUpperCase('tr') === rev.toLocaleUpperCase('tr')) return null;
+  return `3B model revizyonu (${t.model.revizyon}) teknik resim revizyonundan (${rev}) farklı; markanın yerini denetleyin.`;
+}
+
+// 3788: yeni tanım emirden ya da malzemeden başlar. Emirden: malzeme ve teknik resim revizyonu emrinkidir (kilitli), operasyon emrin
+// adımlarından seçilir, tanım istenirse yalnız bu emre özel olur. Malzemeden: revizyon yazılır (boş: bütün revizyonlar), operasyon yürürlükteki rotadan.
+function YeniTanimSecimi({ t, degistir, tanimlar }: { t: Taslak; degistir: (d: Partial<Taslak>) => void; tanimlar: readonly MarkalamaTanimi[] }) {
+  const emir = t.kaynakEmir;
+  const rev = t.cizimRevizyonKodu.trim().toLocaleUpperCase('tr');
+  const emirId = t.emreOzel && emir !== null ? emir.id : null;
+  const tanimli = new Set(tanimlar.filter((d) => d.malzemeId === t.malzemeId && d.uretimEmriId === emirId
+    && (d.cizimRevizyonKodu ?? '').toLocaleUpperCase('tr') === rev).map((d) => d.opNo));
+  const temizle = () => degistir({ kaynakEmir: null, emreOzel: false, emirNo: null, malzemeId: null, malzemeKodu: null, model: null, opNo: '', cizimRevizyonKodu: '' });
+  return (
+    <div className="tc-mrk-form">
+      <h3 className="tc-mrk-bolum">Ne markalanacak?</h3>
+      {emir === null && t.malzemeId === null && (
+        <>
+          <EmirArama sec={(e) => degistir({
+            kaynakEmir: e, emirNo: e.emirNo, malzemeId: e.malzemeId, malzemeKodu: e.malzemeKodu, cizimRevizyonKodu: e.cizimRevizyonKodu ?? '', opNo: '', model: null,
+          })} />
+          <p className="tc-mrk-ipucu">Emir seçmeden malzemeyle de başlanabilir:</p>
+          <MalzemeSecici sec={(id, kod) => degistir({ malzemeId: id, malzemeKodu: kod })} />
+        </>
+      )}
+      {emir !== null && (
+        <>
+          <dl className="tc-mrk-bilgi">
+            <dt>Emir</dt><dd className="mono">{emir.emirNo} · {emir.adet} adet</dd>
+            <dt>Malzeme</dt><dd className="mono">{emir.malzemeKodu ?? `#${emir.malzemeId}`}</dd>
+            <dt>Teknik resim</dt><dd>{emir.cizimRevizyonKodu === null ? 'Emre revizyon sabitlenmemiş' : <span className="mono">Rev {emir.cizimRevizyonKodu} · emrin çizimi</span>}</dd>
+          </dl>
+          <div className="tc-mrk-yontemler" role="radiogroup" aria-label="Tanım hangi emirlerde geçer">
+            {([false, true] as const).map((ozel) => (
+              <button key={String(ozel)} type="button" role="radio" aria-checked={t.emreOzel === ozel}
+                className={`tc-mrk-yontem${t.emreOzel === ozel ? ' tc-mrk-yontem-secili' : ''}`}
+                onClick={() => degistir({ emreOzel: ozel, opNo: '' })}
+              >
+                {ozel ? `Yalnız ${emir.emirNo}` : 'Bütün emirler'}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {emir === null && t.malzemeId !== null && (
+        <>
+          <p className="tc-mrk-ipucu">Malzeme: <b className="mono">{t.malzemeKodu}</b></p>
+          <Girdi etiket="Teknik resim revizyonu" ipucu="Boş bırakılırsa bütün revizyonlarda geçer (ör. C)" maxLength={20}
+            value={t.cizimRevizyonKodu} onChange={(o) => degistir({ cizimRevizyonKodu: o.target.value, opNo: '' })} />
+        </>
+      )}
+      {(emir !== null || t.malzemeId !== null) && (
+        <>
+          <Dugme simge="x" onClick={temizle}>Seçimi değiştir</Dugme>
+          <h3 className="tc-mrk-bolum">Operasyon</h3>
+          <OperasyonListesi
+            kaynak={emir !== null ? { emirId: emir.id } : { malzemeId: t.malzemeId ?? 0 }}
+            secili={t.opNo === '' ? null : Number(t.opNo)}
+            sec={(o) => degistir({ opNo: String(o.opNo) })}
+            tanimli={tanimli}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+function Duzenleyici({ ilk, yazabilir, kaydedildi, tanimlar }: {
+  ilk: Taslak; yazabilir: boolean; kaydedildi: (id: number) => void; tanimlar: readonly MarkalamaTanimi[];
+}) {
   const [t, tYaz] = useState<Taslak>(ilk);
   const [secili, seciliYaz] = useState(0);
   const [denetim, denetimYaz] = useState<string | null>(null);
@@ -201,7 +283,10 @@ function Duzenleyici({ ilk, yazabilir, kaydedildi }: { ilk: Taslak; yazabilir: b
         alanlar: t.alanlar,
       };
       if (t.id === null) {
-        const govde: TanimEkleGovdesi = { ...ortak, malzemeId: t.malzemeId ?? 0, opNo: sayi(t.opNo) ?? 0 };
+        const govde: TanimEkleGovdesi = {
+          ...ortak, malzemeId: t.malzemeId ?? 0, opNo: sayi(t.opNo) ?? 0,
+          uretimEmriId: t.emreOzel && t.kaynakEmir !== null ? t.kaynakEmir.id : null, cizimRevizyonKodu: bosOlur(t.cizimRevizyonKodu.trim()),
+        };
         return api.post<MarkalamaTanimi>('/markalama/tanimlar/ekle', govde);
       }
       const govde: TanimKaydetGovdesi = { ...ortak, surum: t.surum ?? 0 };
@@ -239,19 +324,20 @@ function Duzenleyici({ ilk, yazabilir, kaydedildi }: { ilk: Taslak; yazabilir: b
   return (
     <div className="tc-mrk-duzen">
       <Kart
-        baslik={t.id === null ? 'Yeni markalama tanımı' : `${t.malzemeKodu ?? `#${t.malzemeId}`} · Op ${t.opNo}`}
+        baslik={t.id === null ? 'Yeni markalama tanımı'
+          : `${t.malzemeKodu ?? `#${t.malzemeId}`} · Op ${t.opNo}${t.cizimRevizyonKodu === '' ? '' : ` · Rev ${t.cizimRevizyonKodu}`}${t.emreOzel ? ` · ${t.emirNo ?? ''}` : ''}`}
         simge="tag"
         {...(t.aktif ? {} : { sag: <Rozet ton="pasif">Pasif</Rozet> })}
       >
         <fieldset className="tc-mrk-form" disabled={!yazabilir}>
-          {t.id === null && (
-            <>
-              {t.malzemeId === null
-                ? <MalzemeSecici sec={(id, kod) => degistir({ malzemeId: id, malzemeKodu: kod })} />
-                : <p className="tc-mrk-ipucu">Malzeme: <b className="mono">{t.malzemeKodu}</b> <Dugme simge="x" onClick={() => degistir({ malzemeId: null, malzemeKodu: null, model: null })}>Değiştir</Dugme></p>}
-              <Girdi etiket="Rota operasyon no" ipucu="Markalamanın yapıldığı rota adımı (ör. 40)" inputMode="numeric" value={t.opNo} onChange={(o) => degistir({ opNo: o.target.value })} />
-            </>
+          {t.id === null && <YeniTanimSecimi t={t} degistir={degistir} tanimlar={tanimlar} />}
+          {t.id !== null && (
+            <p className="tc-mrk-ipucu">
+              {t.cizimRevizyonKodu === '' ? 'Bütün teknik resim revizyonlarında' : <>Teknik resim <b className="mono">Rev {t.cizimRevizyonKodu}</b> için</>}
+              {' · '}{t.emreOzel ? <>yalnız <b className="mono">{t.emirNo}</b> emrinde</> : 'bütün emirlerde'} geçer.
+            </p>
           )}
+          {revizyonUyarisi(t) !== null && <p className="tc-mrk-ipucu" role="status">{revizyonUyarisi(t)}</p>}
           <h3 className="tc-mrk-bolum">Seri numarası</h3>
           <Girdi etiket="Şablon" className="mono" value={t.seriSablonu} maxLength={60} onChange={(o) => degistir({ seriSablonu: o.target.value })} />
           <div className="tc-mrk-parcalar" aria-label="Şablon parçaları">
@@ -356,8 +442,8 @@ export function Tanimlar() {
           bosMesaj="Henüz markalama tanımı yok"
         />
       </Kart>
-      {secim === 'yeni' && <Duzenleyici key="yeni" ilk={YENI} yazabilir={yazabilir} kaydedildi={secimYaz} />}
-      {secili && <Duzenleyici key={secili.id} ilk={taslakYap(secili)} yazabilir={yazabilir} kaydedildi={secimYaz} />}
+      {secim === 'yeni' && <Duzenleyici key="yeni" ilk={YENI} yazabilir={yazabilir} kaydedildi={secimYaz} tanimlar={liste.data.tanimlar} />}
+      {secili && <Duzenleyici key={secili.id} ilk={taslakYap(secili)} yazabilir={yazabilir} kaydedildi={secimYaz} tanimlar={liste.data.tanimlar} />}
     </div>
   );
 }

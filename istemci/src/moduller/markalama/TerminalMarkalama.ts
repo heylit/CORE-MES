@@ -2,11 +2,12 @@ import { useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type {
-  BirimlerCevabi, EmirOzetiCevabi, MarkalaGovdesi, MarkalamaBirimi, MarkalamaTanimi, OnizlemeCevabi, TanimlarCevabi,
+  BirimlerCevabi, EmirOzetiCevabi, IsTanimiCevabi, IsTanimiDurumu, MarkalaGovdesi, MarkalamaBirimi, MarkalamaTanimi, OnizlemeCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { YONTEM_ADLARI } from './adlar.ts';
 import { anahtarlar } from './anahtarlar.ts';
 
 // Terminalin markalama işi: rotalı emrin bir operasyonu ve terminalin istasyonu. Terminal ekranı kendi görünümünü çizer;
@@ -16,8 +17,9 @@ export interface TerminalMarkalamaIsi { uretimEmriId: number; opNo: number; malz
 export const TERMINAL_SON_SERI_SAYISI = 12;
 
 export interface TerminalMarkalamaVerisi {
-  // Bu malzeme ve operasyon için aktif tanım yoksa boş: terminal seri vermez.
+  // Bu emir ve operasyon için geçerli aktif tanım yoksa boş: terminal seri vermez, nedeni `durum`dadır (3788).
   tanim: MarkalamaTanimi | null;
+  durum: IsTanimiDurumu;
   istasyonId: number | null;
   // Sayacı tüketmeyen öngörü; markalama anında sunucu yeniden hesaplar.
   siradakiler: readonly string[];
@@ -28,20 +30,21 @@ export interface TerminalMarkalamaVerisi {
 
 // Terminalin bütün okuması burada ve tek sözdür: okuma yolu (yetki kararı 2048) değişirse yalnız bu işlev değişir.
 export async function terminalMarkalamaOku(is: TerminalMarkalamaIsi): Promise<TerminalMarkalamaVerisi> {
-  const [tanimlar, istasyonlar] = await Promise.all([
-    api.get<TanimlarCevabi>(`/markalama/tanimlar?malzemeId=${is.malzemeId}`),
+  // Tanımı sunucu seçer (MRK-14): bu emre özel, emrin teknik resim revizyonuna ait, revizyonsuz genel.
+  const [isTanimi, istasyonlar] = await Promise.all([
+    api.get<IsTanimiCevabi>(`/markalama/emirler/${is.uretimEmriId}/tanim?opNo=${is.opNo}`),
     api.get<IstasyonSecimiCevabi>('/istasyonlar/secim'),
   ]);
-  const tanim = tanimlar.tanimlar.find((t) => t.aktif && t.opNo === is.opNo) ?? null;
+  const { tanim, durum } = isTanimi;
   const istasyonId = istasyonlar.gruplar.flatMap((g) => g.istasyonlar).find((i) => i.kod === is.istasyonKodu)?.id ?? null;
-  if (tanim === null) return { tanim, istasyonId, siradakiler: [], sonSeriler: [], sayilar: null };
+  if (tanim === null) return { tanim, durum, istasyonId, siradakiler: [], sonSeriler: [], sayilar: null };
   const [onizleme, ozet, birimler] = await Promise.all([
     api.get<OnizlemeCevabi>(`/markalama/tanimlar/${tanim.id}/onizleme?emirId=${is.uretimEmriId}`),
     api.get<EmirOzetiCevabi>(`/markalama/emirler/${is.uretimEmriId}/ozet?tanimId=${tanim.id}`),
     api.get<BirimlerCevabi>(`/markalama/birimler?emirId=${is.uretimEmriId}&tanimId=${tanim.id}`),
   ]);
   return {
-    tanim, istasyonId, siradakiler: onizleme.numaralar, sonSeriler: birimler.birimler.slice(0, TERMINAL_SON_SERI_SAYISI),
+    tanim, durum, istasyonId, siradakiler: onizleme.numaralar, sonSeriler: birimler.birimler.slice(0, TERMINAL_SON_SERI_SAYISI),
     sayilar: { saglam: ozet.sayilar.saglam, hurda: ozet.sayilar.hurda, dogrulanan: ozet.dogrulanan },
   };
 }
@@ -106,3 +109,19 @@ export function useTerminalMarkalama(is: TerminalMarkalamaIsi | null): TerminalM
     dogrulaniyor: dogrulaKomutu.isPending,
   };
 }
+
+export interface TanimOzeti { sablon: string; yontem: string | null; yer: string | null; revizyon: string | null; emreOzel: boolean }
+
+// Terminal ve Hazırlık tanımı kendi alanlarıyla çizer (3788): yöntem ve yer seri no taşıyan ilk markadan, yoksa ilk markadan.
+export function tanimOzeti(t: MarkalamaTanimi): TanimOzeti {
+  const alan = t.alanlar.find((a) => a.icerik === 'seri') ?? t.alanlar[0];
+  return {
+    sablon: t.seriSablonu, yontem: alan === undefined ? null : YONTEM_ADLARI[alan.yontem], yer: alan?.yuzey ?? null,
+    revizyon: t.cizimRevizyonKodu, emreOzel: t.uretimEmriId !== null,
+  };
+}
+
+export const IS_TANIMI_YOK_ILETISI: Readonly<Record<Exclude<IsTanimiDurumu, 'bulundu'>, string>> = {
+  'tanim-yok': 'Bu parça ve operasyon için markalama tanımı yok; seri verilmez.',
+  'revizyon-tanimi-yok': 'Bu emrin teknik resim revizyonu için markalama tanımı yok; başka revizyonun tanımı kullanılmaz, seri verilmez.',
+};

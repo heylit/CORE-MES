@@ -10,6 +10,8 @@ export interface TanimSatiri {
   malzemeId: number;
   opNo: number;
   operasyonId: number | null;
+  uretimEmriId: number | null;
+  cizimRevizyonKodu: string | null;
   seriSablonu: string;
   sayacKapsami: SayacKapsami;
   baslangicSirasi: number;
@@ -21,13 +23,14 @@ export interface TanimSatiri {
   degismeZamani: string;
 }
 
-const TANIM_SUTUNLARI = `id, malzeme_id AS "malzemeId", op_no AS "opNo", operasyon_id AS "operasyonId", seri_sablonu AS "seriSablonu", sayac_kapsami AS "sayacKapsami",
+const TANIM_SUTUNLARI = `id, malzeme_id AS "malzemeId", op_no AS "opNo", operasyon_id AS "operasyonId", uretim_emri_id AS "uretimEmriId",
+  cizim_revizyon_kodu AS "cizimRevizyonKodu", seri_sablonu AS "seriSablonu", sayac_kapsami AS "sayacKapsami",
   baslangic_sirasi AS "baslangicSirasi", dogrulama, aktif, model_belge_id AS "modelBelgeId", model_revizyon AS "modelRevizyon", surum,
   ${zamanMetni('degisme_zamani')} AS "degismeZamani"`;
 
 export function tanimlariOku(db: Db, malzemeId: number | null): Promise<TanimSatiri[]> {
   return db.sorgu<TanimSatiri>(
-    `SELECT ${TANIM_SUTUNLARI} FROM markalama_tanimi WHERE ($1::int IS NULL OR malzeme_id = $1) ORDER BY malzeme_id, op_no`,
+    `SELECT ${TANIM_SUTUNLARI} FROM markalama_tanimi WHERE ($1::int IS NULL OR malzeme_id = $1) ORDER BY malzeme_id, op_no, uretim_emri_id NULLS LAST, cizim_revizyon_kodu NULLS LAST, id`,
     [malzemeId],
   );
 }
@@ -45,18 +48,24 @@ export interface TanimYazimi {
   modelRevizyon: string | null;
 }
 
+export interface TanimAnahtari { uretimEmriId: number | null; cizimRevizyonKodu: string | null }
+
 // Operasyonu bilinen tanımda op_no operasyonun kayıtlı numarasıdır (eski (malzeme, op_no) tetikleyicisi aynı kimliği bulur) ve aynı
-// operasyonun ikinci tanımı numara yeniden dizilmiş olsa da eklenmez (null döner). Yürürlükte rotası olmayan malzemede numara olduğu gibi yazılır.
+// operasyonun aynı emir ve revizyonlu ikinci tanımı numara yeniden dizilmiş olsa da eklenmez (null döner). Yürürlükte rotası olmayan
+// malzemede numara olduğu gibi yazılır. Revizyon kodu tekil dizinle aynı biçimde (büyük harf, kırpılmış) karşılaştırılır.
 export async function tanimEkle(
-  db: Db, malzemeId: number, opNo: number, operasyon: { id: number; kayitliOpNo: number } | null, y: TanimYazimi, kisiId: number,
+  db: Db, malzemeId: number, opNo: number, operasyon: { id: number; kayitliOpNo: number } | null, anahtar: TanimAnahtari, y: TanimYazimi, kisiId: number,
 ): Promise<number | null> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO markalama_tanimi (malzeme_id, op_no, seri_sablonu, sayac_kapsami, baslangic_sirasi, dogrulama, model_belge_id,
-       model_revizyon, degistiren_kisi_id)
-     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
-      WHERE $10::int IS NULL OR NOT EXISTS (SELECT 1 FROM markalama_tanimi WHERE operasyon_id = $10)
+       model_revizyon, degistiren_kisi_id, uretim_emri_id, cizim_revizyon_kodu)
+     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $11, $12
+      WHERE $10::int IS NULL OR NOT EXISTS (
+        SELECT 1 FROM markalama_tanimi WHERE operasyon_id = $10 AND uretim_emri_id IS NOT DISTINCT FROM $11::int
+           AND coalesce(upper(btrim(cizim_revizyon_kodu)), '') = coalesce(upper(btrim($12::text)), ''))
      RETURNING id`,
-    [malzemeId, operasyon?.kayitliOpNo ?? opNo, y.seriSablonu, y.sayacKapsami, y.baslangicSirasi, y.dogrulama, y.modelBelgeId, y.modelRevizyon, kisiId, operasyon?.id ?? null],
+    [malzemeId, operasyon?.kayitliOpNo ?? opNo, y.seriSablonu, y.sayacKapsami, y.baslangicSirasi, y.dogrulama, y.modelBelgeId, y.modelRevizyon, kisiId,
+      operasyon?.id ?? null, anahtar.uretimEmriId, anahtar.cizimRevizyonKodu],
   );
   return satir?.id ?? null;
 }

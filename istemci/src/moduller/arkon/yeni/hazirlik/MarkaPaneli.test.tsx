@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
-import type { MarkalamaBirimi, MarkalamaTanimi } from '#paylasilan/sozlesme/markalama.ts';
+import type { IsTanimiCevabi, IsTanimiDurumu, MarkalamaBirimi, MarkalamaTanimi } from '#paylasilan/sozlesme/markalama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '../../../../ortak/veri/api.ts';
 import { MarkaPaneli, type IsDegisikligi, type PanelArayuzu } from './IstasyonPanelleri.tsx';
 import type { IstasyonAyari } from './kurallar.ts';
@@ -14,7 +14,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
 const TANIM: MarkalamaTanimi = {
-  id: 7, malzemeId: 11, malzemeKodu: 'ORN-A', opNo: 40, seriSablonu: '{PARCA}-{SEQ:5}', sayacKapsami: 'malzeme', baslangicSirasi: 1, dogrulama: true, aktif: true,
+  id: 7, malzemeId: 11, malzemeKodu: 'ORN-A', opNo: 40, uretimEmriId: null, emirNo: null, cizimRevizyonKodu: null, seriSablonu: '{PARCA}-{SEQ:5}', sayacKapsami: 'malzeme', baslangicSirasi: 1, dogrulama: true, aktif: true,
   model: null, surum: 3, degismeZamani: '2026-10-27T08:00:00Z', alanlar: [],
 };
 const birim = (b: Partial<MarkalamaBirimi> = {}): MarkalamaBirimi => ({
@@ -27,7 +27,12 @@ const ISTASYONLAR: IstasyonSecimiCevabi = {
 
 interface Cagri { yol: string; yontem: string; govde: unknown; kimlik: string | null }
 
-function sunucuKur(islemler: string[], tanimlar: MarkalamaTanimi[] = [TANIM]) {
+// Tanımı sunucu seçer (3788); test seçilmiş sonucu verir.
+const isTanimi = (tanim: MarkalamaTanimi | null, durum: IsTanimiDurumu = tanim === null ? 'tanim-yok' : 'bulundu'): IsTanimiCevabi => ({
+  durum, tanim, emir: { id: 5, emirNo: 'ORN-UE-1', malzemeId: 11, malzemeKodu: 'ORN-A', adet: 10, durum: 'basladi', cizimRevizyonKodu: 'C' },
+});
+
+function sunucuKur(islemler: string[], is: IsTanimiCevabi = isTanimi(TANIM)) {
   const cagrilar: Cagri[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
@@ -35,7 +40,7 @@ function sunucuKur(islemler: string[], tanimlar: MarkalamaTanimi[] = [TANIM]) {
     cagrilar.push({ yol, yontem, govde: typeof secenek?.body === 'string' ? JSON.parse(secenek.body) : undefined, kimlik: new Headers(secenek?.headers).get(ISTEK_KIMLIGI_BASLIGI) });
     if (yol === '/oturum') return json(200, { kullanici: { id: 3, ad: 'Deneme Operatör', islemler } });
     if (yol === '/istasyonlar/secim') return json(200, ISTASYONLAR);
-    if (yol === '/markalama/tanimlar?malzemeId=11') return json(200, { tanimlar });
+    if (yol === '/markalama/emirler/5/tanim?opNo=40') return json(200, is);
     if (yol === '/markalama/tanimlar/7/onizleme?emirId=5') return json(200, { numaralar: ['ORN-A-00005', 'ORN-A-00006'] });
     if (yol === '/markalama/emirler/5/ozet?tanimId=7') return json(200, { uretimEmriId: 5, sayilar: { saglam: 4, red: 0, rework: 0, hurda: 1 }, dogrulanan: 3 });
     if (yol === '/markalama/birimler?emirId=5&tanimId=7') return json(200, { birimler: [birim(), birim({ id: 30, seriNo: 'ORN-A-00003', durum: 'hurda' })] });
@@ -103,10 +108,31 @@ describe('terminal markalama paneli (2028)', () => {
   });
 
   it('bu operasyonda tanım yoksa seri verilmez', async () => {
-    sunucuKur(['sayfa.uretim-terminali', 'markalama.seri-ver'], [{ ...TANIM, opNo: 50 }]);
+    sunucuKur(['sayfa.uretim-terminali', 'markalama.seri-ver'], isTanimi(null));
     ac();
     expect(await screen.findByText('Bu parça ve operasyon için markalama tanımı yok; seri verilmez.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Markalandı/ })).toBeNull();
+  });
+
+  it('3788: emrin teknik resim revizyonunun tanımı yoksa başka revizyonun tanımı kullanılmaz, neden yazılır', async () => {
+    sunucuKur(['sayfa.uretim-terminali', 'markalama.seri-ver'], isTanimi(null, 'revizyon-tanimi-yok'));
+    ac();
+    expect(await screen.findByText(/Bu emrin teknik resim revizyonu için markalama tanımı yok/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Markalandı/ })).toBeNull();
+  });
+
+  it('3788: yöntem, yer, revizyon ve emre özellik tanımdan gelir; paketteki eski ayar gösterilmez', async () => {
+    const alan = {
+      sira: 1, ad: 'Seri no', icerik: 'seri', sabitMetin: null, kodTuru: 'qr', yontem: 'nokta_vurus', yaziYuksekligiMm: null, yaziDerinligiMm: null,
+      yaziTipi: null, program: null, yuzey: 'ORN yan yüz', yer: null,
+    } as const;
+    sunucuKur(['sayfa.uretim-terminali', 'markalama.seri-ver'], isTanimi({ ...TANIM, uretimEmriId: 5, emirNo: 'ORN-UE-1', cizimRevizyonKodu: 'C', alanlar: [alan] }));
+    ac();
+    expect(await screen.findByText('Nokta vuruş')).toBeTruthy();
+    expect(screen.getByText('Rev C')).toBeTruthy();
+    expect(screen.getByText('Emre özel')).toBeTruthy();
+    expect(screen.getByText('ORN yan yüz')).toBeTruthy();
+    expect(screen.queryByText('Flanş yüzü')).toBeNull();
   });
 
   it('CORE emrine bağlı olmayan işte Markalama\'ya istek gitmez', async () => {

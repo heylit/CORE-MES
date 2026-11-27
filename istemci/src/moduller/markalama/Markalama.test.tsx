@@ -9,7 +9,8 @@ import type { MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/belge-merkezi.
 import type { HurdaNedenleriCevabi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type {
-  BirimAyrintisi, BirimlerCevabi, EmirOzetiCevabi, MarkalamaBirimi, MarkalamaTanimi, OnizlemeCevabi, TanimEmirleriCevabi, TanimlarCevabi,
+  BirimAyrintisi, BirimlerCevabi, EmirAraCevabi, EmirOzetiCevabi, EmirSecimi, IsTanimiCevabi, MarkalamaBirimi, MarkalamaTanimi, OnizlemeCevabi,
+  OperasyonlarCevabi, TanimlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
@@ -25,7 +26,7 @@ const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.m
 const IZLEYICI: Kullanici = { id: 2, ad: 'Deneme İzleyici', islemler: ['sayfa.markalama'] };
 
 const TANIM: MarkalamaTanimi = {
-  id: 7, malzemeId: 11, malzemeKodu: 'ORN-A', opNo: 40, seriSablonu: '{PARCA}-{SEQ:5}', sayacKapsami: 'malzeme', baslangicSirasi: 1, dogrulama: true, aktif: true,
+  id: 7, malzemeId: 11, malzemeKodu: 'ORN-A', opNo: 40, uretimEmriId: null, emirNo: null, cizimRevizyonKodu: null, seriSablonu: '{PARCA}-{SEQ:5}', sayacKapsami: 'malzeme', baslangicSirasi: 1, dogrulama: true, aktif: true,
   model: null, surum: 3, degismeZamani: '2026-10-27T08:00:00Z',
   alanlar: [{
     sira: 1, ad: 'Seri no', icerik: 'seri', sabitMetin: null, kodTuru: 'datamatrix', yontem: 'lazer', yaziYuksekligiMm: 2, yaziDerinligiMm: null, yaziTipi: null, program: null, yuzey: 'Flanş yüzü', yer: null,
@@ -36,6 +37,17 @@ const birim = (b: Partial<MarkalamaBirimi> = {}): MarkalamaBirimi => ({
   id: 31, seriNo: 'ORN-A-00005', tanimId: 7, malzemeId: 11, uretimEmriId: 5, istasyonId: null, durum: 'saglam', dogrulamaZamani: null, surum: 1,
   zaman: '2026-10-27T09:00:00Z', ...b,
 });
+
+const EMIR: EmirSecimi = { id: 5, emirNo: 'UE-DNM-1', malzemeId: 11, malzemeKodu: 'ORN-A', adet: 10, durum: 'acik', cizimRevizyonKodu: 'B' };
+
+const OPERASYONLAR: OperasyonlarCevabi = {
+  operasyonlar: [
+    { opNo: 30, ad: 'Deneme tornalama', istasyonKodu: 'DNM-3', markalama: false },
+    { opNo: 40, ad: 'Deneme lazer', istasyonKodu: 'DNM-1', markalama: true },
+  ],
+};
+
+interface SunucuSecenekleri { isTanimi?: IsTanimiCevabi; operasyonlar?: OperasyonlarCevabi }
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
@@ -54,20 +66,23 @@ const ISTASYONLAR: IstasyonSecimiCevabi = {
 
 function sunucuKur(
   kullanici: Kullanici, birimDurumu: MarkalamaBirimi['durum'] = 'saglam', istasyonlar: IstasyonSecimiCevabi = ISTASYONLAR,
-  modelBelgeleri: MalzemeBelgeleriCevabi['belgeler'] = [],
+  modelBelgeleri: MalzemeBelgeleriCevabi['belgeler'] = [], secenek: SunucuSecenekleri = {},
 ) {
   const cagrilar: Cagri[] = [];
-  vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+  vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
     const yol = adres.replace('/api', '');
-    const yontem = secenek?.method ?? 'GET';
-    const basliklar = new Headers(secenek?.headers);
-    cagrilar.push({ yol, yontem, govde: typeof secenek?.body === 'string' ? JSON.parse(secenek.body) : undefined, kimlik: basliklar.get(ISTEK_KIMLIGI_BASLIGI) });
+    const yontem = istek?.method ?? 'GET';
+    const basliklar = new Headers(istek?.headers);
+    cagrilar.push({ yol, yontem, govde: typeof istek?.body === 'string' ? JSON.parse(istek.body) : undefined, kimlik: basliklar.get(ISTEK_KIMLIGI_BASLIGI) });
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol === '/istasyonlar/secim') return json(200, istasyonlar);
     if (yol === '/markalama/tanimlar') return json(200, { tanimlar: [TANIM, { ...TANIM, id: 8, opNo: 50, seriSablonu: '{PARCA}-{SEQ:6}', aktif: false, model: { belgeId: 5, revizyon: 'A' } }] } satisfies TanimlarCevabi);
     if (yol === '/markalama/tanimlar/7/aktiflik') return json(200, { ...TANIM, aktif: false, surum: 4 });
     if (yol.startsWith('/markalama/tanimlar/7/onizleme')) return json(200, { numaralar: ['ORN-A-00005', 'ORN-A-00006'] } satisfies OnizlemeCevabi);
-    if (yol === '/markalama/tanimlar/7/emirler') return json(200, { emirler: [{ id: 5, emirNo: 'UE-DNM-1', adet: 10, durum: 'acik' }] } satisfies TanimEmirleriCevabi);
+    if (yol.startsWith('/markalama/emir-ara?')) return json(200, { emirler: [EMIR] } satisfies EmirAraCevabi);
+    if (yol === '/markalama/emirler/5/operasyonlar') return json(200, secenek.operasyonlar ?? OPERASYONLAR);
+    if (yol === '/markalama/emirler/5/tanim?opNo=40') return json(200, secenek.isTanimi ?? ({ durum: 'bulundu', tanim: TANIM, emir: EMIR } satisfies IsTanimiCevabi));
+    if (yol === '/markalama/tanimlar/ekle') return json(200, { ...TANIM, id: 9, uretimEmriId: 5, emirNo: 'UE-DNM-1', cizimRevizyonKodu: 'B', surum: 1 });
     if (yol === '/markalama/tanimlar/7/kaydet') return json(200, { ...TANIM, surum: 4 });
     if (yol === '/markalama/emirler/5/ozet?tanimId=7') {
       return json(200, { uretimEmriId: 5, sayilar: { saglam: 4, red: 0, rework: 0, hurda: 1 }, dogrulanan: 3 } satisfies EmirOzetiCevabi);
@@ -105,7 +120,15 @@ function ac(ekran: ReactNode, adres = '/markalama') {
   );
 }
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.localStorage.clear(); });
+
+// Markalama terminali emirden başlar: emir okutulur (Enter), tek markalama adımı kendiliğinden seçilir.
+async function emirOkut(etiket = 'Emri ya da refakat kartını okut') {
+  const girdi = await screen.findByLabelText(etiket);
+  fireEvent.change(girdi, { target: { value: 'UE-DNM-1' } });
+  await screen.findByRole('option', { name: /UE-DNM-1/ });
+  fireEvent.keyDown(girdi, { key: 'Enter' });
+}
 
 describe('Markalama tanımları', () => {
   it('tanım seçilince düzenleyici açılır; marka eklenip kaydedilince sürümle ve sıralı markalarla gider', async () => {
@@ -122,6 +145,45 @@ describe('Markalama tanımları', () => {
     const govde = cagrilar.find((c) => c.yol === '/markalama/tanimlar/7/kaydet')!.govde as { surum: number; alanlar: { icerik: string; yontem: string; sabitMetin: string | null }[] };
     expect(govde.surum).toBe(3);
     expect(govde.alanlar.map((a) => [a.icerik, a.yontem, a.sabitMetin])).toEqual([['seri', 'lazer', null], ['sabit', 'nokta_vurus', 'C']]);
+  });
+
+  it('3788: yeni tanım emirden başlar; revizyon emirden kilitli gelir, yalnız bu emre seçilince emir kimliğiyle gider', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    ac(<Tanimlar />);
+    fireEvent.click(await screen.findByRole('button', { name: /Yeni tanım/ }));
+    await emirOkut('Üretim emri ara');
+    expect(await screen.findByText('Rev B · emrin çizimi')).toBeTruthy();
+    expect(screen.queryByLabelText('Teknik resim revizyonu')).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'Yalnız UE-DNM-1' }));
+    const op = await screen.findByRole('option', { name: /OP40/ });
+    expect(screen.queryByRole('option', { name: /OP30/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Tümünü göster/ }));
+    expect(await screen.findByRole('option', { name: /OP30/ })).toBeTruthy();
+    fireEvent.click(op);
+    fireEvent.click(screen.getByRole('button', { name: /Kaydet/ }));
+    await waitFor(() => expect(cagrilar.some((c) => c.yol === '/markalama/tanimlar/ekle')).toBe(true));
+    const govde = cagrilar.find((c) => c.yol === '/markalama/tanimlar/ekle')!.govde as { malzemeId: number; opNo: number; uretimEmriId: number | null; cizimRevizyonKodu: string | null };
+    expect([govde.malzemeId, govde.opNo, govde.uretimEmriId, govde.cizimRevizyonKodu]).toEqual([11, 40, 5, 'B']);
+  });
+
+  it('3788: bütün emirler seçilirse tanım emre bağlanmaz, emrin revizyonuyla gider', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    ac(<Tanimlar />);
+    fireEvent.click(await screen.findByRole('button', { name: /Yeni tanım/ }));
+    await emirOkut('Üretim emri ara');
+    expect(screen.getByRole('radio', { name: 'Bütün emirler' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(await screen.findByRole('option', { name: /OP40/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Kaydet/ }));
+    await waitFor(() => expect(cagrilar.some((c) => c.yol === '/markalama/tanimlar/ekle')).toBe(true));
+    const govde = cagrilar.find((c) => c.yol === '/markalama/tanimlar/ekle')!.govde as { uretimEmriId: number | null; cizimRevizyonKodu: string | null };
+    expect([govde.uretimEmriId, govde.cizimRevizyonKodu]).toEqual([null, 'B']);
+  });
+
+  it('3788: listede teknik resim revizyonu ve emir sütunu görünür', async () => {
+    sunucuKur(YONETICI);
+    ac(<Tanimlar />);
+    expect(await screen.findByRole('columnheader', { name: 'Teknik resim' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Emir' })).toBeTruthy();
   });
 
   it('2138-2: model seçeneği merkezin harfini değil revizyon kodunu yazar; kodsuz revizyon adıyla', async () => {
@@ -192,15 +254,12 @@ describe('Markalama tanımları', () => {
 });
 
 describe('Markalama istasyonu', () => {
-  it('parça ve emir seçilince sıradaki seri görünür; Markalandı istek kimliğiyle gider ve doğrulama bekler', async () => {
+  it('3788: emir okutulunca tek markalama adımı seçilir, sıradaki seri görünür; Markalandı istek kimliğiyle gider ve doğrulama bekler', async () => {
     const cagrilar = sunucuKur(YONETICI);
     ac(<Istasyon />);
-    fireEvent.change(await screen.findByLabelText('Parça ve operasyon'), { target: { value: '7' } });
-    const emir = await screen.findByLabelText('Üretim emri');
-    await screen.findByRole('option', { name: /UE-DNM-1/ });
-    fireEvent.change(emir, { target: { value: '5' } });
+    await emirOkut();
     expect(await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' })).toBeTruthy();
-    const istasyon = screen.getByLabelText('İstasyon');
+    const istasyon = screen.getByLabelText('Bu cihazın istasyonu');
     await screen.findByRole('option', { name: /Lazer 1/ });
     expect(screen.queryByRole('option', { name: /Eski Lazer/ })).toBeNull();
     expect(screen.queryByRole('option', { name: /Torna 1/ })).toBeNull();
@@ -211,7 +270,6 @@ describe('Markalama istasyonu', () => {
     const c = cagrilar.find((x) => x.yol === '/markalama/birimler/markala')!;
     expect(c.govde).toEqual({ tanimId: 7, uretimEmriId: 5, istasyonId: 21, sonuc: 'iyi' });
     expect(c.kimlik).toMatch(/^[0-9a-f-]{36}$/);
-    expect(screen.queryByRole('option', { name: /Op 50/ })).toBeNull();
     expect(cagrilar.some((x) => x.yol === '/markalama/birimler?emirId=5&tanimId=7')).toBe(true);
     expect(await screen.findByText('4')).toBeTruthy();
     expect(await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-bolum .mono' })).toBeTruthy();
@@ -222,13 +280,10 @@ describe('Çift dokunuş', () => {
   it('MRK-1: Markalandı çift dokunuşta tek istek, tek seri; sonraki parça yeni kimlikle', async () => {
     const cagrilar = sunucuKur(YONETICI);
     ac(<Istasyon />);
-    fireEvent.change(await screen.findByLabelText('Parça ve operasyon'), { target: { value: '7' } });
-    const emir = await screen.findByLabelText('Üretim emri');
-    await screen.findByRole('option', { name: /UE-DNM-1/ });
-    fireEvent.change(emir, { target: { value: '5' } });
+    await emirOkut();
     await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' });
     await screen.findByRole('option', { name: /Lazer 1/ });
-    fireEvent.change(screen.getByLabelText('İstasyon'), { target: { value: '21' } });
+    fireEvent.change(screen.getByLabelText('Bu cihazın istasyonu'), { target: { value: '21' } });
     const markalar = () => cagrilar.filter((c) => c.yol === '/markalama/birimler/markala');
     const dugme = screen.getByRole('button', { name: /Markalandı/ });
     fireEvent.click(dugme);
@@ -245,10 +300,7 @@ describe('Markalama istasyonu, istasyon listesi boş', () => {
   it('2036: markalama istasyonu yoksa seri verilmez; düğmeler kapalı kalır', async () => {
     const cagrilar = sunucuKur(YONETICI, 'saglam', { gruplar: [] });
     ac(<Istasyon />);
-    fireEvent.change(await screen.findByLabelText('Parça ve operasyon'), { target: { value: '7' } });
-    const emir = await screen.findByLabelText('Üretim emri');
-    await screen.findByRole('option', { name: /UE-DNM-1/ });
-    fireEvent.change(emir, { target: { value: '5' } });
+    await emirOkut();
     await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' });
     await screen.findByRole('option', { name: 'Markalama istasyonu yok' });
     expect((screen.getByRole('button', { name: /Markalandı/ }) as HTMLButtonElement).disabled).toBe(true);
@@ -258,17 +310,77 @@ describe('Markalama istasyonu, istasyon listesi boş', () => {
   });
 });
 
+describe('Markalama terminali, emirden iş', () => {
+  it('3788: cihazın istasyonu saklanır; sonraki açılışta seçili gelir', async () => {
+    sunucuKur(YONETICI);
+    ac(<Istasyon />);
+    await screen.findByRole('option', { name: /Lazer 1/ });
+    fireEvent.change(screen.getByLabelText('Bu cihazın istasyonu'), { target: { value: '21' } });
+    expect(window.localStorage.getItem('markalama.terminal.istasyon')).toBe('21');
+    cleanup();
+    ac(<Istasyon />);
+    await screen.findByRole('option', { name: /Lazer 1/ });
+    expect((screen.getByLabelText('Bu cihazın istasyonu') as HTMLSelectElement).value).toBe('21');
+  });
+
+  it('3788: emrin revizyonuna tanım yoksa nedeni yazılır, seri ekranı açılmaz; tanım yazabilene bağlantı çıkar', async () => {
+    const cagrilar = sunucuKur(YONETICI, 'saglam', ISTASYONLAR, [], { isTanimi: { durum: 'revizyon-tanimi-yok', tanim: null, emir: EMIR } });
+    ac(<Istasyon />);
+    await emirOkut();
+    expect(await screen.findByText(/teknik resim revizyonu için markalama tanımı yok/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Tanım yaz' })).toBeTruthy();
+    expect(screen.getByText('Teknik resim Rev B')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Markalandı/ })).toBeNull();
+    expect(cagrilar.some((c) => c.yol.includes('/onizleme'))).toBe(false);
+  });
+
+  it('3788: tanım yazamayan kişiye bağlantı çıkmaz', async () => {
+    sunucuKur({ ...YONETICI, islemler: ['sayfa.markalama', 'markalama.seri-ver'] }, 'saglam', ISTASYONLAR, [], { isTanimi: { durum: 'tanim-yok', tanim: null, emir: EMIR } });
+    ac(<Istasyon />);
+    await emirOkut();
+    expect(await screen.findByText(/markalama tanımı yok; seri verilmez/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Tanım yaz' })).toBeNull();
+  });
+
+  it('3788: emre özel tanım kullanıldığı söylenir', async () => {
+    sunucuKur(YONETICI, 'saglam', ISTASYONLAR, [], { isTanimi: { durum: 'bulundu', tanim: { ...TANIM, uretimEmriId: 5, emirNo: 'UE-DNM-1' }, emir: EMIR } });
+    ac(<Istasyon />);
+    await emirOkut();
+    expect(await screen.findByText('Bu emre özel tanım kullanılıyor.')).toBeTruthy();
+    expect(await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' })).toBeTruthy();
+  });
+
+  it('3788: markalama istasyonunda birden çok adım varsa kendiliğinden seçilmez; operatör seçer', async () => {
+    const cagrilar = sunucuKur(YONETICI, 'saglam', ISTASYONLAR, [], {
+      operasyonlar: { operasyonlar: [...OPERASYONLAR.operasyonlar, { opNo: 60, ad: 'Deneme ikinci lazer', istasyonKodu: 'DNM-1', markalama: true }] },
+    });
+    ac(<Istasyon />);
+    await emirOkut();
+    const secenek = await screen.findByRole('option', { name: /OP40/ });
+    expect(screen.getByRole('option', { name: /OP60/ })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: /OP30/ })).toBeNull();
+    expect(cagrilar.some((c) => c.yol.startsWith('/markalama/emirler/5/tanim'))).toBe(false);
+    fireEvent.click(secenek);
+    expect(await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' })).toBeTruthy();
+  });
+
+  it('3788: emirde markalama adımı yoksa uyarılır, bütün adımlar seçilebilir', async () => {
+    sunucuKur(YONETICI, 'saglam', ISTASYONLAR, [], { operasyonlar: { operasyonlar: [OPERASYONLAR.operasyonlar[0]!] } });
+    ac(<Istasyon />);
+    await emirOkut();
+    expect(await screen.findByText(/markalama istasyonuna giden adım yok\. Doğru emri/)).toBeTruthy();
+    expect(await screen.findByRole('option', { name: /OP30/ })).toBeTruthy();
+  });
+});
+
 describe('Hatalı markalama', () => {
   it('onay sormadan numara yakmaz; Vazgeç istek göndermez, onayla hatalı sonuçla gider', async () => {
     const cagrilar = sunucuKur(YONETICI);
     ac(<Istasyon />);
-    fireEvent.change(await screen.findByLabelText('Parça ve operasyon'), { target: { value: '7' } });
-    const emir = await screen.findByLabelText('Üretim emri');
-    await screen.findByRole('option', { name: /UE-DNM-1/ });
-    fireEvent.change(emir, { target: { value: '5' } });
+    await emirOkut();
     await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' });
     await screen.findByRole('option', { name: /Lazer 1/ });
-    fireEvent.change(screen.getByLabelText('İstasyon'), { target: { value: '21' } });
+    fireEvent.change(screen.getByLabelText('Bu cihazın istasyonu'), { target: { value: '21' } });
     const markalar = () => cagrilar.filter((c) => c.yol === '/markalama/birimler/markala');
     fireEvent.click(screen.getByRole('button', { name: /Hatalı markalama/ }));
     const pencere = await screen.findByRole('dialog');

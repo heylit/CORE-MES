@@ -57,8 +57,16 @@ const tanimAlanlari = z.object({
   alanlar: z.array(alanGovdesi).min(1, 'En az bir marka gerekir.').max(AZAMI_ALAN),
 });
 
+// 3788: teknik resim revizyon kodu (Belge Merkezi'nin gösterdiği kod, emre 3755 ile sabitlenir). Boş tanım bütün revizyonlarda geçerlidir.
+export const AZAMI_REVIZYON_KODU = 20;
+const revizyonKodu = z.string().trim().min(1).max(AZAMI_REVIZYON_KODU);
+
+// Tanımın anahtarı malzeme, operasyon, teknik resim revizyonu ve emirdir; eklendikten sonra değişmez (değişen anahtar yeni tanımdır).
+// Emir verilirse tanım yalnız o emirde geçer ve revizyonu emrin revizyonudur (sunucu emirden yazar).
 export const tanimEkleGovdesi = tanimAlanlari.extend({
   malzemeId: id,
+  uretimEmriId: id.nullable().prefault(null),
+  cizimRevizyonKodu: revizyonKodu.nullable().prefault(null),
   opNo: z.coerce.number<number>().int('Rota operasyon no tam sayı olmalı.').positive('Rota operasyon no 0\'dan büyük olmalı.').max(2147483647),
 });
 export const tanimKaydetGovdesi = tanimAlanlari.extend(beklenenSurum);
@@ -89,6 +97,11 @@ export const tanimSemasi = z.object({
   // Malzeme kaydı yoksa (silinmiş ya da Aşama 2 bağı yok) boş.
   malzemeKodu: z.string().nullable(),
   opNo: z.number().int(),
+  // Boşsa bütün emirlerde geçer; emir no okunur ad içindir.
+  uretimEmriId: z.number().int().nullable(),
+  emirNo: z.string().nullable(),
+  // Boşsa bütün teknik resim revizyonlarında geçer.
+  cizimRevizyonKodu: z.string().nullable(),
   seriSablonu: z.string(),
   sayacKapsami: z.enum(SAYAC_KAPSAMLARI),
   baslangicSirasi: z.number().int(),
@@ -109,6 +122,42 @@ export const onizlemeCevabi = z.object({ numaralar: z.array(z.string()) });
 // İstasyonda seçilecek emirler: tanımın malzemesinin açık emirleri.
 export const tanimEmirleriCevabi = z.object({
   emirler: z.array(z.object({ id: z.number().int(), emirNo: z.string(), adet: z.number().int(), durum: z.string() })),
+});
+
+// Emir araması (Tanımlar ve markalama terminali): açık emirler, emir no ya da parça kodu parçasıyla.
+export const emirAraSorgusu = z.object({ metin: z.string().trim().min(2).max(60) });
+export const emirSecimiSemasi = z.object({
+  id: z.number().int(),
+  emirNo: z.string(),
+  malzemeId: z.number().int(),
+  // Malzeme kaydı yoksa boş.
+  malzemeKodu: z.string().nullable(),
+  adet: z.number().int(),
+  durum: z.string(),
+  // Emre sabitlenmiş teknik resim revizyonu (3755); sabitlenmemişse boş.
+  cizimRevizyonKodu: z.string().nullable(),
+});
+export const emirAraCevabi = z.object({ emirler: z.array(emirSecimiSemasi) });
+
+// Seçilebilir operasyonlar. Emirden okununca emrin adımları ve istasyonları; malzemeden okununca yürürlükteki rota (istasyon bilinmez: boş).
+export const operasyonSemasi = z.object({
+  opNo: z.number().int(),
+  ad: z.string(),
+  istasyonKodu: z.string().nullable(),
+  // Adımın istasyonu markalama tipinde mi; istasyon bilinmiyorsa boş.
+  markalama: z.boolean().nullable(),
+});
+export const operasyonlarCevabi = z.object({ operasyonlar: z.array(operasyonSemasi) });
+export const malzemeParametresi = z.object({ malzemeId: id });
+
+// İşin tanımı: emir ve operasyon için geçerli tanım. Sıra: bu emre özel, emrin teknik resim revizyonuna ait, revizyonsuz genel.
+// Başka revizyonun tanımı kullanılmaz. Bulunamazsa neden döner; terminal seri vermez ve nedeni yazar.
+export const IS_TANIMI_DURUMLARI = ['bulundu', 'tanim-yok', 'revizyon-tanimi-yok'] as const;
+export const isTanimiSorgusu = z.object({ opNo: z.coerce.number<number>().int().positive().max(2147483647) });
+export const isTanimiCevabi = z.object({
+  durum: z.enum(IS_TANIMI_DURUMLARI),
+  tanim: tanimSemasi.nullable(),
+  emir: emirSecimiSemasi,
 });
 
 export const markalaGovdesi = z.object({
@@ -191,6 +240,12 @@ export type TanimlarCevabi = z.output<typeof tanimlarCevabi>;
 export type OnizlemeCevabi = z.output<typeof onizlemeCevabi>;
 export type TanimEmirleriCevabi = z.output<typeof tanimEmirleriCevabi>;
 export type MarkalaGovdesi = z.output<typeof markalaGovdesi>;
+export type EmirSecimi = z.output<typeof emirSecimiSemasi>;
+export type EmirAraCevabi = z.output<typeof emirAraCevabi>;
+export type MarkalamaOperasyonSecimi = z.output<typeof operasyonSemasi>;
+export type OperasyonlarCevabi = z.output<typeof operasyonlarCevabi>;
+export type IsTanimiDurumu = (typeof IS_TANIMI_DURUMLARI)[number];
+export type IsTanimiCevabi = z.output<typeof isTanimiCevabi>;
 export type DogrulaGovdesi = z.output<typeof dogrulaGovdesi>;
 export type DurumGovdesi = z.output<typeof durumGovdesi>;
 export type MarkalamaBirimi = z.output<typeof birimSemasi>;

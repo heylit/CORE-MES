@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { AlanGovdesi } from '#paylasilan/sozlesme/markalama.ts';
 import {
-  alanHatasi, baslangicHatasi, durumGecisi, hurdaNedeniHatasi, isoHafta, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi,
+  alanHatasi, baslangicHatasi, durumGecisi, emreOzelRevizyonHatasi, hurdaNedeniHatasi, isoHafta, kapsamAnahtari, normalHatasi, olcuHatasi, sablonHatasi, seriAlaniVarMi, seriNoUret, seriUzunlukHatasi, tanimSec,
 } from './kurallar.ts';
+import type { TanimAdayi } from './kurallar.ts';
 
 const alan = (a: Partial<AlanGovdesi> = {}): AlanGovdesi => ({
   ad: 'Seri', icerik: 'seri', sabitMetin: null, kodTuru: 'yok', yontem: 'lazer', yaziYuksekligiMm: null, yaziDerinligiMm: null, yaziTipi: null, program: null, yuzey: null, yer: null, ...a,
@@ -90,5 +91,32 @@ describe('markalama kuralları', () => {
     assert.equal(baslangicHatasi(5, null), null);
     assert.equal(baslangicHatasi(13, 12), null);
     assert.match(baslangicHatasi(12, 12) ?? '', /en az 13/);
+  });
+
+  test('MRK-14: tanım sırası emre özel, emrin revizyonu, revizyonsuz genel; başka revizyonun tanımı kullanılmaz', () => {
+    const aday = (id: number, a: Partial<TanimAdayi> = {}): TanimAdayi => ({ id, aktif: true, uretimEmriId: null, cizimRevizyonKodu: null, ...a });
+    const genel = aday(1);
+    const revB = aday(2, { cizimRevizyonKodu: 'B' });
+    const revC = aday(3, { cizimRevizyonKodu: 'C' });
+    const ozel = aday(4, { uretimEmriId: 5, cizimRevizyonKodu: 'B' });
+    const baskaEmrin = aday(5, { uretimEmriId: 6 });
+    assert.deepEqual(tanimSec([genel, revB, revC, ozel], 5, 'B'), { durum: 'bulundu', id: 4 });
+    assert.deepEqual(tanimSec([genel, revB, revC, ozel], 7, 'B'), { durum: 'bulundu', id: 2 }, 'başka emrin özel tanımı geçmez');
+    assert.deepEqual(tanimSec([genel, revB, revC], 5, ' b '), { durum: 'bulundu', id: 2 }, 'revizyon büyük-küçük harf ve boşluk ayırmaz');
+    assert.deepEqual(tanimSec([genel, revC], 5, 'B'), { durum: 'bulundu', id: 1 }, 'revizyonsuz genel geçer');
+    assert.deepEqual(tanimSec([revC], 5, 'B'), { durum: 'revizyon-tanimi-yok' });
+    assert.deepEqual(tanimSec([revB], 5, null), { durum: 'revizyon-tanimi-yok' }, 'revizyonu sabitlenmemiş emirde revizyonlu tanım geçmez');
+    assert.deepEqual(tanimSec([genel], 5, null), { durum: 'bulundu', id: 1 });
+    assert.deepEqual(tanimSec([baskaEmrin], 5, 'B'), { durum: 'tanim-yok' });
+    assert.deepEqual(tanimSec([aday(1, { aktif: false })], 5, null), { durum: 'tanim-yok' }, 'pasif tanım sayılmaz');
+    assert.deepEqual(tanimSec([], 5, 'B'), { durum: 'tanim-yok' });
+    assert.deepEqual(tanimSec([aday(8, { uretimEmriId: 5, aktif: false }), genel], 5, null), { durum: 'bulundu', id: 1 }, 'pasif emre özel tanım genele düşer');
+  });
+
+  test('MRK-15: emre özel tanımın revizyonu emrinkidir', () => {
+    assert.equal(emreOzelRevizyonHatasi(null, 'B'), null);
+    assert.equal(emreOzelRevizyonHatasi('b', 'B'), null);
+    assert.match(emreOzelRevizyonHatasi('C', 'B') ?? '', /revizyonu B/);
+    assert.match(emreOzelRevizyonHatasi('C', null) ?? '', /sabitlenmemiş/);
   });
 });

@@ -2314,6 +2314,8 @@ export interface UretimEmriOzeti {
   kaynakRotaRevizyonId: number | null;
   // Bağlı sipariş satırı; satırsız emirde null (Proje maliyet geliri satırdan okur, 226 a).
   siparisSatiriId: number | null;
+  // 3755: emre sabitlenmiş teknik resim revizyon kodu; sabitlenmemişse null (Markalama tanımı revizyona göre seçer, 3788).
+  parcaRevizyonKodu: string | null;
 }
 
 // 335: üretimden giriş fişine giren hurda (stok ve Logo okur). Emrin bütün adımlarındaki net hurda adedi, düzeltmeler düşülmüş; yalnız
@@ -2339,6 +2341,7 @@ export async function uretimEmriOzeti(db: Db, id: number): Promise<UretimEmriOze
     id: e.id, emirNo: e.emirNo, malzemeNo: e.malzemeNo, adet: e.adet, durum: gorunenDurum(e.durum, kendi.some((i) => i.durum !== 'bekliyor')),
     arsiv: e.arsiv, oncelik: e.oncelik, baslangic: e.baslangic, teslim: e.teslim, saglamAdet: e.saglamAdet, siradakiIsEmriId: siradakiIsEmri(kendi)?.id ?? null,
     kaynakRotaRevizyonId: e.kaynakRotaRevizyonId, siparisSatiriId: e.siparisSatiriId, ustEmirId: e.ustEmirId,
+    parcaRevizyonKodu: e.parcaRevizyonKodu,
   };
 }
 
