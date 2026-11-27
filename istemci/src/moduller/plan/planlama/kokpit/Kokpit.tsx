@@ -93,7 +93,8 @@ const YON_ADI = { ileri: 'İleriye', geri: 'Teslimden geriye' } as const;
 // Sorun turu şimdilik kapalıdır (3304 a: üst şeritte benzer düğmeler azaltıldı); girişi bu değerle geri gelir.
 const TUR_ACIK = false as boolean;
 // Ctrl + tekerleğin bir adımı saat enini bu oranda büyütür ya da küçültür; sığdırmada tahta ölçülemezse (ilk çizim) bu genişlik alınır.
-const TEKER_ORANI = 1.25, SIGDIRMA_ENI = 1000;
+// Telefonda tezgâh adı sütunu dar alanı yer; önizleme aralığı en az bu enle sığdırılır (yatay kaydırılır) ki paylar hücre kipine düşmesin.
+const TEKER_ORANI = 1.25, SIGDIRMA_ENI = 1000, ONIZLEME_EN_AZ = 120;
 const YON_ACIKLAMASI = { ileri: 'Bütün planı ileriye diz: iş ilk boş saatte başlar', geri: 'Bütün planı teslimden geriye diz: iş termine yetişecek en geç saatte başlar' } as const;
 
 // Menü düğmenin sağ kenarına yaslı açılır; düğme şeridin solundaysa menü sola taşıp kesilir. O zaman düğmenin sol kenarına yaslanır.
@@ -903,25 +904,32 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   }, [coklu, secIs, secEmir, yanan, m, bildir, goz]);
   sigdirSon.current = sigdir;
   // 3792: önizleme açılınca paylar ve kayan iş görünüme gelir (telefonda ölçek küçülür, kapanınca eski ölçek döner); Esc önizlemeyi iptal eder.
-  const bolOncesi = useRef<{ saatEni: number | null; olcek: KokpitOlcegi; odak: number | null } | null>(null);
+  const bolOncesi = useRef<{ saatEni: number | null; olcek: KokpitOlcegi; odak: number | null; gorunum: 'emir' | 'tezgah' | 'siparis' } | null>(null);
   const bolAcik = bolOn !== null;
   const bolIlk = bolOn?.isId ?? null, bolBas = bolOn?.aralik.bas ?? 0, bolSon = bolOn?.aralik.son ?? 0;
   useEffect(() => {
     if (!bolAcik) {
       const o = bolOncesi.current;
-      if (o !== null) { bolOncesi.current = null; setSaatEni(o.saatEni); setOlcek(o.olcek); setOdak(o.odak); }
+      if (o !== null) { bolOncesi.current = null; setSaatEni(o.saatEni); setOlcek(o.olcek); setOdak(o.odak); setLdGorunum(o.gorunum); }
       return;
     }
+    bolOncesi.current ??= { saatEni, olcek, odak, gorunum: ldGorunum };
+    // Paylar tezgâh satırlarında görünür: Emirler ağacında adım satırı kapalı olabilir.
+    setLdGorunum('tezgah');
     setBolSuz(darEkran());
-    if (bolIlk !== null) setGoster(bolIlk);
-    if (!darEkran()) return;
+    // Üst şerit ve tahta birlikte görünsün: önizleme sayfanın aşağısında kalmasın.
+    requestAnimationFrame(() => {
+      const s = document.querySelector<HTMLElement>('[data-onizleme]');
+      if (s !== null && typeof s.scrollIntoView === 'function') s.scrollIntoView({ block: 'start' });
+    });
     const k = document.querySelector<HTMLElement>('.tc-pyq-tahta'), ad = k?.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0;
-    const gorunen = (k?.clientWidth ?? 0) - ad - ODAK_PAYI;
-    const r = sigdirma(bolBas, bolSon, gorunen > 0 ? gorunen : SIGDIRMA_ENI);
-    bolOncesi.current ??= { saatEni, olcek, odak };
-    setSaatEni(r.px); setOlcek(yakinOlcegi(r.px)); setOdak(r.odak);
-    // yalnız önizleme açılırken ya da aralığı değişirken
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const gorunen = Math.max((k?.clientWidth ?? 0) - ad, ONIZLEME_EN_AZ);
+    const r = sigdirma(bolBas, bolSon, gorunen);
+    // Hafta ölçeği tahtayı hücre kipine çevirir; paylar çubuk olarak görünmeli.
+    const o = yakinOlcegi(r.px);
+    setSaatEni(r.px); setOlcek(o === 'H' ? '3' : o);
+    // Telefonda görünen alan birkaç yüz px: tahtanın odak payı (ODAK_PAYI) paylara ayrılan yeri yemesin.
+    setOdak(darEkran() ? r.odak + ODAK_PAYI / r.px : r.odak);
   }, [bolAcik, bolIlk, bolBas, bolSon]);
   const bolVazgec = bolIstegi?.vazgec;
   useEffect(() => {
@@ -1084,7 +1092,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     );
   };
   return (
-    <div className="tc-pyq" data-satir-boyu={satirBoyu} data-goz={goz} data-duzen={klasik ? 'klasik' : 'liste'} data-sayfa={onayAcik ? 'onay' : undefined} ref={kok}>
+    <div className="tc-pyq" data-bol-onizleme={salt ? '' : undefined} data-satir-boyu={satirBoyu} data-goz={goz} data-duzen={klasik ? 'klasik' : 'liste'} data-sayfa={onayAcik ? 'onay' : undefined} ref={kok}>
       {!onayAcik && !klasik && (
         <div className="tc-pyq-ust tc-pyq-ust-sade">
           {tahtasiz(goz) && <button type="button" className="tc-pyq-ok" title="Sipariş listesine dön" onClick={() => { setGoz('T'); }}><Simge ad="chev-left" boyut="k" /><span>Listeye dön</span></button>}

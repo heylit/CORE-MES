@@ -1459,7 +1459,7 @@
 .tc-pyq-taslak[data-onizleme] > b { color: var(--ink); }
 .tc-pyq-bol-onayi > span[role="status"] { display: flex; flex-direction: column; gap: var(--b-1); }
 .tc-pyq-bol-kisa { display: none; }
-.tc-pyq-bol-not { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-bol-not { display: none; color: var(--muted); font-size: var(--yazi-xs); }
 .tc-pyq-onay-tur[data-onay-tur="bol"] { display: inline-flex; align-items: center; gap: var(--b-1); }
 .tc-pyq-bol-suzgec { display: flex; flex-wrap: wrap; gap: var(--b-2); margin: 0 0 var(--b-2); }
 .tc-pyq-bol-suzgec button { min-height: var(--dokunma); }
@@ -1467,8 +1467,25 @@
 @media (max-width: 767px) {
   .tc-pyq-bol-uzun { display: none; }
   .tc-pyq-bol-kisa { display: inline; }
+  .tc-pyq-bol-not { display: block; }
   .tc-pyq-bol-onayi { width: calc(100vw - var(--b-5)); }
   .tc-pyq-bol-onayi > span[role="status"] { flex: 1 1 100%; }
   .tc-pyq-bol-onayi button { flex: 1 1 auto; min-height: var(--dokunma); }
   .tc-pyq-bol-onayi .tc-pyq-onay-tur { flex: none; }
 }
+/* 3792: telefonda tahta yoktur (liste gösterilir); bölme önizlemesi sürerken tahta açılır, liste kapanır. */
+@media (max-width: 767px) {
+  .tc-pyq[data-bol-onizleme] .tc-pyq-tahta { display: block; }
+  .tc-pyq[data-bol-onizleme] .tc-pyq-liste { display: none; }
+}
+.tc-pyq-elle-bol[hidden] { display: none; }
+/* 3792: telefonda önizleme şeridi kısalır (sayaç özeti gizlenir); tahta onay çubuğunun üstünde görünür kalsın. */
+@media (max-width: 767px) {
+  .tc-pyq-taslak[data-onizleme] > :not(b, [data-onizleme-neden], .tc-pyq-taslak-dugmeler, .tc-pyq-taslak-hata) { display: none; }
+  .tc-pyq-taslak[data-onizleme] .tc-pyq-taslak-dugmeler { margin-left: 0; }
+  .tc-pyq-taslak[data-onizleme] .tc-pyq-taslak-dugmeler button:not(:last-child) { display: none; }
+  .tc-pyq-bol-suzgec button { padding-inline: var(--b-2); font-size: var(--yazi-s); }
+}
+/* 3792: onay çubuğu sabit durur; gövdenin son satırları çubuğun altında kalmasın. */
+.tc-pyq[data-bol-onizleme] .tc-pyq-govde { padding-bottom: calc(var(--b-6) * 3); }
+@media (max-width: 767px) { .tc-pyq[data-bol-onizleme] .tc-pyq-govde { padding-bottom: calc(var(--b-6) * 4); } }

@@ -16,7 +16,6 @@ export function MakasSimgesi() {
 export function BolOnayi({ o, duzenle, vazgec, uygula, bekle }: { o: BolOnizlemesi; duzenle: () => void; vazgec: () => void; uygula: () => void; bekle: boolean }) {
   return (
     <>
-      <div className="tc-pyq-alt-bosluk" aria-hidden="true" />
       {createPortal(
         <div className="tc-pyq-ipucu tc-pyq-tasima-onayi tc-pyq-alt-panel tc-pyq-bol-onayi" role="group" aria-label="Bölmeyi onayla" data-bol-onayi="">
           <b className="tc-pyq-onay-tur" data-onay-tur="bol"><MakasSimgesi /> Böl</b>

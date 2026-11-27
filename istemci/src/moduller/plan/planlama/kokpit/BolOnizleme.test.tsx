@@ -124,6 +124,15 @@ describe('Kokpit: bölmenin etkisi tahtada taslak olarak görünür (3792)', () 
     expect(screen.queryByText(/Bırakmak için tıklayın/)).toBeNull();
     fireEvent.contextMenu(is);
     expect(screen.queryByRole('menu')).toBeNull();
+    // Bir işe basmak seçer; önizleme sürer.
+    fireEvent.click(is);
+    await new Promise((t) => { setTimeout(t, 300); });
+    expect(screen.getByRole('group', { name: 'Bölmeyi onayla' })).toBeTruthy();
+    expect(taslakCubuklari()).toHaveLength(2);
+    // Boş tahta alanına basmak da önizlemeyi bozmaz.
+    fireEvent.click(document.querySelector('.tc-pyq-tahta')!);
+    await new Promise((t) => { setTimeout(t, 300); });
+    expect(screen.getByRole('group', { name: 'Bölmeyi onayla' })).toBeTruthy();
   });
 
   it('Vazgeç bölmeyi taslaktan geri alır, önizleme kalkar ve panel girilen değerlerle yeniden açılır; Esc de aynısını yapar', async () => {
