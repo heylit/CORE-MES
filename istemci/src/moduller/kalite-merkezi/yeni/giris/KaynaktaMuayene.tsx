@@ -59,15 +59,15 @@ export function KaynaktaMuayene({ satir, kapat }: { satir: KmKaynaktaMuayeneSati
         <MuayeneBelgeleri emirId={satir.uretimEmriId} isEmriId={satir.muayeneIsEmriId} opNo={satir.opNo} />
         <form id={formKimligi} className="tc-km-gkk-alanlar" noValidate
           onSubmit={(e) => { e.preventDefault(); if (!kapali && !onayla.isPending) onayla.mutate({ saglam: s, red: r }); }}>
+        <p id={ozetId} className={ihlal !== null && (s + r > 0 || eksik.length > 0) ? 'tc-km-gkk-hata' : 'tc-km-gkk-soluk'}>
+          {ihlal ?? `${String(s)} sağlam, ${String(r)} red onaylanır; onay bir kez verilir.`}
+        </p>
         <div className="tc-km-gkk-ikili">
           <Girdi etiket="Sağlam" type="number" inputMode="numeric" min={0} step={1} max={satir.gonderilen} value={saglam}
             disabled={onayla.isPending} onChange={(e) => { saglamYaz(e.target.value); }} />
           <Girdi etiket="Red" type="number" inputMode="numeric" min={0} step={1} max={satir.gonderilen} value={red}
             disabled={onayla.isPending} onChange={(e) => { redYaz(e.target.value); }} />
         </div>
-        <p id={ozetId} className={ihlal !== null && (s + r > 0 || eksik.length > 0) ? 'tc-km-gkk-hata' : 'tc-km-gkk-soluk'}>
-          {ihlal ?? `${String(s)} sağlam, ${String(r)} red onaylanır; onay bir kez verilir.`}
-        </p>
         {onayla.isError && <p className="tc-km-gkk-hata" role="alert">{hataIletisi(onayla.error, 'Muayene onaylanamadı; yeniden deneyin.')}</p>}
         </form>
       </div>

@@ -208,7 +208,8 @@ export function GirisKontrolu({ veri, yetki, gecis, gecisTamam, git }: EkranOzel
   const bosMesaj = arama.trim()
     ? 'Aramaya uyan kayıt yok'
     : sekme === 'bekleyen' ? 'Bekleyen GKK yok' : sekme === 'karar' ? 'Kararı bekleyen hatalı lot yok'
-      : sekme === 'kaynakta' ? 'Bekleyen kaynağında muayene yok' : 'Bu aralıkta yapılan GKK yok';
+      : sekme === 'kaynakta' ? 'Bekleyen kaynağında muayene yok'
+        : fasonYapilan.length > 0 ? 'Bu aralıkta mal kabul GKK\'sı yok; fason dönüşü kararları aşağıda.' : 'Bu aralıkta yapılan GKK yok';
   const yukleniyor = sorgu.isPending && (sekme !== 'yapilan' || aralikGecerli);
   const arac = (etiket: string, yerTutucu: string) => ({ arama: { deger: arama, degistir: aramaYaz, etiket, yerTutucu }, csv: { ad: `gkk-${sekme}` } });
 
@@ -265,6 +266,7 @@ export function GirisKontrolu({ veri, yetki, gecis, gecisTamam, git }: EkranOzel
                 arac={arac('GKK ara', 'GKK no, mal kabul, malzeme, lot, tedarikçi, sipariş')}
               />
             )}
+      {sekme === 'yapilan' && fasonYapilan.length > 0 && <h3 className="tc-km-gkk-bolum">Fason dönüşü kararları</h3>}
       {sekme === 'yapilan' && fasonYapilan.length > 0 && (
         <Tablo etiket="Fason dönüşü kararları" sutunlar={FASON_YAPILAN_SUTUNLARI} satirlar={fasonYapilan}
           satirAnahtari={(k) => `${String(k.uretimEmriId)}-${String(k.opNo)}-${k.zaman}-${k.sonuc}-${k.miktar}`} bosMesaj="" />

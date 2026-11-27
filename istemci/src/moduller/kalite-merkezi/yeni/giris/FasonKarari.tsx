@@ -66,6 +66,9 @@ export function FasonKarari({ satir, kapat }: { satir: KmFasonGkkSatiri; kapat: 
         {!satir.gkkAdimi && (
           <p className="tc-km-gkk-soluk">Bu emirde GKK adımı yok (eski emir): karar yalnız stoğu değiştirir.</p>
         )}
+        <p id={ozetId} className={ihlal !== null && toplam > 0 ? 'tc-km-gkk-hata' : 'tc-km-gkk-soluk'} role={ihlal !== null && toplam > 0 ? 'alert' : undefined}>
+          {ihlal ?? `${String(toplam)} adet karar yazılır; ${String((bekleyen ?? 0) - toplam)} adet bekler.`}
+        </p>
         <div className="tc-km-gkk-ikili">
           {ALANLAR.map((a) => (
             <Girdi
@@ -77,9 +80,6 @@ export function FasonKarari({ satir, kapat }: { satir: KmFasonGkkSatiri; kapat: 
         </div>
         <CokSatir etiket="Not" maxLength={500} value={not} disabled={yaz.isPending} onChange={(e) => { notYaz(e.target.value); }}
           ipucu="İsteğe bağlı; şartlı kabulde şartı yazın." />
-        <p id={ozetId} className={ihlal !== null && toplam > 0 ? 'tc-km-gkk-hata' : 'tc-km-gkk-soluk'} role={ihlal !== null && toplam > 0 ? 'alert' : undefined}>
-          {ihlal ?? `${String(toplam)} adet karar yazılır; ${String((bekleyen ?? 0) - toplam)} adet bekler.`}
-        </p>
         {yaz.isError && <p className="tc-km-gkk-hata" role="alert">{hataIletisi(yaz.error, 'Karar yazılamadı; yeniden deneyin.')}</p>}
       </form>
     </Pencere>

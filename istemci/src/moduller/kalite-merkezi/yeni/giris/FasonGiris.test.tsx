@@ -87,11 +87,14 @@ describe('3809 fason dönüşü GKK ve kaynağında muayene', () => {
     await waitFor(() => { expect(s.yazmalar.find((y) => y.yol.endsWith('/82/onay'))?.govde).toEqual({ saglam: 8, red: 2 }); });
   });
 
-  it('Yapılan sekmesi fason kararlarını ayrı tabloda gösterir', async () => {
+  it('Yapılan sekmesi fason kararlarını başlıklı ayrı tabloda gösterir; GKK yoksa boş mesajı fasonu anar', async () => {
     ac([]);
     fireEvent.click(await screen.findByRole('tab', { name: /Yapılan/ }));
     const tablo = await screen.findByRole('table', { name: 'Fason dönüşü kararları' });
     expect(within(tablo).getByText('ORN-UE-0007 · OP 30')).toBeTruthy();
     expect(within(tablo).getByText('Red')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Fason dönüşü kararları' })).toBeTruthy();
+    expect(screen.getByText(/mal kabul GKK'sı yok; fason dönüşü kararları aşağıda/)).toBeTruthy();
+    expect(screen.queryByText('Bu aralıkta yapılan GKK yok')).toBeNull();
   });
 });
