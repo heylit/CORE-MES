@@ -330,8 +330,11 @@ export function kaymaNedeni(opNo: number, adimlar: readonly KaymaAdimi[], yerind
 // 3414-7 a: durdurulan iş sahada hâlâ sürüyorsa canlıya alınırken yeri değişmez; her biri için işi adıyla söyleyen ileti.
 export function durdurmaBekleyenler(durdurulan: readonly string[], kimlik: Readonly<Record<string, string>>, suren: ReadonlySet<string>): string[] {
   return durdurulan.map((id) => kimlik[id]).filter((a): a is string => a !== undefined && suren.has(a))
-    .map((a) => `${opMetni(a)} terminalde durdurulmayı bekliyor: canlıda eski yerinde kaldı, operatör durdurunca kalan adet yeni yerine geçer.`);
+    .map((a) => `${opMetni(a)} terminalde durdurulmayı bekliyor: canlıda eski yerinde kalır, operatör durdurunca kalan adet yeni yerine geçer.`);
 }
+
+// 3803 N2: motorsuz yazılan iş (parça, kişi tezgâhı) motorun makine yerleriyle üç yazımda oturmadı; sıra denetimi aykırı adımı gösterir.
+export const YAKINSAMADI_UYARISI = 'Parça ve kişi tezgâhı yerleri üç yazımda oturmadı; bir adım öncülünden önce kalabilir, sıra denetimine bakın.';
 
 // Kaydın kalıcı kilitleri (S.locks): planlamacının sabitlediği ya da elle taşıdığı işler. Motorun değerlendirmede koyduğu geçici kilit
 // (gecici) sayılmaz.

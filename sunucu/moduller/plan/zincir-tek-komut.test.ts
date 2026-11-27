@@ -192,11 +192,14 @@ describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canl
     const locks = { [p]: { m: ops[p]!.m, S: yeniS }, [q]: { m: ops[q]!.m, S: pBitis } };
     const w = { ...(calisma['w'] as Record<string, unknown>), durdurulan: { [p]: 1 } };
     const s2 = await calismaKaydet({ ...calisma, plan: { ...plan, ops: yeniOps } as Calisma['plan'], locks, w }, s1);
+    // 3803 N3: aynı uyarı canlıya almadan önce sıra denetiminde de görünür.
+    const oz = await tamam<CanliyaAlOnizlemesiCevabi>(c.planlama, 'POST', '/plan/planlama-calismasi/gonderme-onizlemesi', { ad: 'Durdurma önizleme', calismaSurumu: s2 });
+    assert.match(oz.uyarilar?.join(' ') ?? '', / OP \d+ terminalde durdurulmayı bekliyor: canlıda eski yerinde kalır/, JSON.stringify(oz.uyarilar));
     const r = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'Durdurma bekler', calismaSurumu: s2, dortSaatGerekcesi: 'Deneme gerekçesi: süren iş taşındı' });
     assert.equal(r.statusCode, 200, r.body);
     const cevap = r.json<CalismaGonderCevabi>();
     assert.equal(cevap.uyarilar?.length, 1, JSON.stringify(cevap.uyarilar));
-    assert.match(cevap.uyarilar![0]!, / OP \d+ terminalde durdurulmayı bekliyor: canlıda eski yerinde kaldı/);
+    assert.match(cevap.uyarilar![0]!, / OP \d+ terminalde durdurulmayı bekliyor: canlıda eski yerinde kalır/);
     assert.equal((await yerOf(isler[0])).baslangic, once.baslangic, 'süren iş canlıda yerinden oynamaz');
 
     // Operatör işi durdurur: aynı çalışma yeniden canlıya alınınca kalan yeni yerine geçer, uyarı kalmaz.
@@ -259,7 +262,7 @@ describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canl
       const s2 = await calismaKaydet({ ...calisma, plan: { ...plan, ops: yeniOps } as Calisma['plan'], locks: {}, w }, s1);
       const r = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'Süren baştan kur', calismaSurumu: s2, dortSaatGerekcesi: 'Deneme gerekçesi: süren iş taşındı' });
       assert.equal(r.statusCode, 200, r.body);
-      assert.match(r.json<CalismaGonderCevabi>().uyarilar?.join(' ') ?? '', / OP \d+ terminalde durdurulmayı bekliyor: canlıda eski yerinde kaldı/);
+      assert.match(r.json<CalismaGonderCevabi>().uyarilar?.join(' ') ?? '', / OP \d+ terminalde durdurulmayı bekliyor: canlıda eski yerinde kalır/);
       const y1 = await yerOf(isler[0]), y2 = await yerOf(isler[1]);
       assert.equal(y1.baslangic, once.baslangic, 'süren iş canlıda yerinden oynamaz');
       assert.ok(Date.parse(y2.baslangic) >= Date.parse(y1.bitis) - 1000, `ardıl süren işin bitişinden önce başlamaz: ${y1.bitis} / ${y2.baslangic}`);

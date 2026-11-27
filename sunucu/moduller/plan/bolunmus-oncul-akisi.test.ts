@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { before, describe, test } from 'node:test';
-import type { CanliyaAlOnizlemesiCevabi, PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
+import { kilitCakismasiAyrintisi, type CanliyaAlOnizlemesiCevabi, type PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { DegerlendirmeDurumuCevabi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { kablola } from '../../kablolama.ts';
 import { kullaniciYukle } from '../kisiler/disari.ts';
@@ -333,6 +333,12 @@ describe('plan (gerçek PostgreSQL): kilitli adım sahada süren işle üst üst
     assert.equal(r.statusCode, 409, r.body);
     const ileti = r.json<{ hata?: string; ileti?: string; mesaj?: string }>();
     const metin = JSON.stringify(ileti);
-    for (const parca of ['OP 10 kilitli saatinde', 'RT-SCI-T1', 'ile üst üste', 'OP 10 sahada çalışıyor', 'arasında yerinde kalıyor', 'kilidi kaldırın']) assert.ok(metin.includes(parca), `${parca}: ${metin}`);
+    for (const parca of ['OP 10 kilitli saatinde', 'RT-SCI-T1', 'ile üst üste', 'OP 10 sahada çalışıyor', 'arasında yerinde kalıyor', 'kilidi kaldırın']) assert.ok(metin.includes(parca), `${parca}: ${metin}`);    // 3805: aynı çakışma ayrıntıda yapılı gelir; alanlar iletideki metinle birebir aynıdır (istemci çareyi buradan kurar).
+    const govde = r.json<{ mesaj: string; ayrinti?: { kilitCakismasi?: unknown } }>();
+    const x = kilitCakismasiAyrintisi.parse(govde.ayrinti?.kilitCakismasi);
+    assert.deepEqual([x.opNo, x.engelOpNo, x.neden], [10, 10, 'sahada çalışıyor']);
+    assert.ok(x.kaynak.includes('RT-SCI-T1') && x.emirNo !== x.engelEmirNo, JSON.stringify(x));
+    assert.ok(govde.mesaj.startsWith(`${x.emirNo} OP ${String(x.opNo)} kilitli saatinde ${x.kaynak} üzerinde ${x.engelEmirNo} OP ${String(x.engelOpNo)} ile üst üste. `), govde.mesaj);
+    assert.ok(govde.mesaj.includes(`OP ${String(x.engelOpNo)} ${x.neden}, canlıda ${x.baslangic} - ${x.bitis} arasında yerinde kalıyor.`), govde.mesaj);
   });
 });

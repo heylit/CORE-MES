@@ -16,6 +16,12 @@ export function kilitKaydi(m: Pick<KokpitModeli, 'isler'>, isId: string, istenen
   if (!e) return null;
   return { isId, engel: e.id, S: r.S, neden: e.basladi && !e.bitti ? 'sahada süren' : e.kilitli ? 'kilitli' : 'yerinde kalan' };
 }
+// Satır yalnız taşıma taslağın son değişikliğiyken gösterilir: sonraki bir değişiklik (başka taşıma, geri alma) ya da süren bir iş
+// (tur, meşgul) yer bilgisini eskitir.
+export interface SonTasima { isId: string; istenen: number; onceki: number }
+export function gorunenKilitKaydi(m: Pick<KokpitModeli, 'isler'>, son: SonTasima | null, adimSayisi: number, mesgul: boolean): KilitKaydi | null {
+  return son !== null && adimSayisi === son.onceki + 1 && !mesgul ? kilitKaydi(m, son.isId, son.istenen) : null;
+}
 export function isAdi(m: Pick<KokpitModeli, 'isler' | 'emirler'>, id: string): string {
   const i = m.isler[id];
   const no = m.emirler.find((e) => e.id === i?.job)?.no ?? i?.job ?? id;

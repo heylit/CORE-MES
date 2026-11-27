@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CanliyaAlOnizlemesiCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { CanliyaAlOnizlemesiCevabi, KilitCakismasiAyrintisi } from '#paylasilan/sozlesme/plan.ts';
 import { api, ApiHatasi, hataIletisi } from '../../../../../ortak/veri/api.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
@@ -12,7 +12,7 @@ export const GONDERME_ONIZLEME_YOLU = '/plan/planlama-calismasi/gonderme-onizlem
 export type OnizlemeDurumu =
   | { tur: 'yukleniyor'; onceki: CanliyaAlOnizlemesiCevabi | null }
   | { tur: 'hazir'; veri: CanliyaAlOnizlemesiCevabi }
-  | { tur: 'hata'; ileti: string };
+  | { tur: 'hata'; ileti: string; kilit: KilitCakismasi | null };
 
 // Sonuç okunduğu çalışmaya bağlıdır: çalışma değiştiği anda (plan yeniden çözülünce, kilit kaydırılınca, her yazmada) durum "yükleniyor" olur,
 // önceki sonuç eski diye kalır ve kaydırma düğmesi kapanır. İstek çalışma durulunca (kısa bekleme) ve bekleyen yazma sunucuya yazıldıktan sonra,
@@ -24,7 +24,7 @@ export type OnizlemeDurumu =
 export const ONIZLEME_BEKLEME_MS = 150;
 export const ONIZLEME_ZAMAN_ASIMI_MS = 20_000;
 const YENIDEN_DENEME_MS = 600;
-type Kayit = { calisma: PlanlamaCalismasi } & ({ tur: 'hazir'; veri: CanliyaAlOnizlemesiCevabi } | { tur: 'hata'; ileti: string });
+type Kayit = { calisma: PlanlamaCalismasi } & ({ tur: 'hazir'; veri: CanliyaAlOnizlemesiCevabi } | { tur: 'hata'; ileti: string; kilit: KilitCakismasi | null });
 const surumCakismasi = (h: unknown): boolean => h instanceof ApiHatasi && h.durum === 409;
 export function useGondermeOnizlemesi(a: { calisma: PlanlamaCalismasi | null; komut: CalismaKomutu | null; ilkSurum: number | null; etkin: boolean; ad: string }): { durum: OnizlemeDurumu; yenidenDene: () => void } {
   const [kayit, setKayit] = useState<Kayit | null>(null);
@@ -40,25 +40,25 @@ export function useGondermeOnizlemesi(a: { calisma: PlanlamaCalismasi | null; ko
       const k = komutRef.current;
       const surum = k === null ? ilkSurum : await k.kaydet();
       if (iptal) return;
-      if (surum === null) { setKayit({ calisma, tur: 'hata', ileti: 'Çalışma kaydedilemedi; sıra denetimi yapılamadı. Yeniden deneyin.' }); return; }
+      if (surum === null) { setKayit({ calisma, tur: 'hata', ileti: 'Çalışma kaydedilemedi; sıra denetimi yapılamadı. Yeniden deneyin.', kilit: null }); return; }
       try {
         const veri = await api.post<CanliyaAlOnizlemesiCevabi>(GONDERME_ONIZLEME_YOLU, { ad, calismaSurumu: surum });
         if (!iptal) { sonVeri.current = veri; setKayit({ calisma, tur: 'hazir', veri }); }
       } catch (h) {
         if (iptal) return;
         if (!yeniden && surumCakismasi(h)) { await new Promise((r) => { setTimeout(r, YENIDEN_DENEME_MS); }); if (!iptal) await sor(true); return; }
-        setKayit({ calisma, tur: 'hata', ileti: hataIletisi(h, 'sunucuya ulaşılamadı') });
+        setKayit({ calisma, tur: 'hata', ileti: hataIletisi(h, 'sunucuya ulaşılamadı'), kilit: h instanceof ApiHatasi ? kilitCakismasiAyrintidan(h.govde.ayrinti) : null });
       }
     };
     let asim: ReturnType<typeof setTimeout> | null = null;
     const t = setTimeout(() => {
-      asim = setTimeout(() => { if (!iptal) setKayit((k) => (k !== null && k.calisma === calisma ? k : { calisma, tur: 'hata', ileti: 'Sıra denetimi zamanında dönmedi; yeniden deneyin.' })); }, ONIZLEME_ZAMAN_ASIMI_MS);
+      asim = setTimeout(() => { if (!iptal) setKayit((k) => (k !== null && k.calisma === calisma ? k : { calisma, tur: 'hata', ileti: 'Sıra denetimi zamanında dönmedi; yeniden deneyin.', kilit: null })); }, ONIZLEME_ZAMAN_ASIMI_MS);
       void sor(false).finally(() => { if (asim !== null) clearTimeout(asim); });
     }, ONIZLEME_BEKLEME_MS);
     return () => { iptal = true; clearTimeout(t); if (asim !== null) clearTimeout(asim); };
   }, [calisma, ilkSurum, etkin, ad, sayac]);
   const yenidenDene = useCallback(() => { setKayit(null); setSayac((n) => n + 1); }, []);
-  const durum: OnizlemeDurumu = kayit !== null && kayit.calisma === calisma ? (kayit.tur === 'hazir' ? { tur: 'hazir', veri: kayit.veri } : { tur: 'hata', ileti: kayit.ileti }) : { tur: 'yukleniyor', onceki: sonVeri.current };
+  const durum: OnizlemeDurumu = kayit !== null && kayit.calisma === calisma ? (kayit.tur === 'hazir' ? { tur: 'hazir', veri: kayit.veri } : { tur: 'hata', ileti: kayit.ileti, kilit: kayit.kilit }) : { tur: 'yukleniyor', onceki: sonVeri.current };
   return { durum, yenidenDene };
 }
 
@@ -205,28 +205,38 @@ export type ItilenPay = NonNullable<CanliyaAlOnizlemesiCevabi['itilen']>[number]
 export const itilenSatiri = (x: ItilenPay): string =>
   `${x.emirNo} ${adimAdi(x)}${x.parca === null ? '' : ` parça ${String(x.parca)}`}: Kokpit ${gunSaat(x.onizleme)} → canlıya alınınca ${gunSaat(x.yeni)} (öncülün arkasına itildi)`;
 
-// 3793-2 (madde 8): kilitli adım canlıda yerinde kalan işle üst üste gelince sunucu yazımı durdurur ve iletide çakışan işi, kaynağı, nedeni ve
-// canlıdaki aralığı yazar (servis.ts, 3793 6). Sunucu kuralı değişmeden iki çare sunulur: kilidi o işin arkasına taşımak ya da kilidi kaldırmak.
-// İleti tanınmazsa (eski sunucu, başka engel) düğme çıkmaz, ileti olduğu gibi kalır.
-export interface KilitCakismasi {
-  emirNo: string; opNo: number; kaynak: string; engelEmirNo: string; engelOpNo: number;
-  neden: 'sahada çalışıyor' | 'kilitli' | 'dondurulmuş' | 'bu yazımda taşınmıyor'; baslangic: string; bitis: string;
+// 3793-2 (madde 8): kilitli adım canlıda yerinde kalan işle üst üste gelince sunucu yazımı durdurur; 409'un ayrıntısı çakışan işi, kaynağı,
+// nedeni ve canlıdaki aralığı yapılı verir (servis.ts, 3805). Sunucu kuralı değişmeden iki çare sunulur: kilidi o işin arkasına taşımak ya da
+// kilidi kaldırmak. Ayrıntı yoksa ya da biçimi tanınmazsa (başka engel) düğme çıkmaz, ileti olduğu gibi kalır.
+export type KilitCakismasi = KilitCakismasiAyrintisi;
+const NEDENLER: ReadonlySet<string> = new Set<KilitCakismasi['neden']>(['sahada çalışıyor', 'kilitli', 'dondurulmuş', 'bu yazımda taşınmıyor']);
+const TESIS_SAATI = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/;
+export function kilitCakismasiAyrintidan(ayrinti: unknown): KilitCakismasi | null {
+  const v = typeof ayrinti === 'object' && ayrinti !== null ? (ayrinti as { kilitCakismasi?: unknown }).kilitCakismasi : null;
+  if (typeof v !== 'object' || v === null) return null;
+  const x = v as Record<string, unknown>;
+  const metin = (a: unknown): a is string => typeof a === 'string' && a !== '';
+  const op = (a: unknown): a is number => typeof a === 'number' && Number.isInteger(a);
+  const saat = (a: unknown): a is string => typeof a === 'string' && TESIS_SAATI.test(a);
+  const { emirNo, opNo, kaynak, engelEmirNo, engelOpNo, neden, baslangic, bitis } = x;
+  if (!metin(emirNo) || !op(opNo) || !metin(kaynak) || !metin(engelEmirNo) || !op(engelOpNo) || typeof neden !== 'string' || !NEDENLER.has(neden) || !saat(baslangic) || !saat(bitis)) return null;
+  return { emirNo, opNo, kaynak, engelEmirNo, engelOpNo, neden: neden as KilitCakismasi['neden'], baslangic, bitis };
 }
-const KILIT_CAKISMASI = /(\S+) OP (\d+) kilitli saatinde (.+?) üzerinde (\S+) OP (\d+) ile üst üste\. OP \d+ (sahada çalışıyor|kilitli|dondurulmuş|bu yazımda taşınmıyor), canlıda (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) - (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) arasında yerinde kalıyor/;
-export function kilitCakismasiAyir(ileti: string): KilitCakismasi | null {
-  const m = KILIT_CAKISMASI.exec(ileti);
-  if (!m) return null;
-  return { emirNo: m[1]!, opNo: Number(m[2]), kaynak: m[3]!, engelEmirNo: m[4]!, engelOpNo: Number(m[5]), neden: m[6] as KilitCakismasi['neden'], baslangic: m[7]!, bitis: m[8]! };
-}
-// Kilidin anahtarı emir no ve OP'den bulunur (bölünmüş adım sabitlenmez, anahtarı payısızdır). Yeni saat canlıdaki bitişten sonraki ilk çeyrek
-// saattir: iletideki saat dakikaya kesiktir, aynı dakikaya konan kilit saniyelerle yine üst üste kalırdı. Tezgâh kilidin tezgâhıdır.
+// Kilidin anahtarı emir no ve OP'den bulunur; pay kilidi (`<adım>~N`) de adımın kilididir. Adımın birden çok kilidi varsa (pay kilitleri)
+// çakışan, yani canlıdaki bitişten önce başlayanların en geç başlayanı alınır. Yeni saat canlıdaki bitişten sonraki ilk çeyrek saattir:
+// iletideki saat dakikaya kesiktir, aynı dakikaya konan kilit saniyelerle yine üst üste kalırdı. Tezgâh kilidin tezgâhıdır.
 export function kilitCakismasiIsi(c: PlanlamaCalismasi, x: KilitCakismasi, emirNo: (id: string) => string, simdi: number): KaydirmaIsi | null {
   const ad = `${x.emirNo} OP ${String(x.opNo)}`;
-  const k = Object.keys(c.locks).find((id) => komsuAdi(id, emirNo) === ad);
-  const kilit = k === undefined ? undefined : c.locks[k] as { m?: unknown } | null;
   const bitis = saatOku(c.D, x.bitis);
-  if (k === undefined || typeof kilit?.m !== 'string' || bitis === null) return null;
-  return { k, tezgah: kilit.m, S: kaydirmaSaati(bitis + 1 / 60, simdi) };
+  if (bitis === null) return null;
+  const adaylar = Object.entries(c.locks).flatMap(([k, v]) => {
+    const kilit = v as { m?: unknown; S?: unknown } | null;
+    if (komsuAdi(k.replace(/~\d+$/, ''), emirNo) !== ad || typeof kilit?.m !== 'string') return [];
+    return [{ k, m: kilit.m, S: typeof kilit.S === 'number' && Number.isFinite(kilit.S) ? kilit.S : null }];
+  });
+  const cakisan = adaylar.length > 1 ? adaylar.filter((a) => a.S !== null && a.S < bitis).sort((a, b) => b.S! - a.S!) : adaylar;
+  const sec = cakisan[0];
+  return sec === undefined ? null : { k: sec.k, tezgah: sec.m, S: kaydirmaSaati(bitis + 1 / 60, simdi) };
 }
 export const kilitCakismasiNedeni = (x: KilitCakismasi): string =>
   `${x.engelEmirNo} OP ${String(x.engelOpNo)} ${x.neden}; canlıda ${x.baslangic.slice(8, 10)}.${x.baslangic.slice(5, 7)} ${x.baslangic.slice(11)} - ${x.bitis.slice(8, 10)}.${x.bitis.slice(5, 7)} ${x.bitis.slice(11)} arasında yerinde kalıyor.`;
@@ -241,7 +251,7 @@ export function kilidiKaldir(komut: CalismaKomutu, k: string, ad: string): boole
 export function onizlemeEngeli(d: OnizlemeDurumu, etkin = true): string | null {
   if (!etkin) return null;
   if (d.tur === 'yukleniyor') return 'Sıra denetimi bitince açılır.';
-  if (d.tur === 'hata') return kilitCakismasiAyir(d.ileti) !== null ? 'Kilitli adım yerinde kalan işle üst üste; önce kilidi arkasına alın ya da kaldırın.' : 'Sıra denetimi alınamadığı için kapalı; yeniden deneyin.';
+  if (d.tur === 'hata') return d.kilit !== null ? 'Kilitli adım yerinde kalan işle üst üste; önce kilidi arkasına alın ya da kaldırın.' : 'Sıra denetimi alınamadığı için kapalı; yeniden deneyin.';
   const l = d.veri.ihlaller;
   if (l.length === 0) return null;
   if (l.some((i) => i.kilitli)) return "Önce kilidi kaydırın ya da adımı Kokpit'te düzeltin.";

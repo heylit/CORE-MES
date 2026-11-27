@@ -7,7 +7,7 @@ import type {
   CanliYerlesimCevabi, CanliyaAlCevabi, CanliyaAlmaGecmisiCevabi, CanliyaAlOnizlemesiCevabi, KaydirmaOnerisiCevabi, HizliDeneme, MotorFarki, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
   EkMesaiGovdesi, GeriGonderGovdesi, MotorKuraliGovdesi, OnayaGonderGovdesi, PlanEkMesai, PlanOnayKomutu, PlanlanabilirlikCevabi, RotaPlanlanabilirlikCevabi,
 } from '#paylasilan/sozlesme/plan.ts';
-import { CANLI_DEGISTI, DORT_SAAT_RED_NEDENI, PLAN_ONAY_KOMUTLARI, SONRADAN_BASLAYAN, type CanliDegistiAyrintisi, type SonradanBaslayanAyrintisi } from '#paylasilan/sozlesme/plan.ts';
+import { CANLI_DEGISTI, DORT_SAAT_RED_NEDENI, PLAN_ONAY_KOMUTLARI, SONRADAN_BASLAYAN, type CanliDegistiAyrintisi, type KilitCakismasiAyrintisi, type SonradanBaslayanAyrintisi } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
 import { devirPartisi } from '#paylasilan/devir-kurali.ts';
 import {
@@ -1884,6 +1884,7 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
   let atlanan = 0;
   let motorFarki: MotorFarki | undefined;
   let yerlesmeyen: KuyrukYazCevabi['yerlesmeyen'];
+  let yakinsamadi = false;
   const itilen: NonNullable<KuyrukYazCevabi['itilen']> = [];
   if (g.kuyruklar.length > 0) {
     const p = await taslagaYaz(db, k, taslak, async (b0, id) => {
@@ -1972,9 +1973,14 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
             const o = b.isler.get(ust.isEmriId);
             const m = yerler.find((y) => y.isEmriId === ust.isEmriId);
             const neden = o?.durum === 'basladi' ? 'sahada çalışıyor' : sabitYer.has(ust.isEmriId) || m?.kilitli ? 'kilitli' : m?.dondurulmus ? 'dondurulmuş' : 'bu yazımda taşınmıyor';
+            // 3805: aynı bilgi yapılı alanda da döner; istemci çareyi iletinin metninden değil buradan kurar.
+            const kilitCakismasi: KilitCakismasiAyrintisi = {
+              emirNo: i.is.emirNo, opNo: i.is.opNo, kaynak: kaynakMetni(b, q.kaynak), engelEmirNo: o?.emirNo ?? '', engelOpNo: o?.opNo ?? 0,
+              neden, baslangic: zamanMetni(b, ust.baslangic), bitis: zamanMetni(b, ust.bitis),
+            };
             throw cakisma(`${isMetni(b, i.is.id)} kilitli saatinde ${kaynakMetni(b, q.kaynak)} üzerinde ${isMetni(b, ust.isEmriId)} ile üst üste. `
               + `OP ${String(o?.opNo ?? '')} ${neden}, canlıda ${zamanMetni(b, ust.baslangic)} - ${zamanMetni(b, ust.bitis)} arasında yerinde kalıyor. `
-              + `OP ${String(i.is.opNo)} için kilitli saati ${zamanMetni(b, ust.bitis)} sonrasına alın ya da kilidi kaldırın.`);
+              + `OP ${String(i.is.opNo)} için kilitli saati ${zamanMetni(b, ust.bitis)} sonrasına alın ya da kilidi kaldırın.`, { kilitCakismasi });
           }
           const neden = sabit.tur === 'vardiya-disi' ? 'vardiya dışı (mola, vardiya sonu ya da kapalı gün)' : 'bu yazımda taşınmayan başka işle üst üste';
           throw cakisma(`${isMetni(b, i.is.id)} sabitlendiği saatte ${kaynakMetni(b, q.kaynak)} üzerinde başlayamıyor (${neden}); çalışmada saati ya da sabitliği düzeltin.`);
@@ -2179,6 +2185,8 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
       const yazilanBas = yazilan;
       const itilenBas = itilen.length;
       let sonuc = yakinsa(new Map());
+      // Motordan sonra okunan satır yoksa bu turda yazılan satır kullanılır: motorun yerleştirdiği iş yazılmadan kalmasın (3803 N1).
+      const sonYazim = new Map<number, Parameters<typeof s.yerlesimYaz>[2]>();
       // 3793 2a: motor makine işini (çalışan işin gerçek kalanı, sabit iş) kuyruk turundan geç koyabilir; motorsuz yazılan ardıl (kişi tezgâhı,
       // parça) o zaman öncülünden önce kalır. Motorun yerleri kesin sayılıp turlar yeniden koşar, değişen motorsuz iş yeniden yazılır ve motor
       // onun etrafında bir kez daha dizer. En çok üç yazım.
@@ -2198,9 +2206,11 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
             }]);
             continue;
           }
-          await s.yerlesimYaz(db, id, {
+          const satir = {
             isEmriId: i.is.id, kaynak: q.kaynak, baslangic: tarih(b, yer.baslangic), bitis: tarih(b, yer.bitis), kilitli: false, dondurulmus: i.x.dondurulmus, elleSira: i.x.elle ? i.sira : null, elleIstasyonId: rotaIstasyonu(b, i.is), elleKaynak: i.x.elleKaynak,
-          });
+          };
+          await s.yerlesimYaz(db, id, satir);
+          sonYazim.set(i.is.id, satir);
           idler.push(i.is.id);
         }
         // Bölünmüş işin ana satırı zarftır: ilk parçanın kaynağı, ilk başlangıç, son bitiş; iş düzeyinde elle sıra parçaların en küçüğü.
@@ -2225,15 +2235,21 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
         if (m.yerlesmez.size > 0) await s.yerlesimleriSil(db, id, [...m.yerlesmez]);
         idler.push(...m.yerlesmez);
         const yazili = new Map((await s.yerlesimler(db, id)).map((y) => [y.isEmriId, y]));
-        for (const [isId, y] of m.yer) await s.yerlesimYaz(db, id, { ...yazili.get(isId)!, baslangic: y.baslangic, bitis: y.bitis });
+        for (const [isId, y] of m.yer) {
+          const onceki = yazili.get(isId) ?? sonYazim.get(isId);
+          if (onceki === undefined) throw cakisma(`${isMetni(b, isId)} motorun verdiği yere yazılamadı: taslakta satırı yok. Yeniden deneyin.`);
+          await s.yerlesimYaz(db, id, { ...onceki, baslangic: y.baslangic, bitis: y.bitis });
+        }
         motorFarki = m.fark;
         yerlesmeyen = m.yerlesmeyen.map((x) => { const i = b.isler.get(x.isId)!; return { emirNo: i.emirNo, opNo: i.opNo, ...nedenAlanlari(x.neden) }; });
-        if (dongu >= 2 || (parcaNolari.size === 0 && !kisiKuyruklu)) break;
+        if (parcaNolari.size === 0 && !kisiKuyruklu) break;
         const kaynagi = new Map(motorKuyrugu.flatMap((q) => q.isler.map((x) => [x.isId, q.makineId] as const)));
         const kesin = new Map([...m.yer].flatMap(([isId, y]) => (kaynagi.has(isId)
           ? [[isId, { baslangic: dk(b, y.baslangic), bitis: dk(b, y.bitis), kaynak: { tur: 'makine', id: kaynagi.get(isId)! } as Kaynak }] as const] : [])));
         const yeni = yakinsa(kesin);
         if (motorsuzYerler(yeni) === motorsuzYerler(sonuc)) break;
+        // Üç yazımda oturmadıysa son yazım kalır; ardıl öncülünden önce kalabilir (sıra denetimi gösterir), cevap bunu söyler (3803 N2).
+        if (dongu >= 2) { yakinsamadi = true; break; }
         sonuc = yeni;
       }
       return { tur: 'sirala', ozet: `Reçete ve Rota kuyrukları yazıldı (${g.kuyruklar.length} kaynak, ${yazilan} iş)`, isEmriIdleri: [...new Set(idler)] };
@@ -2241,7 +2257,7 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
     taslak = { id: p.taslak!.id, surum: p.taslak!.surum };
   }
   if (taslak === null) throw dogrulama('Yazılacak kuyruk yok.', 'kuyruklar');
-  return { cevap: { taslak: taslak.id, canli: false, yazilan, atlanan, ...(motorFarki === undefined ? {} : { motorFarki }), ...(yerlesmeyen?.length ? { yerlesmeyen } : {}), ...(itilen.length > 0 ? { itilen } : {}) }, ekMesai };
+  return { cevap: { taslak: taslak.id, canli: false, yazilan, atlanan, ...(motorFarki === undefined ? {} : { motorFarki }), ...(yerlesmeyen?.length ? { yerlesmeyen } : {}), ...(itilen.length > 0 ? { itilen } : {}), ...(yakinsamadi ? { yakinsamadi: true as const } : {}) }, ekMesai };
 }
 
 // 3734-2: çalışan bölünmüş işte yerinde kalan payların kaynakları: terminalin çalıştırdığı kaynak (yoksa iş emrinin kaynağı) ve sayımı olan

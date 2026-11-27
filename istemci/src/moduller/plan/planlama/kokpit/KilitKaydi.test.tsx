@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { isAdi, kilitKaydi, KilitKaydiSatiri } from './KilitKaydi.tsx';
+import { gorunenKilitKaydi, isAdi, kilitKaydi, KilitKaydiSatiri } from './KilitKaydi.tsx';
 import type { KokpitIsi, KokpitModeli } from './kurallar.ts';
 
 // 3793-2 (madde 7, a): bırakılan adım yerinde kalan işin arkasına alındıysa Kokpit bunu söyler. Veriler uydurmadır.
@@ -28,6 +28,26 @@ describe('Kokpit: kilit yerinde kalan işin arkasına alındı (3793-2)', () => 
     expect(kilitKaydi(model([is('J7.20', 'J7', 'M1', 10, 40, { basladi: true }), is('J9.50', 'J9', 'M2', 40, 44)]), 'J9.50', 20)).toBeNull();
     expect(kilitKaydi(model([is('J7.20', 'J7', 'M2', 10, 40), is('J9.50', 'J9', 'M2', 40, 44)]), 'J9.50', 20)).toBeNull();
     expect(kilitKaydi(model([is('J9.50', 'J9', 'M2', 40, 44)]), 'yok', 20)).toBeNull();
+  });
+  it('3804 K2: yeni saatten sonra biten iş engel sayılmaz (adım onun bitişine kaymış olamaz)', () => {
+    expect(kilitKaydi(model([is('J7.30', 'J7', 'M2', 15, 50, { basladi: true }), is('J9.50', 'J9', 'M2', 40, 44)]), 'J9.50', 20)).toBeNull();
+    const m = model([is('J7.20', 'J7', 'M2', 10, 40, { basladi: true }), is('J7.30', 'J7', 'M2', 15, 50, { kilitli: true }), is('J9.50', 'J9', 'M2', 40, 44)]);
+    expect(kilitKaydi(m, 'J9.50', 20)?.engel).toBe('J7.20');
+  });
+  it('3804 K5: birden çok engelde en geç biten engel sayılır (adım onun bitişine oturdu)', () => {
+    const m = model([is('J7.20', 'J7', 'M2', 10, 30, { basladi: true }), is('J7.30', 'J7', 'M2', 22, 40, { kilitli: true }), is('J9.50', 'J9', 'M2', 40, 44)]);
+    expect(kilitKaydi(m, 'J9.50', 20)).toEqual({ isId: 'J9.50', engel: 'J7.30', S: 40, neden: 'kilitli' });
+    const ters = model([is('J7.30', 'J7', 'M2', 22, 40, { kilitli: true }), is('J7.20', 'J7', 'M2', 10, 30, { basladi: true }), is('J9.50', 'J9', 'M2', 40, 44)]);
+    expect(kilitKaydi(ters, 'J9.50', 20)?.engel).toBe('J7.30');
+  });
+  it('3804 K6: satır yalnız taşıma son değişiklikken ve Kokpit meşgul değilken görünür', () => {
+    const m = model([is('J7.20', 'J7', 'M2', 10, 40, { basladi: true }), is('J9.50', 'J9', 'M2', 40, 44, { kilitli: true })]);
+    const son = { isId: 'J9.50', istenen: 20, onceki: 3 };
+    expect(gorunenKilitKaydi(m, son, 4, false)?.engel).toBe('J7.20');
+    expect(gorunenKilitKaydi(m, son, 5, false)).toBeNull();
+    expect(gorunenKilitKaydi(m, son, 3, false)).toBeNull();
+    expect(gorunenKilitKaydi(m, son, 4, true)).toBeNull();
+    expect(gorunenKilitKaydi(m, null, 4, false)).toBeNull();
   });
   it('satır çakışan işi, tezgâhı ve yeni saati yazar; Tamam, Kilidi kaldır ve Geri al kendi işini yapar; yetki yoksa Kilidi kaldır yok', () => {
     const m = model([is('J7.20', 'J7', 'M2', 10, 40, { basladi: true }), is('J9.50', 'J9', 'M2', 40, 44, { kilitli: true })]);

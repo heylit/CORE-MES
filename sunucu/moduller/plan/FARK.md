@@ -469,3 +469,18 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   nedeniyle ("sahada çalışıyor", "kilitli", "dondurulmuş") söylenir; çare: kilitli saati o bitişten sonraya almak ya da kilidi kaldırmak.
 - Test: `bolunmus-oncul-akisi.test.ts` 4-9 (4-5 Test2 E1-E2; 6 sahada süren iş ve kişi tezgâhı; 7-8 kişi tezgâhında itme; 9 çakışma
   iletisi); `planlama-kurallar.test.ts` 3793 3a; istemci `KokpitOnaySira.test.tsx` 3793 3a.
+
+## Canlıya alma sağlamlığı ve kilit çakışmasının yapılı alanı (3803, 3804, 3805; 2026-11-27)
+- Motor sonrası yazım (3803 N1, `servis.ts kuyruklariYazIc`): motorun yerleştirdiği işin satırı okunamazsa o turda yazılan satır kullanılır;
+  ikisi de yoksa anlaşılır 409 (önceden `undefined` ile çöküş). Kod okumasına göre yol erişilmez (motor yer ve yerleşmez kümeleri ayrık).
+- Yakınsama (N2): motorsuz yerler üç yazımda oturmadıysa cevapta `yakinsamadi: true` (plan `kuyrukYazCevabi`, isteğe bağlı); çalışma
+  taslağı bunu `uyarilar`'a yazar.
+- Önizleme uyarıları (N3): `canliyaAlOnizlemesiCevabi.uyarilar` (isteğe bağlı) taslak yazımının uyarılarını taşır (durdurulmayı bekleyen
+  süren iş, yakınsamama, elle bölme uyarlaması); onay ekranı canlıya almadan listeler. Durdurma uyarısı "kaldı" yerine "kalır" der.
+- Sahada süren koşulu (N4, `motor/girdi.js stKur`): `w.durdurulan` işareti sunucu kaydı başlamış ve bitişsizse etkisiz (taşıma ve taslak
+  kuralıyla aynı koşul); başlangıcı olmayan sunucu kaydında işaret uygulanır.
+- Kilit çakışması (3805): 409'un `ayrinti.kilitCakismasi`'nda çakışma yapılı döner (`kilitCakismasiAyrintisi`, saatler tesis saatiyle);
+  istemci çareyi buradan kurar, iletinin metnini ayrıştırmaz. Pay kilidi (`adım~N`) de adımın kilidi sayılır (3803 N7).
+- Test: `durdurulan-kosulu.test.ts`; `bolunmus-oncul-akisi.test.ts` 9 (yapılı alan ile ileti aynı); `zincir-tek-komut.test.ts` önizleme
+  uyarısı; istemci `KokpitOnaySira.test.tsx` 3805, 3803 N2/N3/N7, `KilitKaydi.test.tsx` 3804 K2/K5/K6; ekran
+  `planlama-kokpit-kilit-kaydi.spec.ts` (768, 1280).
