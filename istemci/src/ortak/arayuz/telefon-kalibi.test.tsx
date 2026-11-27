@@ -62,6 +62,16 @@ describe('telefon kalıbı (kart 3676)', () => {
     expect(container.querySelector('.tc-tablo-kap')?.hasAttribute('data-kompakt')).toBe(true);
   });
 
+  it('kartta gizli kimlik sütunu kart başlığı olmaz, başlık sonraki sütundur (3797)', () => {
+    telefonOlsun(true);
+    const sutunlar: Sutun<Satir>[] = [
+      { anahtar: 'no', baslik: 'No', kartta: false, hucre: () => 'ORN-1' }, { anahtar: 'ad', baslik: 'Ad', hucre: () => 'ORN-A' },
+    ];
+    const { container } = render(<Tablo etiket="K" kip="kayit" sutunlar={sutunlar} satirlar={SATIRLAR} satirAnahtari={(s) => s.no} />);
+    expect(container.querySelector('td[data-baslik="No"]')?.hasAttribute('data-kart-gizli')).toBe(true);
+    expect(container.querySelector('td[data-baslik="Ad"]')?.classList.contains('tc-tablo-kart-baslik')).toBe(true);
+  });
+
   it('hiçbir sütun işaretli değilse ilk üç başlıklı sütun görünür', () => {
     telefonOlsun(true);
     const sutunlar: Sutun<Satir>[] = [

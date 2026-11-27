@@ -410,7 +410,7 @@ export function Tablo<S>({
   const telefon = useTelefon();
   const kayitKarti = kip === 'kayit' && telefon;
   const kaydir = kip === 'kaydir' || (kip === 'kayit' && !telefon);
-  const kartBasligi = sutunlar.find((s) => s.baslik !== '');
+  const kartBasligi = sutunlar.find((s) => s.baslik !== '' && s.kartta !== false);
   const acikIsaretli = sutunlar.some((s) => s.kartta === true);
   const ilkUc = new Set(sutunlar.filter((s) => s.baslik !== '').slice(0, 3));
   const rozetMi = (s: Sutun<S>) => s.kartRozet === true || (s.anahtar === 'durum' && s.kartta !== false);
