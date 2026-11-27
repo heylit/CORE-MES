@@ -1205,7 +1205,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     // (karar 110 b). Sorulamazsa (ağ yok) başlatma gider, son sözü TMI'nin başlat denetimi söyler.
     const tmiEmir = tmiEmirId(o.pkg);
     // 3337-2 a: CORE emrinin işi refakat kartıyla başlar; kartsız işte önce kart sorulur (kartsız başlatma yalnız yetkilide).
-    if (a === 'start' && !hazir && !pv && tmiEmir !== null && o.kart == null && !o.kartsizGerekce && kartGecti.current !== siraAnahtari(o)) {
+    if (a === 'start' && !hazir && !pv && tmiEmir !== null && o.kart == null && !o.kartsizGerekce && o.kartsizIzinId == null && kartGecti.current !== siraAnahtari(o)) {
       kartBekleyen.current = { t, warned: true };
       ovYaz('kartbaslat');
       return;
@@ -1239,12 +1239,12 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   const actRef = useRef(act);
   actRef.current = act;
   const kartBaslatYetkili = (useOturum().data?.islemler ?? []).includes(KARTSIZ_BASLATMA_ISLEMI);
-  const kartlaBaslat = (alan: { kart: number } | { kartsizGerekce: string }) => {
+  const kartlaBaslat = (alan: { kart: number } | { kartsizGerekce: string } | { kartsizIzinId: number }) => {
     const bekleyen = kartBekleyen.current;
     kartBekleyen.current = null;
     ovYaz(null);
     kartGecti.current = siraAnahtari(o);
-    islerYaz((l) => l.map((x, j) => (j === aiRef.current ? { ...x, ...('kart' in alan ? { kart: alan.kart, kartsizGerekce: null } : { kartsizGerekce: alan.kartsizGerekce }) } : x)));
+    islerYaz((l) => l.map((x, j) => (j === aiRef.current ? { ...x, ...('kart' in alan ? { kart: alan.kart, kartsizGerekce: null, kartsizIzinId: null } : 'kartsizIzinId' in alan ? { kartsizIzinId: alan.kartsizIzinId, kartsizGerekce: null } : { kartsizGerekce: alan.kartsizGerekce, kartsizIzinId: null }) } : x)));
     actRef.current('start', bekleyen?.t, bekleyen?.warned ?? true);
   };
   const sendSample = async (gonderim: NumuneGonderimi) => {
@@ -1761,6 +1761,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
       {ov === 'kartbaslat' ? (
         <KartlaBaslat is={o.no} kartlar={kartlar.filter((k) => k.uretimEmriId === tmiEmirId(o.pkg))} yetkili={kartBaslatYetkili}
           kartla={(kart) => kartlaBaslat({ kart })} kartsiz={(kartsizGerekce) => kartlaBaslat({ kartsizGerekce })}
+          cagri={kartCagrisi(o.pkg)} izinle={(kartsizIzinId) => kartlaBaslat({ kartsizIzinId })}
           kamera={() => scanYaz({ baslik: 'Refakat kartını okut', ipucu: 'Kartın karekodunu çerçeveye tutun', okundu: (k) => {
             const t = terminalOkutmasi(k);
             if (t.tur === 'kart') kartlaBaslat({ kart: t.kartId }); else { bip('nok'); say(KART_DEGIL_ILETISI, 'alert', 'hold'); }
@@ -2006,6 +2007,11 @@ const IS_DURUM_RENGI = (s: string) => ({ queued: 'sirada', setup: 'ayar', runnin
 
 // 1979 (2003 c): planda bölünmüş adımın payları terminalde. Kişinin kendi payı önde, "Payın N, saydığın M" (aşan "+K fazla"); öteki
 // paylar adlarıyla. Makine payında sayılan bilinmiyorsa (sayım makine tutana dek) yalnız adet. Bölünmemiş adımda çip çıkmaz.
+// 3771 a: yetkili çağrısı işin CORE emri ve adımı içindir; CORE dışı işte çağrı yok.
+const kartCagrisi = (p: Parameters<typeof tmiEmirId>[0]): { emirId: number; isEmriId: number | null } | null => {
+  const emirId = tmiEmirId(p);
+  return emirId === null ? null : { emirId, isEmriId: tmiIsEmriId(p) };
+};
 const tmiIsEmriId = (p: unknown): number | null => {
   const t = p && typeof p === 'object' ? (p as { tmi?: { isEmriId?: unknown } | null }).tmi : null;
   const id = t && typeof t === 'object' ? t.isEmriId : undefined;

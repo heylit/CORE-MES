@@ -1,6 +1,7 @@
 import { KONTROL_TIPI_KODU, fasonYolu, kontrolTipiEksikIletisi } from '#paylasilan/fason-kontrol.ts';
 import type { FasonKontrol, FasonYolu } from '#paylasilan/fason-kontrol.ts';
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
+import { KARTSIZ_IZIN_SURE_DK } from '#paylasilan/sozlesme/kartsiz-izin.ts';
 import { ADIMLI_OKUMA_ISLEMLERI, AZAMI_LISTE_MADDESI, BEKLEME_NEDENI_ADLARI, HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, YALNIZ_GORUNUM_MADDELERI, hazirlikUyarirMi, listeKontrolSemasi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { ListeKanitiGirdisi, ListeKontrolu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
@@ -57,6 +58,37 @@ export function kartsizBaslatmaIhlali(
   if (kart.gerekce.length > KARTSIZ_GEREKCE_AZAMI) return { tur: 'gecersiz', ileti: KARTSIZ_GEREKCE_UZUN };
   return yetkili ? null : { tur: 'yetki', ileti: KARTSIZ_YETKI_YOK };
 }
+// 3771 a: yetkilinin telefondan verdiği izin. Süre kayıttaki anlardan hesaplanır: bekleyen istek istekten, verilmiş izin karardan
+// KARTSIZ_IZIN_SURE_DK sonra düşer. İzin yalnız isteyen kişinin aynı işinde (emir ve adım) ve bir kez kullanılır.
+export const KARTSIZ_IZIN_YOK = 'Kartsız başlatma izni bulunamadı.';
+export const KARTSIZ_IZIN_KARARLI = 'Bu isteğe cevap verilmiş ya da istek düşmüş; yeni istek gelirse ondan izin verin.';
+export const KARTSIZ_IZIN_BASKASI = 'Bu izin başka kişinin ya da başka işin; kartı okutun ya da yetkiliyi yeniden çağırın.';
+export const KARTSIZ_IZIN_GECERSIZ = 'Kartsız başlatma izni geçerli değil (verilmedi, kullanıldı ya da süresi doldu); kartı okutun ya da yetkiliyi yeniden çağırın.';
+export const KARTSIZ_IZIN_KENDI = 'Kendi isteğinize izin veremezsiniz; yetkiniz varsa işi "Kartsız başlat" ile başlatın.';
+export const KARTSIZ_IZIN_GEREKCE_BIRDEN = 'Kartsız başlatma izni varken kart ya da gerekçe ayrıca verilmez.';
+type IzinKaydi = { durum: 'bekliyor' | 'izin' | 'ret' | 'iptal' | 'kullanildi'; istekAn: string; kararAn: string | null };
+export function kartsizIzinGorunenDurumu(z: IzinKaydi, simdiMs: number): IzinKaydi['durum'] | 'sure-doldu' {
+  const bitis = kartsizIzinBitisi(z);
+  return bitis !== null && simdiMs > bitis ? 'sure-doldu' : z.durum;
+}
+// Bekleyen istekte cevap süresinin, verilmiş izinde kullanma süresinin sonu (ms); başka durumda null.
+export function kartsizIzinBitisi(z: IzinKaydi): number | null {
+  const dk = KARTSIZ_IZIN_SURE_DK * 60_000;
+  if (z.durum === 'bekliyor') return Date.parse(z.istekAn) + dk;
+  if (z.durum === 'izin' && z.kararAn !== null) return Date.parse(z.kararAn) + dk;
+  return null;
+}
+export function kartsizIzinKullanimIhlali(
+  z: IzinKaydi & { uretimEmriId: number; isEmriId: number | null; isteyenKisiId: number },
+  b: { uretimEmriId: number; isEmriId: number | null; kisiId: number; anMs: number },
+): string | null {
+  if (z.isteyenKisiId !== b.kisiId || z.uretimEmriId !== b.uretimEmriId || (z.isEmriId !== null && z.isEmriId !== b.isEmriId)) return KARTSIZ_IZIN_BASKASI;
+  // Başlatma anı izinden önce olamaz: terminalden gelen eski tarihli kayıt izni geriye taşımaz.
+  if (z.kararAn !== null && b.anMs < Date.parse(z.kararAn)) return KARTSIZ_IZIN_GECERSIZ;
+  return kartsizIzinGorunenDurumu(z, b.anMs) === 'izin' ? null : KARTSIZ_IZIN_GECERSIZ;
+}
+// Başlatma kaydına düşen gerekçe: yetkilinin gerekçesi ve adı (kart listesinde "Gerekçeli" olarak görünür).
+export const izinliGerekce = (gerekce: string, kararVeren: string): string => `${gerekce} (izin: ${kararVeren})`.slice(0, KARTSIZ_GEREKCE_AZAMI);
 export const SAYIM_KATILIMSIZ = 'Bu işe başlamadınız ya da katılmadınız; sayımı işteki kişi, yönetici ya da vardiya sorumlusu girer.';
 export const sayimYetkiIhlali = (katilmis: boolean, duzeltebilir: boolean): string | null => (katilmis || duzeltebilir ? null : SAYIM_KATILIMSIZ);
 export const KATILIM_CALISMIYOR = 'Yalnız çalışan işe katılınır; iş duraklatılmış ya da durdurulmuşsa önce devam ettirin.';

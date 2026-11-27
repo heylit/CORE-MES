@@ -17,6 +17,8 @@ import { ADIM_DURUMU_OKUMA_ISLEMLERI } from './kurallar.ts';
 import { emrinTerminOnerisi, siparisinTerminOnerileri, terminKarariVer } from './termin-onerisi.ts';
 import { adimDurumu, adimDurumuTerminal, adimMatrisi, statuTopluYaz, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, hazirlikTopluYaz, listeFotografi, listeIsaretle, listeMaddesiEkle, listeMaddesiKaldir, opSablonFarkiKaldirAkis, opSablonFarkiYazAkis } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
+import { kartsizIzinCevabi, kartsizIzinIsteGovdesi, kartsizIzinKararGovdesi, kartsizIzinParametresi } from '#paylasilan/sozlesme/kartsiz-izin.ts';
+import { kartsizIzinIptal, kartsizIzinIste, kartsizIzinKarari, kartsizIzinOku } from './kartsiz-izin.ts';
 import { gecmisGeriAl, gecmisGir } from './gecmis-giris.ts';
 import { parcaRevizyonlari, parcaRevizyonuSec } from './parca-revizyonu.ts';
 import { parcaRevizyonlariCevabi, parcaRevizyonlariSorgusu, parcaRevizyonuSecGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -82,6 +84,44 @@ const emirUclari = [
     isle: ({ db, parametre }) => emirAyrintisi(db, parametre.id),
   }),
   // 3050 a: emri düzenleyebilen kişi bekletir ve bekletmeyi kaldırır (yeni yetki yok). Emrin durumu değişmez.
+  // 3771 a: kartı olmayan operatör yetkiliyi çağırır; yetkili telefondan izin verir ya da reddeder. İzinle başlatma terminal yolundadır.
+  uc({
+    yontem: 'POST',
+    yol: '/uretim-emirleri/:id/kartsiz-izin-iste',
+    tekrarKorumali: true,
+    yetki: 'terminal.uret',
+    parametre: emirParametresi,
+    govde: kartsizIzinIsteGovdesi,
+    cevap: kartsizIzinCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kartsizIzinIste(db, kullanici, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/uretim-emirleri/kartsiz-izinler/:izinId',
+    yetki: { biri: ['terminal.uret', 'uretim-emirleri.kartsiz-baslat'] },
+    parametre: kartsizIzinParametresi,
+    cevap: kartsizIzinCevabi,
+    isle: ({ db, kullanici, parametre }) => kartsizIzinOku(db, kullanici, parametre.izinId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/uretim-emirleri/kartsiz-izinler/:izinId/karar',
+    tekrarKorumali: true,
+    yetki: 'uretim-emirleri.kartsiz-baslat',
+    parametre: kartsizIzinParametresi,
+    govde: kartsizIzinKararGovdesi,
+    cevap: kartsizIzinCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kartsizIzinKarari(db, kullanici, parametre.izinId, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/uretim-emirleri/kartsiz-izinler/:izinId/iptal',
+    tekrarKorumali: true,
+    yetki: 'terminal.uret',
+    parametre: kartsizIzinParametresi,
+    cevap: kartsizIzinCevabi,
+    isle: ({ db, kullanici, parametre }) => kartsizIzinIptal(db, kullanici, parametre.izinId),
+  }),
   uc({
     yontem: 'POST',
     yol: '/uretim-emirleri/:id/beklet',

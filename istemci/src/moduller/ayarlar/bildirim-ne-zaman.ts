@@ -50,6 +50,7 @@ const METINLER: Readonly<Record<Exclude<BildirimTuru, KademeTuruAdi>, string>> =
   'uretim-emirleri.kaynakta-muayene-bekliyor': 'Kaynağında muayene seçili fason adımın parçası firmaya gidince; Kalite Merkezi onaylayınca kapanır',
   'stok.fason-gkk-bekliyor': 'Fason dönüşü karantinaya karar bekliyor girince; Kalite Merkezi bütün adedi kararlayınca kapanır',
   'stok.gkk-bekliyor': 'Giriş kontrolü isteyen lot karantinaya girince; kontrol verilince kapanır',
+  'uretim-emirleri.kartsiz-izin-istendi': 'Operatör kart olmadan başlatmak için yetkiliyi çağırınca',
   'uretim-emirleri.adim-tamamlandi': 'Adım bitince, sıradaki adımın istasyonuna atananlara',
   'uretim-emirleri.emir-tamamlandi': 'Üretim emri bitince',
   'arkon.gec-giris': 'İş üretime planlanandan geç girince',

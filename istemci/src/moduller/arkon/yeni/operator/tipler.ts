@@ -23,6 +23,8 @@ export interface Is extends Order {
   kart?: number | null;
   // 3337-2 a: kart yokken yetkilinin yazdığı kartsız başlatma gerekçesi; başlatma kaydıyla sunucuya gider.
   kartsizGerekce?: string | null;
+  // 3771 a: yetkilinin telefondan verdiği kartsız başlatma izni; başlatma kaydıyla sunucuya gider, sunucu bir kez kullandırır.
+  kartsizIzinId?: number | null;
 }
 
 export interface UyariOnayi { at: number; by: string; cnt: number; k: number; v?: number | undefined }

@@ -73,3 +73,7 @@ export {
 export {
   type SablonSurumSatiri, type SablonSatirSatiri, etkinSurumler, surumSatirlari, turuKilitle, sonSurum, surumEkle, satirEkle, type OzelFarkSatiri, ozelFarklar, ozelEkle,
 } from './sorgular/hazirlik-sablonu/sorgular.ts';
+export {
+  type KartsizIzinKayitDurumu, type KartsizIzinSatiri, kartsizIzinGetir, bekleyenKartsizIzniIptalEt, kartsizIzinEkle, kartsizIzinKarariYaz,
+  kartsizIzniIptalEt, kartsizIzniKullan, simdi as kartsizIzinAni,
+} from './sorgular/kartsiz-izin/sorgular.ts';

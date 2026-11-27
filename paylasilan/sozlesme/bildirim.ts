@@ -156,6 +156,12 @@ const ELLE_TANIMLI_TURLER = {
   'uretim-emirleri.adim-tamamlandi': {
     baslik: 'Önceki adım tamamlandı', onem: 'bilgi', alanIslemler: [], yol: '/uretim-terminali', varsayilan: { mesaj: false, eposta: false },
   },
+  // 3771 a: kartı olmayan operatör yetkiliyi çağırdı; izin ya da ret verilince, istek iptal edilince bildirim kapanır. Ekip çağrısı gibi
+  // her zaman gider (terminal cevabı bekler): anahtar listesinde yoktur.
+  'uretim-emirleri.kartsiz-izin-istendi': {
+    baslik: 'Kartsız başlatma izni istendi', onem: 'acil', sinif: 'gorev', alanIslemler: ['uretim-emirleri.kartsiz-baslat'], yol: '/adim-durumu',
+    varsayilan: { mesaj: false, eposta: false },
+  },
   // 3809: kaynağında muayene seçili fason adımın parçası firmaya gitti. Görevdir: Kalite Merkezi muayeneyi onaylayınca kapanır.
   'uretim-emirleri.kaynakta-muayene-bekliyor': {
     baslik: 'Kaynağında muayene bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['kalite-merkezi.onayla'], yol: '/kalite-merkezi/giris-kontrolu',
@@ -598,7 +604,7 @@ export const bildirimPushTurDegistirGovdesi = z.object({ acik: z.boolean() }).st
 
 // 3478 (3478-1 a, 3478-2 a): olay başına ana anahtar; satırı olmayan olay kapalıdır. Kademeli uyarının türleri kaynağın ayarına,
 // ekip çağrısı kendi yönlendirmesine bağlıdır: anahtar listesinde yoktur ve her zaman gider. Elle duyuru (yayın) bu yoldan geçmez.
-export const HER_ZAMAN_GIDEN_TURLER: readonly string[] = ['arkon.ekip-cagrisi'];
+export const HER_ZAMAN_GIDEN_TURLER: readonly string[] = ['arkon.ekip-cagrisi', 'uretim-emirleri.kartsiz-izin-istendi'];
 export const KADEME_DENETIMLI_TURLER: readonly string[] = [
   ...new Set(KADEME_KAYNAK_ANAHTARLARI.flatMap((k) => kaynakKademeleri(k).map((n) => kademeTuru(k, n) as string))), 'projeler.hazirlik-ozet',
 ];

@@ -35,6 +35,7 @@ import { hurdaSayimiBildir, kaliteKarariBildir, saglamSayimiBildir } from './say
 import { baslatmaDenetimi } from './baslatma-denetimi.ts';
 import { listeParcaRevizyonlari } from './parca-revizyonu.ts';
 import type { BaslatmaKarti } from './baslatma-denetimi.ts';
+import { izinKartiDenetle, izinliKart } from './kartsiz-izin.ts';
 import { adimBittiBildir, emirBittiBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
 import * as sorgular from './sorgular.ts';
 import { surenBeklemeler } from './bekleme-kademe.ts';
@@ -721,6 +722,8 @@ async function istasyonYetkinliginiDenetle(db: Db, kisiId: number, istasyonId: n
 // 3337-2 a: kartsız gerekçe `uretim-emirleri.kartsiz-baslat` ister; kart ile gerekçe birlikte gelmez. Kartın kendisini stok denetler.
 export function baslatmaKartiniDenetle(kullanici: Kullanici, kart: BaslatmaKarti | undefined): BaslatmaKarti | undefined {
   if (kart === undefined) return undefined;
+  // 3771 a: izinle başlatmada yetki izni verende aranmıştır; izin başlatma komutunda (izinliKart) denetlenir ve kullanılır.
+  if (kart.izinId != null) { izinKartiDenetle(kart); return kart; }
   const ihlal = kartsizBaslatmaIhlali(kart, islemVarMi(kullanici, KARTSIZ_BASLATMA_ISLEMI));
   if (ihlal === null) return kart;
   if (ihlal.tur === 'yetki') throw yetkiYok(ihlal.ileti);
@@ -757,7 +760,8 @@ export async function emirBaslat(
   }
   const istasyonIhlali = baslatmaIstasyonIhlali(await istasyonDurumu(db, istasyonId));
   if (istasyonIhlali !== null) throw cakisma(istasyonIhlali);
-  const denetim = isEmri === null ? { engel: null, uyarilar: [] } : await baslatmaDenetimi(db, { uretimEmriId: id, isEmriId: isEmri.id, istasyonId, kisiId, ...(kart === undefined ? {} : { kart, an: await komutAni(db, id) }) });
+  const izinli = await izinliKart(db, { kisiId, uretimEmriId: id, isEmriId: isEmri?.id ?? null, an: await komutAni(db, id) }, kart);
+  const denetim = isEmri === null ? { engel: null, uyarilar: [] } : await baslatmaDenetimi(db, { uretimEmriId: id, isEmriId: isEmri.id, istasyonId, kisiId, ...(izinli === undefined ? {} : { kart: izinli, an: await komutAni(db, id) }) });
   if (denetim.engel !== null) throw cakisma(denetim.engel);
   const secim = (makineIdleri !== undefined && makineIdleri.length > 0) || isEmri?.makineId != null ? makineIdleri : await baslatmaMakinesi(db, istasyonId);
   await secimiDenetle(db, istasyonId, secim);

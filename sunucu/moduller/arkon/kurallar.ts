@@ -1715,7 +1715,7 @@ export function kodlarAyir(tesis: TesisHaritasi, kapsamdaMi: (merkezId: number) 
 // duraklatmadır: Arkon başka emre geçerken çalışan eskisini duraklatır (paused); duraklamış emir istasyonu kilitlemez (#241). Çalışmayan emirde TMI değişmez ve kayıt "eslenemedi" olur.
 export type YansimaKomutu =
   // kart (3337-2 a): terminalin okuttuğu refakat kartı ya da yetkilinin kartsız gerekçesi; yalnız adımın ilk başlatmasında denetlenir.
-  | { komut: 'basla-ya-da-devam'; makineKodlari: readonly string[]; kart: { refakatPartisiId: number | null; gerekce: string | null } }
+  | { komut: 'basla-ya-da-devam'; makineKodlari: readonly string[]; kart: { refakatPartisiId: number | null; gerekce: string | null; izinId?: number | null } }
   | { komut: 'duraklat' }
   // Hazırlık (Arkon `setup`) TMI'de "ayar" olayıdır: başlamamış işte yazılır, Başlat kapatır ve hazırlık süresi ondan ölçülür.
   | { komut: 'ayar' }
@@ -1785,10 +1785,17 @@ const kartsizGerekce = (satir: Readonly<Record<string, unknown>>): string | null
   const g = satir[KARTSIZ_GEREKCE_ALANI];
   return typeof g === 'string' && g.trim() !== '' ? g : null;
 };
-export const baslatmaKaydiKarti = (satir: Readonly<Record<string, unknown>>): { refakatPartisiId: number | null; gerekce: string | null } =>
-  ({ refakatPartisiId: sayimKarti(satir), gerekce: kartsizGerekce(satir) });
+// 3771 a: yetkilinin telefondan verdiği kartsız başlatma izni; geçerliliğini ve tek kullanımını üretim emirleri denetler.
+export const KARTSIZ_IZIN_ALANI = 'kartsizIzinId';
+export const baslatmaKaydiKarti = (satir: Readonly<Record<string, unknown>>): { refakatPartisiId: number | null; gerekce: string | null; izinId?: number } => {
+  const izinId = kimlikAlani(satir, KARTSIZ_IZIN_ALANI);
+  return { refakatPartisiId: sayimKarti(satir), gerekce: kartsizGerekce(satir), ...(izinId === null ? {} : { izinId }) };
+};
 function sayimKarti(satir: Readonly<Record<string, unknown>>): number | null {
-  const k = satir[REFAKAT_KARTI_ALANI];
+  return kimlikAlani(satir, REFAKAT_KARTI_ALANI);
+}
+function kimlikAlani(satir: Readonly<Record<string, unknown>>, alan: string): number | null {
+  const k = satir[alan];
   return typeof k === 'number' && Number.isInteger(k) && k > 0 && k <= 2147483647 ? k : null;
 }
 
