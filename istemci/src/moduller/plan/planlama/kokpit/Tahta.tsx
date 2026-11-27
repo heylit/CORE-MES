@@ -37,6 +37,8 @@ import {
 // Ay ve Yıl'da satırlar yük hücrelerine döner; hücre o güne iner.
 
 export type TahtaGozu = 'T' | 'S';
+import { MakasSimgesi } from './BolOnayi.tsx';
+import { bolOkYolu, type BolOnizlemesi } from './bol-onizleme.ts';
 export interface CanliYer { m: string; S: number; C: number }
 export interface TahtaOzellikleri {
   m: KokpitModeli; cx: Derleme; goz: TahtaGozu; olcek: KokpitOlcegi;
@@ -95,6 +97,8 @@ export interface TahtaOzellikleri {
   gelenBas?: ((isId: string) => void) | null;
   // "Planı güncelle"den hemen önceki iş yerleri (3532, Risk R2): verilince iş yeni yerinde çizilir, eski yeri kesik hayalettir, çubukta kayma yazar.
   eskiYer?: Readonly<Record<string, CanliYer>> | null;
+  // 3792: Planda böl önizlemesi: bölmenin payları taslak çubuğu, bölünen adımın eski yeri satırın alt şeridinde taramalı "eski yer" olur.
+  bolOnizleme?: BolOnizlemesi | null;
   // 3533: sol bölme sütunlu tablodur (Emirler gözünde agac ile, Tezgâhlar gözünde tek başına). Verilmezse bugünkü iki satırlık yazı.
   tablo?: TabloDurumu | null;
   // Gantt dilim 1 (T1): motorun ufkunun sonu (saat). Tahtanın içindeyse kesik çizgi ve "Plan ufku" yazısı, ötesi taralı.
@@ -196,7 +200,7 @@ export function Tahta(o: TahtaOzellikleri) {
   const bol = o.bol ?? null;
   const birlestir = o.birlestir ?? null;
   const sorunBildir = goz === 'T' ? o.sorunBildir ?? null : null;
-  const gelen = o.gelen ?? null, gelenBas = o.gelenBas ?? null, eskiYer = once ? null : o.eskiYer ?? null;
+  const gelen = o.gelen ?? null, gelenBas = o.gelenBas ?? null, eskiYer = once ? null : o.eskiYer ?? null, bolOn = once ? null : o.bolOnizleme ?? null;
   // 3533: tablo kipi. Emirler gözünde (agac) emir sütunları, Tezgâhlar gözünde tezgâh sütunları; Ay ve Yıl ölçeğinde bugünkü satır başı kalır.
   const tablo = o.tablo ?? null;
   const kad = goz !== 'T' && o.siparisler ? o.kademeZorla ?? kademe(olcek) : 'adim';
@@ -246,6 +250,7 @@ export function Tahta(o: TahtaOzellikleri) {
     if (sahip.getAttribute('aria-owns') !== idler) sahip.setAttribute('aria-owns', idler);
   });
   const [oklar, setOklar] = useState<Ok[]>([]);
+  const [bolOklari, setBolOklari] = useState<{ ad: string; tur: 'pay' | 'kayan'; yol: string; uc: string }[]>([]);
   const [ustteki, setUstteki] = useState<string | null>(null);
   // 3681: tabloda payları açılmış bölünmüş adımlar.
   const [acikPay, setAcikPay] = useState<ReadonlySet<string>>(new Set());
@@ -335,6 +340,33 @@ export function Tahta(o: TahtaOzellikleri) {
     izleyen.observe(kok);
     return () => { izleyen.disconnect(); };
   }, [baglar, m, goz, px, yerlesim]);
+  // 3792: önizleme okları (eski yerden payların ve kayan işin yeni yerine); kutular ekrandan okunur, çubuklar satırlarda ölçülür.
+  useLayoutEffect(() => {
+    const kok = ic.current;
+    if (!kok || !bolOn) { setBolOklari((l) => (l.length ? [] : l)); return undefined; }
+    const ciz = (): void => {
+      const ust = kok.getBoundingClientRect();
+      const kutu = (el: Element) => { const r = el.getBoundingClientRect(); return { x1: r.left - ust.left, x2: r.right - ust.left, y1: r.top - ust.top, y2: r.bottom - ust.top }; };
+      const l: { ad: string; tur: 'pay' | 'kayan'; yol: string; uc: string }[] = [];
+      const paylar = [...kok.querySelectorAll<HTMLElement>('[data-is][data-taslak]')];
+      // Her pay kendi eski payından (aynı kimlik), yoksa bölünen adımın ilk eski yerinden çıkar.
+      for (const p of paylar) {
+        const id = p.dataset.is ?? '', y = bolOn.eski.find((e) => e.id === id) ?? bolOn.eski[0];
+        const kaynak = y ? kok.querySelector(`[data-bol-eski="${tirnakIci(y.id)}"]`) : null;
+        if (y && kaynak) l.push({ ad: `${y.id}>${id}`, tur: 'pay', ...bolOkYolu(kutu(kaynak), kutu(p)) });
+      }
+      for (const id of Object.keys(bolOn.kayanEski)) {
+        const kaynak = kok.querySelector(`[data-eski-is="${tirnakIci(id)}"]`), hedef = kok.querySelector(`[data-is="${tirnakIci(id)}"]`);
+        if (kaynak && hedef) l.push({ ad: `${id}>${id}`, tur: 'kayan', ...bolOkYolu(kutu(kaynak), kutu(hedef)) });
+      }
+      setBolOklari(l);
+    };
+    ciz();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const izleyen = new ResizeObserver(ciz);
+    izleyen.observe(kok);
+    return () => { izleyen.disconnect(); };
+  }, [bolOn, m, goz, px, yerlesim, eskiYer]);
   const emir = useMemo(() => new Map(m.emirler.map((e) => [e.id, e])), [m]);
   const adaylar = useCallback((x: KokpitIsi): string[] => emir.get(x.job)?.adimlar.find((a) => a.id === adimKimligi(x))?.adaylar ?? [], [emir]);
   // Bölme eni ve sütun şablonu tahtanın değişkenidir: bütün satırlar ve başlık aynı ızgarayı okur (satır içi stil yok).
@@ -1029,6 +1061,7 @@ export function Tahta(o: TahtaOzellikleri) {
         type="button" className="tc-pyq-is" data-is={x.id} data-d={e?.durum ?? 'iyi'} title={ad} aria-label={ad}
         aria-pressed={secIs === adimKimligi(x) && (x.pay === undefined || aktifPay === x.id)} data-pay={x.pay ? String(x.pay.no) : undefined} data-pay-kardes={x.pay && secIs === adimKimligi(x) && aktifPay !== x.id ? '' : undefined} data-suruyor={x.basladi ? '' : undefined} data-emir-secili={secEmir === x.job ? '' : undefined} data-yanan={yanan?.has(x.job) ? '' : undefined} data-sonuk={uyar(x.job) && (!yanan || yanan.has(x.job)) ? undefined : ''}
         data-sabit={neden && !x.pay ? '' : undefined} data-durdurma-bekliyor={x.durdurmaBekliyor ? '' : undefined} data-tasinan={tasinan?.id === x.id || birles?.kaynak === x.id ? '' : undefined} data-birles-aday={birlesAdaylari.has(x.id) ? '' : undefined} data-birles-hedef={birles?.hedef === x.id || birlesOnay?.hedef === x.id ? '' : undefined} data-kaydi={(canli && Math.abs(kayma) > 0.25) || itilen !== undefined || gKaydi ? '' : undefined}
+        data-taslak={bolOn?.taslak.has(x.id) ? '' : undefined}
         data-kisa={kisa ? '' : undefined} data-gecikir={gecikir ? '' : undefined} data-etiket={etiket}
         ref={(el) => {
           yerYaz(el, (cizS - m.bas) * px, cizim?.en ?? gercek);
@@ -1058,9 +1091,10 @@ export function Tahta(o: TahtaOzellikleri) {
         onPointerLeave={() => { if (imlecteki.current === x.id) imlecteki.current = null; setUstteki((u) => (u === x.id ? null : u)); }}
       >
         {x.kilitli && <Simge ad="lock" boyut="k" />}
-        {x.pay && <span className="tc-pyq-pay-simge" data-pay-simge=""><Simge ad="layers" boyut="k" /></span>}
+        {x.pay && <span className="tc-pyq-pay-simge" data-pay-simge="">{bolOn?.taslak.has(x.id) ? <MakasSimgesi /> : <Simge ad="layers" boyut="k" />}</span>}
         <b>{kod}</b>
         <span>{ek}</span>
+        {bolOn?.taslak.has(x.id) && <small className="tc-pyq-taslak-rozet" data-taslak-rozet="">taslak</small>}
         {(x.basladi || x.pay?.sayilan !== undefined) && <i className="tc-pyq-ilerleme" data-pay-ilerleme={x.pay?.sayilan !== undefined ? '' : undefined} ref={(el) => { el?.style.setProperty('--oran', String(Math.min(1, Math.max(0, x.pay?.sayilan !== undefined ? x.pay.sayilan / Math.max(1, x.pay.adet) : (m.simdi - S) / Math.max(0.01, C - S))))); }} />}
       </button>
       {etiket === 'dis' && (
@@ -1288,6 +1322,17 @@ export function Tahta(o: TahtaOzellikleri) {
     });
   };
 
+  // 3792: bölünen adımın eski yeri; bölmeden önceki tezgâhının satırında, çubukların altındaki ince şeritte. Renge ek olarak yazı ve taramayla ayrılır.
+  const bolEskileri = (r: { kimlik: string; isler: readonly KokpitIsi[] }) => {
+    if (!bolOn) return null;
+    const kok = m.isler[bolOn.isId];
+    return bolOn.eski.flatMap((y) => {
+      if (goz === 'T' ? !kok || satirKimligi({ ...kok, m: y.m }) !== r.kimlik : !r.isler.some((x) => adimKimligi(x) === bolOn.isId)) return [];
+      const ayrinti = ` · ${tezgahKodu.get(y.m) ?? y.m} ${zaman(y.S).slice(6)}–${zaman(y.C).slice(-5)}`, yazi = `eski yer${ayrinti}`;
+      return [<span className="tc-pyq-hayalet tc-pyq-eski tc-pyq-eski-alt" key={`bol-eski-${y.id}`} data-bol-eski={y.id} title={yazi} ref={(el) => { yerYaz(el, (y.S - m.bas) * px, Math.max((y.C - y.S) * px, OKUNUR_EN)); }}>eski yer<span className="tc-pyq-eski-ayrinti">{ayrinti}</span></span>];
+    });
+  };
+
   return (
     <div
       className="tc-pyq-tahta" data-olcek={olcek} data-tasima={tasinan ? '' : undefined} data-birlesme={birles ? '' : undefined} ref={kap} onScroll={pencereyiBildir}
@@ -1364,6 +1409,7 @@ export function Tahta(o: TahtaOzellikleri) {
               {r.agacEmir !== undefined && !r.ozet && r.isler.length === 0 && <span className="tc-pyq-agac-bos" data-agac-bos>planda yeri yok</span>}
               {r.notlar?.map((y) => <p className="tc-pyq-not" key={y}>{y}</p>)}
               {hayaletler(r)}
+              {bolEskileri(r)}
               {(r.siparis || r.emirCubugu) && kademeCubugu(r)}
               {hucreGunleri?.has(r.kimlik) && gunHucreleri(r, hucreSirasi, hucreDurakAnahtari)}
               {!r.siparis && !r.emirCubugu && !hucreGunleri?.has(r.kimlik) && !(r.paylar !== undefined && !r.payAlt) && r.isler.map((x) => {
@@ -1405,6 +1451,13 @@ export function Tahta(o: TahtaOzellikleri) {
           <svg className="tc-pyq-oklar" aria-hidden="true">
             {oklar.map((k) => (
               <g key={`${k.kimden}>${k.kime}`} data-ok={`${k.kimden}>${k.kime}`} data-tur={k.tur} data-ters={k.ters ? '' : undefined}><path d={k.yol} /><path className="tc-pyq-ok-ucu" d={k.uc} /></g>
+            ))}
+          </svg>
+        )}
+        {bolOklari.length > 0 && (
+          <svg className="tc-pyq-oklar" aria-hidden="true">
+            {bolOklari.map((k) => (
+              <g key={k.ad} data-tur="o" data-bol-ok={k.ad} data-bol-ok-tur={k.tur}><path d={k.yol} /><path className="tc-pyq-ok-ucu" d={k.uc} /></g>
             ))}
           </svg>
         )}
