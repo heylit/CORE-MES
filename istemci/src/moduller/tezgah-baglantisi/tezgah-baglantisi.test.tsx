@@ -279,6 +279,31 @@ describe('Geçmiş doluluğu göstergesi (kart 3680)', () => {
     expect(screen.getByText(/Takım tablosu henüz okunmadı/)).toBeTruthy();
   });
 
+  it('Takım tablosu açıkken başka makine seçilince Genel görünüme dönülür (kart 3790)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      const yol = adres.replace('/api', '');
+      if (yol === '/tezgah-baglantisi/durum') return json(200, { ...ORNEK_DURUM(), lsv2Baglanti: 'acik', tezgahlar: [ORNEK_LSV2_TEZGAHI(), ...ORNEK_DURUM().tezgahlar] });
+      if (yol.endsWith('/takim-tablosu')) return json(200, ORNEK_TAKIM_TABLOSU(true));
+      if (yol.startsWith('/tezgah-baglantisi/tezgahlar/ORN-H01')) return json(200, ORNEK_LSV2_AYRINTI());
+      if (yol.startsWith('/tezgah-baglantisi/tezgahlar/')) return json(200, ORNEK_AYRINTI());
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' } satisfies HataGovdesi);
+    }));
+    ac(<TezgahAyrintisi />);
+    const liste = await screen.findByRole('list', { name: 'Tezgâhlar' });
+    const heidenhain = () => within(liste).getAllByRole('button').find((d) => (d.textContent ?? '').includes('ORN-H01'));
+    fireEvent.click(heidenhain() ?? liste);
+    fireEvent.click(await screen.findByRole('tab', { name: /Takım tablosu/ }));
+    await screen.findByRole('table', { name: 'Takım tablosu' });
+    const baska = within(liste).getAllByRole('button').find((d) => !(d.textContent ?? '').includes('ORN-H01'));
+    if (baska === undefined) throw new Error('ikinci tezgâh yok');
+    fireEvent.click(baska);
+    expect(screen.queryByRole('tab', { name: /Takım tablosu/ })).toBeNull();
+    fireEvent.click(heidenhain() ?? baska);
+    const genel = await screen.findByRole('tab', { name: /Genel/ });
+    expect(genel.getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByRole('table', { name: 'Takım tablosu' })).toBeNull();
+  });
+
   it('MTConnect makinesinde Takım tablosu sekmesi çıkmaz', async () => {
     sunucuKur(ORNEK_DURUM());
     ac(<TezgahAyrintisi />);
