@@ -583,6 +583,10 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.equal(bulunan[0]?.cizimRevizyonKodu, 'B', 'revizyon gösterim kuralıyla');
     assert.equal(bulunan[0]?.malzemeId, m);
     assert.equal((await istek('yetkisiz', 'GET', `/markalama/emir-ara?metin=${emirNo}`)).durum, 403);
+    const kod = async (metin: string) => emirAraCevabi.parse((await istek('operator', 'GET', `/markalama/emir-ara?metin=${encodeURIComponent(metin)}`)).govde).emirler.map((x) => x.id);
+    assert.deepEqual(await kod(`UE:${e1}`), [e1], 'refakat kartı karekodu emir kimliğini taşır');
+    assert.deepEqual(await kod(`${emirNo}-P1`), [e1], 'kart etiketi emir numarasına çevrilir');
+    assert.deepEqual(await kod('UE:2147483647'), [], 'olmayan emir boş');
 
     const ops = await istek('operator', 'GET', `/markalama/emirler/${e1}/operasyonlar`);
     assert.equal(ops.durum, 200, JSON.stringify(ops.govde));

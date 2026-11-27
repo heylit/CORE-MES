@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { EmirAraCevabi, EmirSecimi, MarkalamaOperasyonSecimi, OperasyonlarCevabi } from '#paylasilan/sozlesme/markalama.ts';
 import { Dugme, Girdi, Rozet, Secim } from '../../ortak/arayuz/index.ts';
@@ -16,19 +16,23 @@ export function EmirArama({ sec, etiket = 'Üretim emri ara' }: { sec: (e: EmirS
     enabled: aranan.length >= 2,
   });
   const emirler = sonuc.data?.emirler ?? [];
+  // El okuyucu yazıp hemen Enter'a basar; arama o anda dönmemiş olabilir. Enter beklenir, cevap gelince seçilir: emir no tam
+  // eşleşen ya da okutulan kodun çözüldüğü tek emir.
+  const [enter, enterYaz] = useState<string | null>(null);
+  useEffect(() => {
+    if (enter === null || enter !== aranan || sonuc.data === undefined) return;
+    enterYaz(null);
+    const tam = emirler.find((e) => e.emirNo.toLocaleUpperCase('tr') === aranan.toLocaleUpperCase('tr')) ?? (emirler.length === 1 ? emirler[0] : undefined);
+    if (tam) sec(tam);
+  }, [enter, aranan, sonuc.data, emirler, sec]);
   return (
     <div className="tc-mrk-satir">
       <Girdi
         etiket={etiket}
-        ipucu="Emir no ya da parça kodundan en az iki harf"
+        ipucu="Emir no, parça kodu ya da refakat kartının karekodu"
         value={metin}
-        onChange={(o) => metinYaz(o.target.value)}
-        onKeyDown={(o) => {
-          // El okuyucu Enter ile biter: tam eşleşen tek emir hemen seçilir.
-          if (o.key !== 'Enter') return;
-          const tam = emirler.find((e) => e.emirNo.toLocaleUpperCase('tr') === aranan.toLocaleUpperCase('tr'));
-          if (tam) sec(tam);
-        }}
+        onChange={(o) => { metinYaz(o.target.value); enterYaz(null); }}
+        onKeyDown={(o) => { if (o.key === 'Enter' && aranan.length >= 2) enterYaz(aranan); }}
       />
       <Secim
         etiket="Emir"

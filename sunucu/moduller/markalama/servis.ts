@@ -3,6 +3,7 @@ import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz } from '#cekirdek/h
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
+import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   BirimAyrintisi, BirimDurumu, BirimlerCevabi, DogrulaGovdesi, DurumGovdesi, EmirAraCevabi, EmirOzetiCevabi, EmirSecimi, IsTanimiCevabi,
@@ -246,8 +247,24 @@ async function emirSecimleri(db: Db, emirler: readonly { id: number; emirNo: str
 }
 
 // Açık emirler emir no ya da parça no parçasıyla; malzemesi olmayan (rotasız) emir markalanmaz, listelenmez.
+// Terminalde okutulan kod da aranır: refakat kartının karekodu emir kimliğini (UE:12, basılı özet kod CM1/UE:12/...) taşır, kartın
+// etiketi emir numarası ve parti sırasını (<emir no>-P1; stok refakatEtiketi). Stok refakat partisi (RP:) stok katındadır, buradan çözülmez (ADR 0006); metin olarak aranır.
+function okutulanEmir(metin: string): number | string {
+  const k = kodTuru(metin);
+  if (k.tur === 'uretim-emri' && k.bicim === 'kimlik') return Number(k.deger);
+  if (k.tur === 'uretim-emri') return k.deger;
+  const etiket = /^(.+)-P\d+$/i.exec(metin.trim());
+  return etiket === null ? metin : etiket[1]!;
+}
+
 export async function emirAra(db: Db, metin: string): Promise<EmirAraCevabi> {
-  const aranan = metin.toLocaleUpperCase('tr');
+  const okutulan = okutulanEmir(metin);
+  if (typeof okutulan === 'number') {
+    const emir = await uretimEmriOzeti(db, okutulan);
+    if (emir === null || emir.malzemeNo === null || !(ACIK_EMIR_DURUMLARI as readonly string[]).includes(emir.durum)) return { emirler: [] };
+    return { emirler: await emirSecimleri(db, [{ id: emir.id, emirNo: emir.emirNo, malzemeNo: emir.malzemeNo, adet: emir.adet, durum: emir.durum }]) };
+  }
+  const aranan = okutulan.toLocaleUpperCase('tr');
   const bulunan = (await acikEmirler(db))
     .flatMap((e) => (e.malzemeNo == null ? [] : [{ ...e, malzemeNo: e.malzemeNo }]))
     .filter((e) => e.emirNo.toLocaleUpperCase('tr').includes(aranan) || e.parcaNo.toLocaleUpperCase('tr').includes(aranan))

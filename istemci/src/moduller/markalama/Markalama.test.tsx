@@ -125,8 +125,8 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.localStorage.clear();
 // Markalama terminali emirden başlar: emir okutulur (Enter), tek markalama adımı kendiliğinden seçilir.
 async function emirOkut(etiket = 'Emri ya da refakat kartını okut') {
   const girdi = await screen.findByLabelText(etiket);
+  // Okuyucu gibi: yazar ve arama dönmeden Enter'a basar.
   fireEvent.change(girdi, { target: { value: 'UE-DNM-1' } });
-  await screen.findByRole('option', { name: /UE-DNM-1/ });
   fireEvent.keyDown(girdi, { key: 'Enter' });
 }
 
@@ -173,7 +173,7 @@ describe('Markalama tanımları', () => {
     ac(<Tanimlar />);
     fireEvent.click(await screen.findByRole('button', { name: /Yeni tanım/ }));
     await emirOkut('Üretim emri ara');
-    expect(screen.getByRole('radio', { name: 'Bütün emirler' }).getAttribute('aria-checked')).toBe('true');
+    expect((await screen.findByRole('radio', { name: 'Bütün emirler' })).getAttribute('aria-checked')).toBe('true');
     fireEvent.click(await screen.findByRole('option', { name: /OP40/ }));
     fireEvent.click(screen.getByRole('button', { name: /Kaydet/ }));
     await waitFor(() => expect(cagrilar.some((c) => c.yol === '/markalama/tanimlar/ekle')).toBe(true));
@@ -323,6 +323,23 @@ describe('Markalama terminali, emirden iş', () => {
     ac(<Istasyon />);
     await screen.findByRole('option', { name: /Lazer 1/ });
     expect((screen.getByLabelText('Bu cihazın istasyonu') as HTMLSelectElement).value).toBe('21');
+  });
+
+  it('3788: saklanan istasyon artık markalama istasyonu değilse seçili sayılmaz', async () => {
+    window.localStorage.setItem('markalama.terminal.istasyon', '23');
+    sunucuKur(YONETICI);
+    ac(<Istasyon />);
+    await screen.findByRole('option', { name: /Lazer 1/ });
+    expect((screen.getByLabelText('Bu cihazın istasyonu') as HTMLSelectElement).value).toBe('');
+  });
+
+  it('3788: okutulan kod tek emre çözülürse Enter o emri seçer', async () => {
+    sunucuKur(YONETICI);
+    ac(<Istasyon />);
+    const girdi = await screen.findByLabelText('Emri ya da refakat kartını okut');
+    fireEvent.change(girdi, { target: { value: 'UE:5' } });
+    fireEvent.keyDown(girdi, { key: 'Enter' });
+    expect(await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' })).toBeTruthy();
   });
 
   it('3788: emrin revizyonuna tanım yoksa nedeni yazılır, seri ekranı açılmaz; tanım yazabilene bağlantı çıkar', async () => {
