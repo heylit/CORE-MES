@@ -75,7 +75,7 @@ import {
   sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, bitisOzeti, bitirmeEksigi, tmiIlkParcaGerekli,
   type EkranSekmesi,
   hataliNedenleri, hataliUstSiniri, sekmeKarari,
-  isBasladiMi, basladiIletisi, BASLADI_ILETI_SURESI_MS, paketIletisiYenilemeIster,
+  isBasladiMi, basladiIletisi, BASLADI_ILETI_SURESI_MS, paketIletisiYenilemeIster, GIZLI_SAAT_MS,
 } from './kurallar.ts';
 import {
   BilgiCipi, CagriCipi, etiketSayisi, DurumDugmeleri, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsSatiri, Konfeti, NumuneSeridi, PlanBandi,
@@ -232,7 +232,9 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   const shiftRef = useRef({ good: 0, scrap: 0, mOk: 0, mNok: 0, hatali: 0 });
   const scrapLog = useRef<number[]>([]);
   const lastAct = useRef(Date.now());
-  const simdi = useSimdi(1000);
+  // Kalıcı ekran gizliyken (başka sayfaya geçildi) saat seyrek işler ve yoklamalar durur; görününce hemen tazelenir.
+  const gorunur = useEkranGorunur();
+  const simdi = useSimdi(gorunur ? 1000 : GIZLI_SAAT_MS);
   const SL = useVardiyaKaydi(MACHINE, pv);
   const ortam = useMemo(() => ({ planliMi, durusPencereleri: (f: number, t: number) => durusPencereleri(MACHINE, f, t, ayarlar.planliDuruslar, tesis) }), [planliMi, MACHINE, ayarlar.planliDuruslar, tesis]);
   const ceyrek = Math.floor(simdi / 15000);
@@ -303,13 +305,13 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   const seciciAcik = !pv && !o.empty && yetkiVar('prod.run') && ist.mcs.length >= 2 && o.state !== 'running';
   useEffect(() => {
     ayrimYaz(null);
-    if (!seciciAcik || ayrimEmri === null) return;
+    if (!seciciAcik || ayrimEmri === null || !gorunur) return;
     let bitti = false;
     const oku = () => depo.Server.makineAyrimlari(ayrimEmri).then((c) => { if (!bitti) ayrimYaz(c || null); }, () => { if (!bitti) ayrimYaz(null); });
     void oku();
     const t = setInterval(() => { void oku(); }, AYRIM_YENILEME_MS);
     return () => { bitti = true; clearInterval(t); };
-  }, [ayrimEmri, seciciAcik, MACHINE, depo]);
+  }, [ayrimEmri, seciciAcik, MACHINE, depo, gorunur]);
 
   /* paketler */
   const pkgsRef = useRef<Record<string, Pkg>>({});
@@ -559,12 +561,13 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   const kartAnahtari = pv ? '' : kartEmirleri(isler.map((x) => ({ state: x.state, emirId: tmiEmirId(x.pkg) }))).join(',');
   useEffect(() => {
     if (!kartAnahtari) { kartlarYaz([]); return; }
+    if (!gorunur) return;
     let bitti = false;
     const oku = () => depo.Server.refakatKartlari(MACHINE, kartAnahtari.split(',').map(Number)).then((l) => { if (!bitti) kartlarYaz(l); }, () => undefined);
     void oku();
     const t = setInterval(() => { void oku(); }, KART_YENILEME_MS);
     return () => { bitti = true; clearInterval(t); };
-  }, [kartAnahtari, MACHINE, depo]);
+  }, [kartAnahtari, MACHINE, depo, gorunur]);
   // "Aç": iş o kartla açılır (başlatılmaz); aynı işte başka kart seçilirse iş o kartla sürer.
   const kartlaAc = (i: number, k: Pick<RefakatKarti, 'id' | 'etiket'>, onEk = '') => {
     const hedef = isler[i]!;
@@ -1084,7 +1087,6 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   }, []);
   // Terminal kalıcı rotadır: başka sayfadayken gizli kurulu kalır, uzak mod ise gövdeye açılır. Uzak mod yalnız terminal görünürken
   // açılır; gizlenince kapanır, dönüşte 45 sn yeniden sayılır.
-  const gorunur = useEkranGorunur();
   useEffect(() => { lastAct.current = Date.now(); if (!gorunur) awayYaz(false); }, [gorunur]);
   useEffect(() => (pv || !gorunur ? undefined : vardiyaOzetiAcicisiKaydet(() => ovYaz('shift'))), [pv, gorunur]);
   useEffect(() => { if (gorunur && kendiligindenUzak && !away && !ov && !odakKipi && Date.now() - lastAct.current > 45000) awayYaz(true); }, [simdi]);

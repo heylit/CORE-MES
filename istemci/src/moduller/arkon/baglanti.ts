@@ -415,6 +415,22 @@ export const YETKI_YOK = 'Bu ekran için yetkiniz yok; ileti akışı durduruldu
 // Geçici hatada (ağ, 5xx, öteki) bekleme her denemede ikiye katlanır, bu sınırda kalır; başarılı okuma aralığı başa döndürür.
 export const ILETI_AZAMI_ARALIK_MS = 30_000;
 
+// Sayfa gizliyken (sekme arkada, tablet ekranı kapalı) ileti yoklaması seyrekleşir; sayfa görünür olunca beklemeden yoklar.
+// Sunucu iletileri 15 dakika tutar, bu aralık kaçırma sınırının çok altındadır.
+export const ILETI_GIZLI_ARALIK_MS = 15_000;
+
+const sayfaGizli = (): boolean => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+
+function gizliyken(bekle: (ms: number) => Promise<unknown>, ms: number): Promise<void> {
+  return new Promise((coz) => {
+    let bitti = false;
+    const son = () => { if (bitti) return; bitti = true; document.removeEventListener('visibilitychange', degisti); coz(); };
+    const degisti = () => { if (!sayfaGizli()) son(); };
+    document.addEventListener('visibilitychange', degisti);
+    void bekle(ms).then(son, son);
+  });
+}
+
 export function yoklamaAraligi(ardisikHata: number): number {
   if (ardisikHata <= 0) return ILETI_ARALIGI_MS;
   return Math.min(ILETI_AZAMI_ARALIK_MS, ILETI_ARALIGI_MS * 2 ** Math.min(ardisikHata - 1, 30));
@@ -461,7 +477,8 @@ export function anlikIletimKur(
         iletim.readyState = 0;
         iletim.onerror?.(new Event('error'));
       }
-      await bekle(yoklamaAraligi(ardisikHata));
+      const aralik = yoklamaAraligi(ardisikHata);
+      await (sayfaGizli() ? gizliyken(bekle, Math.max(aralik, ILETI_GIZLI_ARALIK_MS)) : bekle(aralik));
     }
   })();
   return iletim;

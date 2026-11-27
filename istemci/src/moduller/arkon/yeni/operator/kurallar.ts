@@ -88,6 +88,9 @@ export function paketIletisiYenilemeIster(makine: unknown, kimlik: unknown, ista
   return bilinen[String(kimlik)]?.machine === istasyon;
 }
 
+// Kalıcı terminal gizliyken saatin aralığı: saniyelik çizim durur; saate bağlı uyarı (kontrol zamanı, uzak kip) en çok bu kadar gecikir.
+export const GIZLI_SAAT_MS = 5000;
+
 // Yenilemeden sonra ekrandaki işin yeni sırası. İş listeden düştüyse (emir bekletildi, paket geri çekildi) ekran sıradaki işe geçer:
 // eski sıra kısalan listede ya yoktur ya başka işi gösterir, şerit "Önizleme" derken düğmeler başka işe yazardı (3131 Test D1).
 export function etkinIsSirasi<T>(isler: readonly T[], anahtar: (x: T) => string, etkin: string | null, onceki: number): number {
