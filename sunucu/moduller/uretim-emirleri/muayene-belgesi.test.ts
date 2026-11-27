@@ -19,7 +19,8 @@ import type { IsEmriGirdisi } from './disari.ts';
 import { fasonDonusuKaydet, fasonGidis, fasonTamamla } from './is-emri-servis.ts';
 import { emirBaslat, emirBitir } from './servis.ts';
 import { isEmirleriGetir } from './sorgular/is-emri/sorgular.ts';
-import { MUAYENE_BELGESI_EKSIK, OTOMATIK_MUAYENE } from './kurallar.ts';
+import { KONTROL_ADIMI_KALITEDEN, MUAYENE_BELGESI_EKSIK, OTOMATIK_MUAYENE } from './kurallar.ts';
+import { kaynaktaMuayeneOnayla } from './kontrol-adimi.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
@@ -50,10 +51,10 @@ describe('uretim-emirleri kaynağında muayene belge kapısı (3708; gerçek Pos
     return { durum: c.statusCode, govde: (c.headers['content-type']?.includes('json') === true ? c.json() : c.rawPayload) as T };
   }
   // Sentetik PDF: imzası türü belirler, gerisi rastgele; gerçek sertifika yok.
-  async function belgeYukle(): Promise<string> {
+  async function belgeYukle(kimCerez = cerez): Promise<string> {
     const icerik = Buffer.concat([Buffer.from('%PDF-1.7\n'), randomBytes(2000)]);
     const ozet = createHash('sha256').update(icerik).digest('hex');
-    const r = await istek('POST', `/dosyalar/${ozet}/parca`, { sira: 0, toplam: 1, veri: icerik.toString('base64') });
+    const r = await istek('POST', `/dosyalar/${ozet}/parca`, { sira: 0, toplam: 1, veri: icerik.toString('base64') }, kimCerez);
     assert.equal(r.durum, 200, JSON.stringify(r.govde));
     return ozet;
   }
@@ -64,8 +65,8 @@ describe('uretim-emirleri kaynağında muayene belge kapısı (3708; gerçek Pos
   const kaynakta = (op: number): IsEmriGirdisi => ({
     ...ic(op), ad: `Fason ${op}`, kaynak: { tur: 'fason', id: firma }, ayarSuresiDk: null, birimSureDk: null, terminGun: 3, kontrolTuru: 'kaynakta', muayeneSuresiSaat: 1,
   });
-  // Muayene adımı çalışırken: önceki adım bitti, parça fasonda, muayene firmada başladı.
-  async function muayenedeEmir(baslat = true): Promise<{ emirId: number; muayeneId: number; ilkId: number; fasonId: number; sonId: number }> {
+  // Muayene bekliyor: önceki adım bitti, parça fasonda (3809: muayene terminalden başlamaz, Kalite Merkezi onaylar).
+  async function muayenedeEmir(): Promise<{ emirId: number; muayeneId: number; ilkId: number; fasonId: number; sonId: number }> {
     const r = await tx((db) => uretimEmriAc(db, yonetici, { malzemeNo: urunNo, adet: 10, teslim: null, kaynakRotaRevizyonId: rev, isEmirleri: [ic(10), kaynakta(20), ic(30)], projeId }));
     const [ilkId, fasonId] = r.isEmriIdleri as [number, number];
     await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'planli' WHERE id = $1", [r.uretimEmriId]);
@@ -73,11 +74,11 @@ describe('uretim-emirleri kaynağında muayene belge kapısı (3708; gerçek Pos
     await tx((db) => fasonGidis(db, yonetici, r.uretimEmriId, fasonId, 10));
     const m = (await tx((db) => isEmirleriGetir(db, [r.uretimEmriId]))).find((i) => i.ekAciklama === OTOMATIK_MUAYENE);
     assert.ok(m, 'muayene adımı fason adımının arkasına girer');
-    if (baslat) await tx((db) => emirBaslat(db, yonetici.id, r.uretimEmriId, undefined, m.id));
     return { emirId: r.uretimEmriId, muayeneId: m.id, ilkId, fasonId, sonId: r.isEmriIdleri[2]! };
   }
   const yol = (emirId: number, isEmriId: number) => `/adimli-emirler/${String(emirId)}/is-emirleri/${String(isEmriId)}/muayene-belgeleri`;
   const bitir = (emirId: number, isEmriId: number, saglam?: number) => tx((db) => emirBitir(db, yonetici.id, emirId, saglam, null, undefined, isEmriId));
+  const onayla = (isEmriId: number, saglam = 10, red = 0) => tx((db) => kaynaktaMuayeneOnayla(db, yonetici, isEmriId, { saglam, red }));
 
   before(async () => {
     ortam = await testVeritabaniKur('uretim_muayene_belgesi');
@@ -90,7 +91,8 @@ describe('uretim-emirleri kaynağında muayene belge kapısı (3708; gerçek Pos
     projeId = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('UE.MBK', 'Deneme proje', $1) RETURNING id", [yoneticiId]))!.id;
     tipId = (await ortam.sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('MB-T', 'Deneme tipi', 'TAL') RETURNING id"))!.id;
-    muayeneTipi = (await ortam.sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('KMY', 'Kaynağında muayene', 'KAL') RETURNING id"))!.id;
+    // 3809: tip koddan bulunur; göç KYM tipini açar.
+    muayeneTipi = (await ortam.sahip.tek<{ id: number }>("SELECT id FROM istasyonlar_operasyon_tipi WHERE kod = 'KYM'"))!.id;
     firma = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id, fason) VALUES ('Deneme Fasoncu', 'tedarikci', $1, true) RETURNING id", [yoneticiId]))!.id;
     const im = await ortam.sahip.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('MBM1', 'Deneme Merkezi') RETURNING id");
@@ -117,8 +119,10 @@ describe('uretim-emirleri kaynağında muayene belge kapısı (3708; gerçek Pos
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
     assert.deepEqual(d.govde.adimlar.filter((a) => a.muayene === true).map((a) => a.isEmriId), [muayeneId]);
     assert.equal((await istek('GET', yol(emirId, ilkId))).durum, 409, 'muayene olmayan adıma belge bağlanmaz');
-    // Fason adımı açıkken (parça firmada) muayene bitirilir: kendi fason öncülü bitirme sırasından düşer. Muayene 10 sağlam onaylar.
-    await bitir(emirId, muayeneId, 10);
+    // Fason adımı açıkken (parça firmada) muayene onaylanır: kendi fason öncülü sıradan düşer. Kalite 10 sağlam onaylar; terminal adımı yürütmez.
+    await assert.rejects(tx((db) => emirBaslat(db, yonetici.id, emirId, undefined, muayeneId)), new RegExp(KONTROL_ADIMI_KALITEDEN.slice(0, 30)));
+    await assert.rejects(bitir(emirId, muayeneId, 10), new RegExp(KONTROL_ADIMI_KALITEDEN.slice(0, 30)), 'terminal bitirmez');
+    await onayla(muayeneId, 10);
     assert.equal((await o().sahip.tek<{ d: string }>('SELECT durum AS d FROM uretim_emirleri_is_emri WHERE id = $1', [muayeneId]))?.d, 'tamam');
     // Risk R1: muayeneden sonraki iç adım, parça firmadayken (fason açık) bitmez; dönüş girip fason kapanınca biter.
     await tx((db) => emirBaslat(db, yonetici.id, emirId, undefined, sonId));
@@ -140,7 +144,7 @@ describe('uretim-emirleri kaynağında muayene belge kapısı (3708; gerçek Pos
     assert.deepEqual(g2.govde.zorunluBelgeler, ['Malzeme sertifikası', 'Test raporu']);
 
     const { emirId, muayeneId } = await muayenedeEmir();
-    await assert.rejects(bitir(emirId, muayeneId), (h: Error) => h.message.includes(MUAYENE_BELGESI_EKSIK) && h.message.includes('Malzeme sertifikası, Test raporu'));
+    await assert.rejects(onayla(muayeneId), (h: Error) => h.message.includes(MUAYENE_BELGESI_EKSIK) && h.message.includes('Malzeme sertifikası, Test raporu'));
 
     const ozet1 = await belgeYukle();
     const yanlis = await istek('POST', yol(emirId, muayeneId), { ozet: ozet1, dosyaAdi: 'ORN-sertifika.pdf', belgeTuru: 'Fatura' });
@@ -148,7 +152,7 @@ describe('uretim-emirleri kaynağında muayene belge kapısı (3708; gerçek Pos
     const b1 = await istek<MuayeneBelgeleriCevabi>('POST', yol(emirId, muayeneId), { ozet: ozet1, dosyaAdi: 'ORN-sertifika.pdf', belgeTuru: 'Malzeme sertifikası' });
     assert.equal(b1.durum, 200, JSON.stringify(b1.govde));
     assert.deepEqual([b1.govde.eksik, b1.govde.belgeler.map((b) => [b.ad, b.belgeTuru])], [['Test raporu'], [['ORN-sertifika.pdf', 'Malzeme sertifikası']]]);
-    await assert.rejects(bitir(emirId, muayeneId), (h: Error) => h.message.includes('Eksik: Test raporu.'));
+    await assert.rejects(onayla(muayeneId), (h: Error) => h.message.includes('Eksik: Test raporu.'));
 
     const ozet2 = await belgeYukle();
     const b2 = await istek<MuayeneBelgeleriCevabi>('POST', yol(emirId, muayeneId), { ozet: ozet2, dosyaAdi: 'ORN-rapor.pdf', belgeTuru: 'Test raporu' });
@@ -159,10 +163,10 @@ describe('uretim-emirleri kaynağında muayene belge kapısı (3708; gerçek Pos
     const k = await istek<MuayeneBelgeleriCevabi>('POST', `${yol(emirId, muayeneId)}/${ozet2}/kaldir`);
     assert.deepEqual([k.durum, k.govde.eksik], [200, ['Test raporu']]);
     assert.equal((await istek('POST', `${yol(emirId, muayeneId)}/${ozet2}/kaldir`)).durum, 404);
-    await assert.rejects(bitir(emirId, muayeneId), (h: Error) => h.message.includes(MUAYENE_BELGESI_EKSIK));
+    await assert.rejects(onayla(muayeneId), (h: Error) => h.message.includes(MUAYENE_BELGESI_EKSIK));
 
     assert.equal((await istek('POST', yol(emirId, muayeneId), { ozet: ozet2, dosyaAdi: 'ORN-rapor.pdf', belgeTuru: 'Test raporu' })).durum, 200);
-    await bitir(emirId, muayeneId);
+    await onayla(muayeneId);
     const durum = await o().sahip.tek<{ d: string }>('SELECT durum AS d FROM uretim_emirleri_is_emri WHERE id = $1', [muayeneId]);
     assert.equal(durum?.d, 'tamam');
     // Risk R2: biten muayenenin belgesi kaldırılmaz.
@@ -171,8 +175,8 @@ describe('uretim-emirleri kaynağında muayene belge kapısı (3708; gerçek Pos
     assert.deepEqual((await istek<MuayeneBelgeleriCevabi>('GET', yol(emirId, muayeneId))).govde.eksik, []);
   });
 
-  // Test1 G2: kalite (fason yetkisi yok) Adım Durumu'nu okuduğu için belgeleri görür ve açar; bağlayamaz, kaldıramaz.
-  test('kalite belgeleri okur ve açar; bağlama ve kaldırma 403', async () => {
+  // Test1 G2, 3809: kalite (fason yetkisi yok) belgeleri görür ve açar; muayeneyi onayladığı için belgeyi bağlar ve kaldırır.
+  test('kalite belgeleri okur, açar, bağlar ve kaldırır', async () => {
     const rol = await o().vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'kalite'");
     const yoneticiRolu = await o().vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'");
     assert.ok(rol && yoneticiRolu, 'rol yok');
@@ -184,19 +188,21 @@ describe('uretim-emirleri kaynağında muayene belge kapısı (3708; gerçek Pos
     const g = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'muayene-kalite', parola: PAROLA } });
     assert.equal(g.statusCode, 200, g.body);
     const kalite = String(g.headers['set-cookie']).split(';')[0] ?? '';
-    const { emirId, muayeneId } = await muayenedeEmir(false);
+    const { emirId, muayeneId } = await muayenedeEmir();
     const ozet = await belgeYukle();
     assert.equal((await istek('POST', yol(emirId, muayeneId), { ozet, dosyaAdi: 'ORN-k.pdf', belgeTuru: 'Test raporu' })).durum, 200);
+    const kendi = await belgeYukle(kalite);
     const v = await istek<MuayeneBelgeleriCevabi>('GET', yol(emirId, muayeneId), undefined, kalite);
     assert.deepEqual([v.durum, v.govde.belgeler.map((b) => b.ad)], [200, ['ORN-k.pdf']]);
     assert.equal((await istek('GET', `${yol(emirId, muayeneId)}/${ozet}/dosya`, undefined, kalite)).durum, 200);
-    assert.equal((await istek('POST', yol(emirId, muayeneId), { ozet, dosyaAdi: 'ORN-k2.pdf', belgeTuru: 'Test raporu' }, kalite)).durum, 403);
-    assert.equal((await istek('POST', `${yol(emirId, muayeneId)}/${ozet}/kaldir`, undefined, kalite)).durum, 403);
+    const bag = await istek('POST', yol(emirId, muayeneId), { ozet: kendi, dosyaAdi: 'ORN-k2.pdf', belgeTuru: 'Malzeme sertifikası' }, kalite);
+    assert.equal(bag.durum, 200, JSON.stringify(bag.govde));
+    assert.equal((await istek('POST', `${yol(emirId, muayeneId)}/${kendi}/kaldir`, undefined, kalite)).durum, 200);
   });
 
   test('belge bir emrin muayenesine bağlıdır: başka emrin yolundan okunmaz', async () => {
-    const a = await muayenedeEmir(false);
-    const b = await muayenedeEmir(false);
+    const a = await muayenedeEmir();
+    const b = await muayenedeEmir();
     const ozet = await belgeYukle();
     assert.equal((await istek('POST', yol(a.emirId, a.muayeneId), { ozet, dosyaAdi: 'ORN-a.pdf', belgeTuru: 'Test raporu' })).durum, 200);
     assert.equal((await istek('GET', `${yol(b.emirId, b.muayeneId)}/${ozet}/dosya`)).durum, 404);

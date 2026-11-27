@@ -1,4 +1,4 @@
-import { fasonYolu } from '#paylasilan/fason-kontrol.ts';
+import { KONTROL_TIPI_KODU, fasonYolu, kontrolTipiEksikIletisi } from '#paylasilan/fason-kontrol.ts';
 import type { FasonKontrol, FasonYolu } from '#paylasilan/fason-kontrol.ts';
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import { KARTSIZ_IZIN_SURE_DK } from '#paylasilan/sozlesme/kartsiz-izin.ts';
@@ -682,7 +682,7 @@ export function fasonTamamIhlali(f: FasonDurumu): string | null {
 
 // 1208: fason adımının hemen arkasında GKK adımı yoksa emre otomatik GKK girer. Yalnız bitmemiş fason adımına ve arkasındaki adım
 // başlamamışsa (başlamış adımın önüne girdi konmaz); op numarası iki adımın arasından, boş numara yoksa girmez (rota uyarısı görünür kalır).
-export const GKK_TIPI = 'GKK';
+export const GKK_TIPI = KONTROL_TIPI_KODU.gkk;
 export const OTOMATIK_GKK_ADI = 'GKK (otomatik)';
 export const OTOMATIK_GKK = 'Otomatik GKK';
 // Otomatik GKK rotada yoktur; rota emre yeniden uygulanırken bekleyeni kalkar ve yeniden konur (öteki ek adımlar uygulamayı durdurur).
@@ -710,14 +710,15 @@ export const otomatikGkkYerleri = (adimlar: readonly KontrolAdimi[], gkkTipiId: 
 // 3708: "Kaynağında muayene" seçili fason adımının arkasına muayene adımı konur (tip yoksa çağıran hiç çağırmaz; rota uyarısı kalır).
 export const otomatikMuayeneYerleri = (adimlar: readonly KontrolAdimi[], muayeneTipiId: number): KontrolYeri[] => kontrolYerleri(adimlar, muayeneTipiId, 'kaynakta');
 
-export const KAYNAKTA_MUAYENE_TIPI = 'Kaynağında muayene';
+// 3809: tip koddan bulunur (KYM); ad sonradan değişse de eşleme bozulmaz.
+export const KAYNAKTA_MUAYENE_TIPI = KONTROL_TIPI_KODU.kaynakta;
 export const OTOMATIK_MUAYENE_ADI = 'Kaynağında muayene (otomatik)';
 export const OTOMATIK_MUAYENE = 'Otomatik kaynağında muayene';
 export const otomatikMuayeneMi = (i: { tur: string; ekAciklama: string | null }): boolean => i.tur === 'ek' && i.ekAciklama === OTOMATIK_MUAYENE;
 // Rota emre yeniden uygulanırken bekleyen otomatik kontrol adımı (GKK ya da muayene) kalkar ve seçime göre yeniden konur.
 export const otomatikKontrolMu = (i: { tur: string; ekAciklama: string | null }): boolean => otomatikGkkMi(i) || otomatikMuayeneMi(i);
-export function muayeneTipiSec<T extends { ad: string; grup: string; aktif: boolean }>(tipler: readonly T[]): T | null {
-  return tipler.find((t) => t.aktif && t.grup === 'KAL' && t.ad === KAYNAKTA_MUAYENE_TIPI) ?? null;
+export function muayeneTipiSec<T extends { kod: string; grup: string; aktif: boolean }>(tipler: readonly T[]): T | null {
+  return tipler.find((t) => t.aktif && t.grup === 'KAL' && t.kod === KAYNAKTA_MUAYENE_TIPI) ?? null;
 }
 
 // Sonraki adım fasonsa fason adımı firmaya aktarımla, değilse mal kabulden dönüşle kapanır (3708 madde 2-4).
@@ -748,6 +749,18 @@ export const donusYoluIhlali = (yol: FasonYolu): string | null => (yol.kapanis =
 export const aktarilanSaglam = (aktarimlar: readonly { saglam: number }[]): number => aktarimlar.reduce((t, a) => t + a.saglam, 0);
 
 export const muayeneBelgeEksikleri = (zorunlu: readonly string[], yuklenen: readonly string[]): string[] => zorunlu.filter((z) => !yuklenen.includes(z));
+// 3809: Kalite Merkezi'nin kaynağında muayene onayı: sağlam ve red, firmaya gönderilenin içindedir; ikisi birden sıfır olamaz.
+export const MUAYENE_ADET_YOK = 'Sağlam ya da red adedi girilir.';
+export const MUAYENE_GONDERILEN_ASIMI = 'Sağlam ve red toplamı firmaya gönderilen adedi aşıyor.';
+export const MUAYENE_GIDIS_YOK = 'Bu fason adımında firmaya gönderilen parça yok; muayene gönderimden sonra onaylanır.';
+export function muayeneOnayAdetIhlali(gonderilen: number, saglam: number, red: number): string | null {
+  if (gonderilen <= 0) return MUAYENE_GIDIS_YOK;
+  if (saglam + red <= 0) return MUAYENE_ADET_YOK;
+  return saglam + red > gonderilen ? MUAYENE_GONDERILEN_ASIMI : null;
+}
+// 3809: otomatik kontrol adımı (fason arkasındaki GKK ve kaynağında muayene) terminalden başlatılmaz ve bitirilmez; Kalite Merkezi'nin
+// kararıyla kapanır.
+export const KONTROL_ADIMI_KALITEDEN = 'Bu kontrol adımı terminalden yürütülmez; Kalite Merkezi\'nin kararıyla kapanır.';
 export const muayeneOnayIhlali = (zorunlu: readonly string[], yuklenen: readonly string[]): string | null =>
   muayeneBelgeEksikleri(zorunlu, yuklenen).length > 0 ? MUAYENE_BELGESI_EKSIK : null;
 
@@ -1784,6 +1797,28 @@ export function kaliteIstasyonuSec<H extends number | null>(
 ): number | H {
   const kalite = istasyonlar.filter((i) => i.aktif && i.tip === 'kalite');
   return kalite.find((i) => i.id === tip.varsayilanIstasyonId)?.id ?? kalite[0]?.id ?? hataIstasyonu;
+}
+
+// 3809: otomatik GKK ve kaynağında muayene adımı terminalden değil Kalite Merkezi'nin kararıyla ilerler; kalite türünde istasyon şartı yoktur.
+// Adımın istasyonu tipin varsayılan istasyonudur (aktifse), yoksa adım istasyonsuz girer.
+export function kontrolIstasyonuSec(tip: { varsayilanIstasyonId: number | null }, istasyonlar: readonly { id: number; aktif: boolean }[]): number | null {
+  return istasyonlar.find((i) => i.aktif && i.id === tip.varsayilanIstasyonId)?.id ?? null;
+}
+// Fason adımın seçtiği kontrol adımı tip eksikliğinden konamadıysa uyarı (emir ayrıntısı); tip varsa adım her zaman konur.
+export function kontrolAdimiUyarilari(
+  adimlar: readonly { sira: number; opNo: number; tur: string; ekAciklama: string | null; fasonFirmaId: number | null; kontrolTuru?: FasonKontrol; durum: IsEmriDurumu }[],
+  tipVar: { gkk: boolean; kaynakta: boolean },
+): string[] {
+  const uyarilar: string[] = [];
+  const sirali = [...adimlar].sort((a, b) => a.sira - b.sira);
+  sirali.forEach((a, i) => {
+    const k = a.kontrolTuru;
+    if (a.tur !== 'rota' || !fasonMu(a) || k === undefined || k === 'kontrolsuz' || tipVar[k]) return;
+    const arkasi = sirali[i + 1];
+    if (arkasi !== undefined && (k === 'gkk' ? otomatikGkkMi(arkasi) : otomatikMuayeneMi(arkasi))) return;
+    uyarilar.push(kontrolTipiEksikIletisi(k, a.opNo));
+  });
+  return uyarilar;
 }
 
 // alt ile ust arasında (ikisi hariç) art arda n op numarası; aralığın ortasından başlar (OP 20 ile 30 arasında iki adım 25, 26).

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AdimliEmirCevabi, FasonFirmalariCevabi, IsEmri, UretimYeri, UretimYeriGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { Dugme, DurumKutusu, Girdi, Pencere, Rozet, Secim, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { IS_EMRI_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
@@ -18,6 +18,14 @@ export function degisimEngeli(a: Pick<IsEmri, 'durum' | 'fason'>): string | null
 
 // 1208: fasonun arkasına sunucunun koyduğu GKK ek adımı; sunucu ek açıklamayı bu metinle yazar.
 export const otomatikGkkMi = (a: Pick<IsEmri, 'tur' | 'ekAciklama'>): boolean => a.tur === 'ek' && a.ekAciklama === 'Otomatik GKK';
+// 3809: otomatik kontrol adımı (GKK ya da kaynağında muayene) terminalden yürümez; Kalite Merkezi'nin kararıyla kapanır.
+export const otomatikKontrolEtiketi = (a: Pick<IsEmri, 'tur' | 'ekAciklama'>): string | null =>
+  a.tur !== 'ek' ? null : a.ekAciklama === 'Otomatik GKK' ? 'Otomatik GKK' : a.ekAciklama === 'Otomatik kaynağında muayene' ? 'Otomatik muayene' : null;
+export const KONTROL_KALITEDEN = "Kalite Merkezi'nden kapanır";
+export function OtomatikKontrolRozeti({ adim }: { adim: Pick<IsEmri, 'tur' | 'ekAciklama'> }) {
+  const etiket = otomatikKontrolEtiketi(adim);
+  return etiket === null ? null : <> <Rozet ton="bilgi">{etiket}</Rozet> <small>{KONTROL_KALITEDEN}</small></>;
+}
 
 export const dalMetni = (d: NonNullable<IsEmri['dal']>): string => `${d.malzeme.kod ?? d.malzeme.ad} · rotada OP ${String(d.kaynakOpNo)}`;
 
@@ -57,7 +65,7 @@ function Adimlar({ emirId, yazar, izleme }: { emirId: number; yazar: boolean; iz
       anahtar: 'ad', baslik: 'Adım', hucre: (a) => (
         <>
           {a.ad}
-          {otomatikGkkMi(a) && <> <Rozet ton="bilgi">Otomatik GKK</Rozet></>}
+          <OtomatikKontrolRozeti adim={a} />
           {izleme && a.dal && <> <Rozet ton="bilgi">{a.dal.ad}</Rozet> <small>{dalMetni(a.dal)}</small></>}
           {/* K21 a: adım alt parça bitmeden de başlar; eksik alt parça engel değil uyarıdır. */}
           {izleme && (a.eksikAltParcalar ?? []).map((p) => (
@@ -100,6 +108,10 @@ function Adimlar({ emirId, yazar, izleme }: { emirId: number; yazar: boolean; iz
       {d.isError && <p className="tc-emir-not">{hataIletisi(d.error, 'Adımlar okunamadı.')}</p>}
       {d.data && (
         <>
+          {/* 3809: kontrol adımının tipi yoksa adım konamaz; sessiz atlanmaz, burada söylenir. */}
+          {(d.data.emir.kontrolUyarilari ?? []).map((u) => (
+            <p key={u} className="tc-emir-not" role="status"><Simge ad="alert" boyut="k" /><span>{u}</span></p>
+          ))}
           <Tablo etiket="Operasyon adımları" sutunlar={sutunlar} satirlar={d.data.emir.isEmirleri} satirAnahtari={(a) => a.id} bosMesaj="Adım yok" />
           {yazar && <p className="tc-emir-not">Değişiklik yalnız bu emri etkiler; rota aynı kalır. Başlamış adım değiştirilemez.</p>}
           {secili && <YerPenceresi emirId={emirId} surum={d.data.emir.surum} adim={secili} kapat={() => seciliYaz(null)} />}

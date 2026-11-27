@@ -578,6 +578,13 @@ export const fasonYoluOku = isEmri.fasonYoluOku;
 export type { FasonYolu } from '#paylasilan/fason-kontrol.ts';
 // Sevkiyat Tüm işler (960): depo çıkışı fason gidişini emre yazar (aynı transaction); yetki denetlemez, çağıran korur.
 export const fasonGidisYaz = isEmri.fasonGidisYaz;
+// 3809: otomatik kontrol adımları Kalite Merkezi'nin kararıyla yürür. Fason GKK kararı (stok yazdıktan sonra) GKK adımına sağlam ekler, bekleyen
+// kalmayınca adımı kapatır; kaynağında muayene onayı belge kapısından geçer ve 3708 kuralıyla adımı kapatır. Listeler Kalite Merkezi'nin
+// Giriş kontrolü ekranı içindir. Çağıranın transaction'ında yürür; fasonGkkKarariniIsle yetki denetlemez (çağıran korur).
+export {
+  fasonEmriniKilitle, fasonGkkKarariniIsle, kaynaktaMuayeneOnayla, kaynaktaMuayeneGorevleri, fasonGkkBaglamlari, fasonGkkAnahtari,
+  type KaynaktaMuayeneGorevi, type FasonGkkBaglami,
+} from './kontrol-adimi.ts';
 // Satın alma dış operasyonlar (#542 U3); yetki denetlemez, çağıran korur.
 export const fasonIsEmirleri = isEmri.fasonIsEmirleri;
 // 3703: adımın öncülü bitmemiş fason adımı mı (Arkon terminalinin mal kabul adımı türü, adım düzeyinde); yetki denetlemez.
@@ -631,8 +638,8 @@ export type {
 // Dinleyiciler kendini kaydeder; çağrı sayım olayıyla aynı yönde kurulur (modül döngüsü olmaz).
 export { emirAcildiDinle, emirBirlestiDinle, emirBittiDinle, emirIptalDinle, fasonHareketiDinle, hazirlikTamamlandiDinle, isEmirleriDegistiDinle, isEmriKopyalandiDinle } from './emir-olaylari.ts';
 // Adım bitti (2497): terminalde çalışan iş emri bitince aynı işlemde; dinleyicinin reddi bitirmeyi geri alır.
-export { adimBittiDinle } from './emir-olaylari.ts';
-export type { AdimBittiDinleyicisi, AdimBittiOlayi } from './emir-olaylari.ts';
+export { adimBittiDinle, fasonTamamlandiDinle } from './emir-olaylari.ts';
+export type { AdimBittiDinleyicisi, AdimBittiOlayi, FasonTamamlandiDinleyicisi, FasonTamamlandiOlayi } from './emir-olaylari.ts';
 export type {
   EmirBittiDinleyicisi, EmirBittiOlayi, EmirIptalDinleyicisi, EmirIptalOlayi, FasonHareketiDinleyicisi, FasonHareketiOlayi, HazirlikTamamlandiDinleyicisi, HazirlikTamamlandiOlayi,
   IsEmriKopyalandiDinleyicisi, IsEmriKopyalandiOlayi,

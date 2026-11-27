@@ -13,7 +13,7 @@ import { MADDE, halGorunumu } from './hazirlik-bilgisi.ts';
 import { maddeGorunumu, useHazirlikMaddeleri } from './hazirlik-maddeleri.ts';
 import { HazirlikProjesiDugmesi } from './HazirlikProjesi.tsx';
 import { SmartesAdimRozeti, SMARTES_DURUM_TONU } from './SmartesRozeti.tsx';
-import { dalMetni, fasonMu, otomatikGkkMi, yerMetni } from './UretimYerleri.tsx';
+import { OtomatikKontrolRozeti, dalMetni, fasonMu, yerMetni } from './UretimYerleri.tsx';
 import './uretim-emirleri.css';
 import './adim-tablosu.css';
 
@@ -77,7 +77,7 @@ export function AdimTablosu({ emirId, malzemeNo, satirlar: dis, ekleme }: { emir
       ad: (
         <>
           {a.ad}
-          {is !== null && otomatikGkkMi(is) && <> <Rozet ton="bilgi">Otomatik GKK</Rozet></>}
+          {is !== null && <OtomatikKontrolRozeti adim={is} />}
           {is?.dal != null && <> <Rozet ton="bilgi">{is.dal.ad}</Rozet> <small>{dalMetni(is.dal)}</small></>}
         </>
       ),

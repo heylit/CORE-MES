@@ -77,6 +77,9 @@ describe('uretim-emirleri fason ve dallı rota (1345, 1346; gerçek PostgreSQL)'
     projeId = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('UE.FDAL', 'Deneme proje', $1) RETURNING id", [yoneticiId]))!.id;
     tipId = (await ortam.sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('FD-T', 'Deneme tipi', 'TAL') RETURNING id"))!.id;
+    // 3809: GKK tipi aktifken fasonun arkasına istasyonsuz otomatik GKK adımı girer; bu dosya fason ve sıra kurallarına bakar, GKK
+    // adımı fason-gkk.test.ts ve fason-kontrol-akis.test.ts'de sınanır.
+    await ortam.sahip.sorgu("UPDATE istasyonlar_operasyon_tipi SET aktif = false WHERE kod = 'GKK'");
     firma = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id, fason) VALUES ('Deneme Fasoncu', 'tedarikci', $1, true) RETURNING id", [yoneticiId]))!.id;
     await ortam.sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('FD-DNM-', 0) ON CONFLICT (onek) DO NOTHING");

@@ -109,6 +109,8 @@ describe('akis emir yolculuğu (gerçek PostgreSQL)', () => {
     await giris('yonetici');
     for (const [ad, rol] of [['planlama_proje', 'planlama_proje'], ['operator', 'operator'], ['depo', 'depo']] as const) await kisiEkle(ad, rol);
     tipId = (await ortam.sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('AK-T', 'Deneme tipi', 'TAL') RETURNING id"))!.id;
+    // 3809: GKK tipi aktifken fasonun arkasına istasyonsuz otomatik GKK adımı girer; yolculuk testi rotadaki adımlara bakar.
+    await ortam.sahip.sorgu("UPDATE istasyonlar_operasyon_tipi SET aktif = false WHERE kod = 'GKK'");
     await ortam.sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('AK-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
     urunNo = (await ortam.sahip.tek<{ no: number }>(
       `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)

@@ -60,3 +60,4 @@ export { malzemeKartiIzleri } from './sorgular.ts';
 // 3148: mal kabul satırlarının GKK özeti (GKK no, zaman, kabul/hatalı miktar, karar, NCR no, not); GKK'sız satır haritada yok. Yetki denetlemez.
 export { girisOzetleri } from './servis.ts';
 export type { GirisOzeti } from './servis.ts';
+export { fasonTamamlandiYansit } from './fason-giris.ts';

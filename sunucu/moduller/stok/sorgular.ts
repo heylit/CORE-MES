@@ -97,3 +97,6 @@ export {
   siparisAyirmaIstegiEkle, siparisAyirmalari,
 } from './sorgular/kontrol/sorgular.ts';
 export * from './sorgular/takim/sorgular.ts';
+export {
+  FASON_DONUSU_ONEKI, FASON_GKK_ACIKLAMASI, type FasonGkkAnahtari, fasonGkkAnahtarlari, fasonGkkKararlari,
+} from './sorgular/fason-gkk/sorgular.ts';

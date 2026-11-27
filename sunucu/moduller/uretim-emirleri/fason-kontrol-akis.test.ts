@@ -99,14 +99,16 @@ describe('uretim-emirleri fason kontrol türü (3708; gerçek PostgreSQL)', () =
   test('kaynağında muayene: muayene adımı fason adımının arkasına girer; tip yoksa girmez; sonraki adım fason değilse dönüş mal kabulden girer', async () => {
     const { makine } = await istasyon('talasli');
     await istasyon('kalite');
+    // 3809: tip koddan (KYM) bulunur; göç tipi açar, pasif tip yok sayılır.
+    await o().sahip.sorgu("UPDATE istasyonlar_operasyon_tipi SET aktif = false WHERE kod = 'KYM'");
     const yok = await ac([ic(10, makine), { ...fason(20), kontrolTuru: 'kaynakta', muayeneSuresiSaat: 2 }, ic(30, makine)]);
     assert.deepEqual((await adimlari(yok.id)).map((a) => a.op), [10, 20, 30], 'tip tanımlı değilse adım girmez (rota uyarısı kalır)');
-    await o().sahip.sorgu("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('KMY', 'Kaynağında muayene', 'KAL')");
+    await o().sahip.sorgu("UPDATE istasyonlar_operasyon_tipi SET aktif = true WHERE kod = 'KYM'");
     const e = await ac([ic(10, makine), { ...fason(20), kontrolTuru: 'kaynakta', muayeneSuresiSaat: 2 }, fason2(30)]);
     const adimlar = await adimlari(e.id);
     assert.deepEqual(adimlar.map((a) => [a.op, a.tur]), [[10, 'rota'], [20, 'rota'], [25, 'ek'], [30, 'rota'], [35, 'ek']]);
     assert.deepEqual([adimlar[2]!.ad, adimlar[2]!.aciklama], [OTOMATIK_MUAYENE_ADI, OTOMATIK_MUAYENE]);
-    assert.equal((await o().sahip.tek<{ tip: string }>('SELECT tip FROM istasyon WHERE id = $1', [adimlar[2]!.ist]))!.tip, 'kalite', 'muayene kalite istasyonunda girer');
+    assert.equal(adimlar[2]!.ist, null, '3809: tipin varsayılan istasyonu yoksa muayene istasyonsuz girer (kalite istasyonu aranmaz)');
     assert.deepEqual((await kontrolSutunu(e.id)).slice(0, 2).map((k) => [k.kontrol, k.saat]), [['gkk', null], ['kaynakta', '2.00']]);
     const sureDk = await o().sahip.tek<{ s: string }>('SELECT ayar_suresi_dk::text AS s FROM uretim_emirleri_is_emri WHERE id = $1', [adimlar[2]!.id]);
     assert.equal(Number(sureDk!.s), 120);
@@ -131,7 +133,6 @@ describe('uretim-emirleri fason kontrol türü (3708; gerçek PostgreSQL)', () =
   test('kaynağında muayene kararı: sonraki adım fasonsa aktarım kaydı yazılır (sağlam = muayenenin sağlamı, kalan hurda); sonraki adım fason değilse yazılmaz', async () => {
     const { makine } = await istasyon('talasli');
     await istasyon('kalite');
-    await o().sahip.sorgu("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) SELECT 'KMY', 'Kaynağında muayene', 'KAL' WHERE NOT EXISTS (SELECT 1 FROM istasyonlar_operasyon_tipi WHERE kod = 'KMY')");
     const kur = async (adimlar: IsEmriGirdisi[]) => {
       const e = await ac(adimlar);
       await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'planli' WHERE id = $1", [e.id]);
@@ -145,9 +146,8 @@ describe('uretim-emirleri fason kontrol türü (3708; gerçek PostgreSQL)', () =
 
     const e = await kur([ic(10, makine), { ...fason(20), kontrolTuru: 'kaynakta', muayeneSuresiSaat: 1 }, fason2(30)]);
     const m = await muayene(e.id);
-    await o().sahip.sorgu("INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, duzeltme, is_emri_id) VALUES ($1, $2, $3, 'hurda', 2, 1, false, $4)", [e.id, yonetici.id, m.istasyonId, m.id]);
-    await tx(async (db) => muayeneKarariniYaz(db, yonetici.id, e.id, m, 8));
-    assert.deepEqual(await aktarimlar(e.adimlar[1]!), [{ saglam: 8, hurda: 2, hedef: firma2 }], 'karar: 8 sağlam, muayenenin saydığı 2 hurda');
+    await tx(async (db) => muayeneKarariniYaz(db, yonetici.id, e.id, m, 8, 2));
+    assert.deepEqual(await aktarimlar(e.adimlar[1]!), [{ saglam: 8, hurda: 2, hedef: firma2 }], 'karar: 8 sağlam, kalitenin verdiği 2 red');
     await tx((db) => fasonTamamla(db, yonetici, e.id, e.adimlar[1]!));
     await o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = now(), bitis = now(), saglam_adet = 8 WHERE id = $1", [(await muayene(e.id)).id]);
     await tx((db) => fasonGidis(db, yonetici, e.id, e.adimlar[2]!, 8));
@@ -162,7 +162,6 @@ describe('uretim-emirleri fason kontrol türü (3708; gerçek PostgreSQL)', () =
   test('muayene kararı sayılmayan parçayı hurda yazmaz; kalan firmada açık durur', async () => {
     const { makine } = await istasyon('talasli');
     await istasyon('kalite');
-    await o().sahip.sorgu("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) SELECT 'KMY', 'Kaynağında muayene', 'KAL' WHERE NOT EXISTS (SELECT 1 FROM istasyonlar_operasyon_tipi WHERE kod = 'KMY')");
     const e = await ac([ic(10, makine), { ...fason(20), kontrolTuru: 'kaynakta', muayeneSuresiSaat: 1 }, fason2(30)]);
     await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'planli' WHERE id = $1", [e.id]);
     await o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = now(), bitis = now(), saglam_adet = 10 WHERE id = $1", [e.adimlar[0]]);
@@ -178,7 +177,6 @@ describe('uretim-emirleri fason kontrol türü (3708; gerçek PostgreSQL)', () =
   test('kaynağında muayene: dönüş muayene bitmeden ve onaylanan sağlamdan fazla girmez', async () => {
     const { makine } = await istasyon('talasli');
     await istasyon('kalite');
-    await o().sahip.sorgu("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) SELECT 'KMY', 'Kaynağında muayene', 'KAL' WHERE NOT EXISTS (SELECT 1 FROM istasyonlar_operasyon_tipi WHERE kod = 'KMY')");
     const e = await ac([ic(10, makine), { ...fason(20), kontrolTuru: 'kaynakta', muayeneSuresiSaat: 1 }, ic(30, makine)]);
     await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'planli' WHERE id = $1", [e.id]);
     await o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = now(), bitis = now(), saglam_adet = 10 WHERE id = $1", [e.adimlar[0]]);

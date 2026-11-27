@@ -21,6 +21,7 @@ import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeMaliyetBilgileri, malzemeNoKoddan, malzemeOlculeri, malzemeOperasyonlari, malzemeOzetleri, malzemeResimAnahtarlari, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { firmaOzeti, karneOlayiYaz, tumFirmalar } from '../musteri-tedarikci/disari.ts';
+import { fasonGkkBekleyenleri, fasonGkkYapilanlar, kaynaktaMuayeneBekleyenleri } from './fason-giris.ts';
 import { siparisSatirlari } from '../satin-alma/disari.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisListesi } from '../siparisler/disari.ts';
 import { girisKontroluSatirlari, girisKontroluUygula, hareketPartileri, karantinadanBirak, karantinaDisiKonumlar, partiGirisZamanlari, partiKaliteDurumuYap, partiKimlikleri, partileriBul, partilerinMalzemeleri, partilerinRedBakiyeleri, partilerinRedGirisleri } from '../stok/disari.ts';
@@ -506,7 +507,10 @@ export async function hataliBekleyenListesi(db: Db): Promise<KmHataliBekleyenCev
 // bekleyenler. Emre bağlı lotun GKK'sı terminalde verilecek (1251 a, D5); o gelene kadar bu listede durur.
 export async function girisBekleyenListesi(db: Db): Promise<KmGirisBekleyenCevabi> {
   const idler = [...new Set([...(await girisKontroluSatirlari(db, null)).map((s) => s.malKabulSatirId), ...(await sorgular.kararBekleyenGirisler(db))])];
-  return { kayitlar: (await girisKayitlari(db, idler)).filter((k) => k.durum !== 'kapandi') };
+  return {
+    kayitlar: (await girisKayitlari(db, idler)).filter((k) => k.durum !== 'kapandi'),
+    fason: await fasonGkkBekleyenleri(db), kaynakta: await kaynaktaMuayeneBekleyenleri(db),
+  };
 }
 
 // 3117: Yapılan listesi kapanan GKK'lardır; hatalısı kararını bekleyen Bekleyenler'de kalır.
@@ -516,6 +520,7 @@ export async function girisKayitlariListesi(db: Db, a: { baslangic: string; biti
   const sira = new Map(idler.map((id, i) => [id, i]));
   return {
     kayitlar: kayitlar.filter((k) => k.durum === 'kapandi').sort((x, y) => (sira.get(x.malKabulSatirId) ?? 0) - (sira.get(y.malKabulSatirId) ?? 0)),
+    fason: await fasonGkkYapilanlar(db, { ...a, sinir: KM_GIRIS_KAYIT_SINIRI }),
     sinirda: idler.length >= KM_GIRIS_KAYIT_SINIRI,
   };
 }

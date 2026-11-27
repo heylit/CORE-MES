@@ -24,13 +24,19 @@ const yol = (emirId: number, isEmriId: number) => `/adimli-emirler/${String(emir
 export const muayeneBelgesiAdresi = (emirId: number, isEmriId: number, ozet: string) =>
   `/api${yol(emirId, isEmriId)}/${encodeURIComponent(ozet)}/dosya`;
 
-// Bölüm Adım Durumu'nu okuyan herkese görünür (kalite dahil); yükleme ve kaldırma yalnız fason yetkisiyle.
+// Belge durumu (zorunlu, eksik) başka ekranda da okunur (Kalite Merkezi onay düğmesi); bağ ve kaldırma aynı önbelleği günceller.
+export const useMuayeneBelgeleri = (emirId: number, isEmriId: number) => useQuery({
+  queryKey: anahtarlar.muayeneBelgeleri(emirId, isEmriId),
+  queryFn: () => api.get<MuayeneBelgeleriCevabi>(yol(emirId, isEmriId)),
+});
+const YAZMA_ISLEMLERI = ['uretim-emirleri.fason', 'kalite-merkezi.onayla'] as const;
+
+// Bölüm Adım Durumu'nu okuyan herkese görünür (kalite dahil); yükleme ve kaldırma fason yetkisiyle ya da muayeneyi onaylayan
+// kaliteyle (kalite-merkezi.onayla).
 export function MuayeneBelgeleri({ emirId, isEmriId, opNo, bitti = false }: { emirId: number; isEmriId: number; opNo: number; bitti?: boolean }) {
-  const yazar = (useOturum().data?.islemler ?? []).includes('uretim-emirleri.fason');
-  const q = useQuery({
-    queryKey: anahtarlar.muayeneBelgeleri(emirId, isEmriId),
-    queryFn: () => api.get<MuayeneBelgeleriCevabi>(yol(emirId, isEmriId)),
-  });
+  const islemler = useOturum().data?.islemler ?? [];
+  const yazar = YAZMA_ISLEMLERI.some((i) => islemler.includes(i));
+  const q = useMuayeneBelgeleri(emirId, isEmriId);
   return (
     <section className="tc-at-kutu" aria-label={`OP ${String(opNo)} muayene belgeleri`}>
       <header className="tc-at-kutu-bas">
