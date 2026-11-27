@@ -170,3 +170,45 @@
 .km-np-gecmis-dugme { justify-self: start; background: none; border: 0; padding: 0; color: var(--done); font: inherit; font-size: var(--yazi-s); text-decoration: underline; cursor: pointer; }
 .km-np-gecmis li { display: grid; gap: var(--b-1); }
 .km-np-eski { display: grid; gap: var(--b-2); }
+
+/* 3796 b: geniş ekranda sol sütun simge şeridine iner, sağ sütun genişler ve kenarından sürüklenir. Sağ sütun en az bugünkü
+   genişlik, en çok resme --bildirim-genis kalacak kadar (SagTutamak ile aynı); tercih yoksa sol açıkken bugünkü, sol darken çekmece
+   genişliği. Şeritten açılan içerik orta sütunun düğme satırını örtmez. */
+.km-st-sol-icerik { display: contents; }
+.km-st-serit, .km-st-tutamak, .km-st-sol-dugme, .km-st-sol-ozet { display: none; }
+@media (min-width: 1200px) {
+  .km-st:not(.km-st-genis) {
+    --km-st-sol-sutun: var(--kuyruk-genis); --km-st-sag-vars: var(--kuyruk-genis);
+    grid-template-columns: var(--km-st-sol-sutun) minmax(0, 1fr) clamp(var(--kuyruk-genis), var(--km-st-sag, var(--km-st-sag-vars)),
+      max(var(--kuyruk-genis), calc(100% - var(--km-st-sol-sutun) - var(--b-3) * 2 - var(--bildirim-genis))));
+  }
+  .km-st-sol-dar:not(.km-st-genis) { --km-st-sol-sutun: var(--menu-serit); --km-st-sag-vars: var(--cekmece-genis); }
+  .km-st-sol-dugme { display: inline-flex; }
+  .km-st-genis .km-st-sol-dugme { display: none; }
+  .km-st-sol-dar .km-st-sol-ozet { display: inline; }
+  .km-st:not(.km-st-genis) .km-st-tutamak {
+    display: block; position: relative; grid-column: 3; grid-row: 1 / -1; justify-self: start; z-index: var(--z-ust);
+    inline-size: var(--b-3); margin-inline-start: calc(-1 * var(--b-3)); cursor: col-resize; touch-action: none;
+  }
+  .km-st-tutamak::after {
+    content: ""; position: absolute; inset-block: var(--b-3); inset-inline-start: 50%; inline-size: var(--b-1); transform: translateX(-50%);
+    border-radius: var(--yari-1); background: var(--edge);
+  }
+  .km-st-tutamak:hover::after, .km-st-tutamak:focus-visible::after { background: var(--edge2); }
+  .km-st-sol-dar .km-st-sol { position: relative; overflow: visible; }
+  .km-st-sol-dar .km-st-sol-icerik { display: none; }
+  .km-st-serit {
+    display: flex; flex-direction: column; align-items: center; gap: var(--b-1); padding: var(--b-2) 0; border-radius: var(--yari-3);
+    background: var(--panel); border: var(--cizgi-ince) solid var(--edge);
+  }
+  .km-st-serit button {
+    display: grid; justify-items: center; gap: var(--b-1); min-inline-size: var(--dokunma); min-block-size: var(--dokunma); padding: var(--b-1);
+    border: 0; border-radius: var(--yari-1); background: none; color: var(--ink); font: inherit; font-size: var(--yazi-xs); font-weight: 700; cursor: pointer;
+  }
+  .km-st-serit button:hover, .km-st-serit button[aria-expanded="true"] { background: var(--panel2); }
+  .km-st-sol-acilir .km-st-sol-icerik {
+    display: flex; flex-direction: column; gap: var(--b-3); position: absolute; inset-block-start: calc(var(--dugme-boy) + var(--b-2)); inset-inline-start: calc(100% + var(--b-3));
+    z-index: var(--z-ust); inline-size: var(--kuyruk-genis); max-block-size: calc(100% - var(--dugme-boy) - var(--b-2)); overflow: auto; padding: var(--b-2);
+    border-radius: var(--yari-3); background: var(--panel-solid); box-shadow: var(--shadow);
+  }
+}
