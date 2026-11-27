@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { ISO } from '../ortak/sorgular.ts';
 
 // 3688: hazırlık şablonu operasyon türüne göre (göç 20261125124500). Sürümler ve satırlar yalnız eklenir; etkin şablon türün en yüksek sürümüdür.
@@ -28,7 +29,7 @@ export function surumSatirlari(db: Db, surumIdleri: readonly string[]): Promise<
 
 // Tür başına yazma kilidi: aynı türe aynı anda iki kayıt sürüm numarasını yarıştırmasın.
 export async function turuKilitle(db: Db, tipId: number | null): Promise<void> {
-  await db.sorgu(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`hazirlik-sablonu:${String(tipId ?? 0)}`]);
+  await islemKilidiAl(db, 'hazirlik-sablonu', tipId ?? 0);
 }
 
 export async function sonSurum(db: Db, tipId: number | null): Promise<number | null> {
