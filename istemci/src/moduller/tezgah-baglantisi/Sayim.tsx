@@ -1,6 +1,6 @@
 import type { TezgahSayimCevabi } from '#paylasilan/sozlesme/tezgah-deneme.ts';
 import { Kart, Rozet, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
-import { adetMetni, Eksikler, GOLGE_NOTU, makineMetni, PencereSecimi, SorguDurumu, useDeneme, usePencere, yuzdeFarkMetni } from './deneme-ortak.tsx';
+import { adetMetni, Eksikler, GOLGE_NOTU, Kirilmaz, makineMetni, PencereSecimi, SorguDurumu, useDeneme, usePencere, yuzdeFarkMetni } from './deneme-ortak.tsx';
 import { gunSaatMetni, YOK } from './gosterim.ts';
 import './tezgah-baglantisi.css';
 
@@ -16,14 +16,14 @@ const ESLESME = {
 const zamanAraligi = (i: Is) => `${gunSaatMetni(i.baslangic)} – ${i.bitis === null ? 'sürüyor' : gunSaatMetni(i.bitis)}`;
 
 const sutunlar: Sutun<Is>[] = [
-  { anahtar: 'is', baslik: 'İş emri · OP', mono: true, hucre: (i) => (i.isEmriNo === null ? YOK : `${i.isEmriNo} · OP ${i.op ?? YOK}`) },
+  { anahtar: 'is', baslik: 'İş emri · OP', mono: true, kirilmaz: true, hucre: (i) => (i.isEmriNo === null ? YOK : <Kirilmaz>{`${i.isEmriNo} · OP ${i.op ?? YOK}`}</Kirilmaz>) },
   { anahtar: 'zaman', baslik: 'Başlangıç – bitiş', kirilmaz: true, hucre: zamanAraligi },
   {
-    anahtar: 'tezgah', baslik: 'Tezgâh adedi', hizala: 'sag', kirilmaz: true,
+    anahtar: 'tezgah', baslik: 'Tezgâh adedi', hizala: 'sag', kirilmaz: true, kartTamSatir: true,
     hucre: (i) => (
       <>
-        {adetMetni(i.tezgahAdedi)}
-        {i.sayacGeriGitti && <span className="tc-tzb-alt tc-tzb-eski" title="Sayaç geri gitti ya da sıfırlandı; taban yenilendi"><Simge ad="flag" boyut="k" /> sayaç sıfırlandı</span>}
+        <span className="tc-tzb-kirilmaz">{adetMetni(i.tezgahAdedi)}</span>
+        {i.sayacGeriGitti && <span className="tc-tzb-alt tc-tzb-eski tc-tzb-not-satir" title="Sayaç geri gitti ya da sıfırlandı; taban yenilendi"><Simge ad="flag" boyut="k" /><span>sayaç sıfırlandı</span></span>}
       </>
     ),
   },
@@ -48,7 +48,7 @@ const sutunlar: Sutun<Is>[] = [
 function MakineSayimi({ m }: { m: Makine }) {
   return (
     <section className="tc-tzb-bolum" aria-label={makineMetni(m.makine, m.cihazAdi)}>
-      <h3 className="tc-tzb-bolum-baslik">{makineMetni(m.makine, m.cihazAdi)}<span className="tc-tzb-alt">Çevrimde {m.cevrimdeParca} parça</span></h3>
+      <h3 className="tc-tzb-bolum-baslik"><Kirilmaz>{makineMetni(m.makine, m.cihazAdi)}</Kirilmaz><span className="tc-tzb-alt">Çevrimde {m.cevrimdeParca} parça</span></h3>
       <Tablo etiket={`${m.cihazAdi} işleri`} sutunlar={sutunlar} satirlar={m.isler} satirAnahtari={(i) => i.baslangic} bosMesaj="Pencerede bu makinede terminalde açılmış iş yok." />
     </section>
   );
@@ -59,7 +59,7 @@ export function Sayim() {
   const sorgu = useDeneme<TezgahSayimCevabi>('sayim', pencere);
   const v = sorgu.data;
   return (
-    <Kart baslik="Sayım denemesi">
+    <Kart baslik="Sayım">
       <div className="tc-tzb">
         <p className="tc-tzb-not">{GOLGE_NOTU}</p>
         <PencereSecimi secili={pencere} sec={pencereSec} />

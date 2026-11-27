@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { DENEME_PENCERELERI, type DenemePenceresi } from '#paylasilan/sozlesme/tezgah-deneme-sabitleri.ts';
 import { DurumKutusu, Sekmeler } from '../../ortak/arayuz/index.ts';
@@ -42,6 +43,11 @@ export function Eksikler({ eksikler }: { eksikler: readonly string[] }) {
       {eksikler.map((e) => <li key={e}>Veri yok: {e}</li>)}
     </ul>
   );
+}
+
+// Kod, tezgâh adı ve süre ortadan bölünmez; sığmazsa bütün olarak alt satıra iner.
+export function Kirilmaz({ children }: { children: ReactNode }) {
+  return <span className="tc-tzb-kirilmaz">{children}</span>;
 }
 
 export const makineMetni = (m: { kod: string } | null, cihaz: string): string => (m === null ? `${cihaz} (eşlenmedi)` : `${m.kod} · ${cihaz}`);

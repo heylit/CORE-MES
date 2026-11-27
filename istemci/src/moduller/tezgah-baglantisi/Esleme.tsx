@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { TezgahEslemeCevabi } from '#paylasilan/sozlesme/tezgah-deneme.ts';
 import { Dugme, Kart, Rozet, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
-import { GOLGE_NOTU, SorguDurumu } from './deneme-ortak.tsx';
+import { GOLGE_NOTU, Kirilmaz, SorguDurumu } from './deneme-ortak.tsx';
 import { gunSaatMetni } from './gosterim.ts';
 import './tezgah-baglantisi.css';
 
@@ -40,10 +40,20 @@ export function Esleme() {
     },
     onError: (h) => { bildir('hata', hataIletisi(h, 'Eşleme kaydedilemedi')); },
   });
+  // Kayıtlı durum: onaysız makinede seçim boştur; öneri seçili gelir ve onaylanmadıkça kayıt sayılmaz.
+  const degisti = (c: Cihaz): boolean => {
+    const t = taslak(c);
+    return t.makineId !== String(c.makineId ?? '') || t.cevrimdeParca !== String(c.cevrimdeParca) || t.durusEsigiDk !== String(c.durusEsigiDk);
+  };
+  const dugmeMetni = (c: Cihaz): string => {
+    const t = taslak(c);
+    if (c.makineId !== null || t.makineId === '') return 'Kaydet';
+    return c.oneriMakineId !== null && t.makineId === String(c.oneriMakineId) ? 'Öneriyi onayla' : 'Onayla';
+  };
   const secenekler = (v?.makineler ?? []).map((m) => ({ deger: String(m.id), baslik: `${m.kod} · ${m.ad}` }));
 
   const sutunlar: Sutun<Cihaz>[] = [
-    { anahtar: 'cihaz', baslik: 'Tezgâh', mono: true, kartTamSatir: true, hucre: (c) => <><span>{c.cihazAdi}</span><span className="tc-tzb-alt">{KAYNAK[c.kaynak]}</span></> },
+    { anahtar: 'cihaz', baslik: 'Tezgâh', mono: true, kartTamSatir: true, hucre: (c) => <><Kirilmaz>{c.cihazAdi}</Kirilmaz><span className="tc-tzb-alt">{KAYNAK[c.kaynak]}</span></> },
     { anahtar: 'durum', baslik: 'Durum', hucre: durum },
     {
       anahtar: 'makine', baslik: 'CORE makinesi', kartTamSatir: true,
@@ -62,19 +72,19 @@ export function Esleme() {
       anahtar: 'esik', baslik: 'Duruş eşiği (dk)',
       hucre: (c) => <input className="tc-alan-kutu tc-tzb-sayi-girdi" aria-label={`${c.cihazAdi} duruş eşiği`} type="number" min={1} max={240} value={taslak(c).durusEsigiDk} onChange={(o) => degistir(c, { durusEsigiDk: o.target.value })} />,
     },
-    { anahtar: 'degisti', baslik: 'Son değişiklik', hucre: (c) => (c.degisti === null ? null : `${gunSaatMetni(c.degisti)} · ${c.degistiren ?? ''}`) },
+    { anahtar: 'degisti', baslik: 'Son değişiklik', kirilmaz: true, hucre: (c) => (c.degisti === null ? null : `${gunSaatMetni(c.degisti)} · ${c.degistiren ?? ''}`) },
     {
       anahtar: 'eylem', baslik: '', sabit: 'sag', csv: false,
       hucre: (c) => (
-        <Dugme simge="check" yukleniyor={kaydet.isPending && kaydet.variables.c.cihazAdi === c.cihazAdi} onClick={() => kaydet.mutate({ c, t: taslak(c) })}>
-          {c.makineId === null && taslak(c).makineId !== '' ? 'Onayla' : 'Kaydet'}
+        <Dugme simge="check" disabled={!degisti(c)} yukleniyor={kaydet.isPending && kaydet.variables.c.cihazAdi === c.cihazAdi} onClick={() => kaydet.mutate({ c, t: taslak(c) })}>
+          {dugmeMetni(c)}
         </Dugme>
       ),
     },
   ];
 
   return (
-    <Kart baslik="Makine eşleme (deneme)">
+    <Kart baslik="Makine eşleme">
       <div className="tc-tzb">
         <p className="tc-tzb-not">{GOLGE_NOTU}</p>
         <p className="tc-tzb-not">Her tezgâh cihazı bir CORE makinesine bağlanır. Ad benzerse (“CNC002” ile “CNC-002”) öneri kendiliğinden gelir; onaylanmayan eşleme hiçbir hesapta kullanılmaz. Çevrimde parça sayaç artışını adede çevirir; duruş eşiğinin altındaki beklemeler kısa duruş sayılır.</p>

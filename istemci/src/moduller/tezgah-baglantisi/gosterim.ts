@@ -1,5 +1,6 @@
 import type { TezgahDurumu, TezgahKarsilastirmaAlani } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
+import { zamanMetni } from '../../ortak/veri/zaman-metni.ts';
 
 export const YOK = '—';
 
@@ -106,8 +107,8 @@ export const sorunDerecesi = (t: Siralanabilir): number => (t.durum === 'alarm' 
 export const sorunaGoreSirala = <T extends Siralanabilir>(liste: readonly T[]): T[] =>
   [...liste].sort((a, b) => sorunDerecesi(a) - sorunDerecesi(b) || a.cihazAdi.localeCompare(b.cihazAdi, 'tr'));
 
-const GUN_SAAT = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-export const gunSaatMetni = (z: string): string => GUN_SAAT.format(new Date(z));
+// Uygulamanın ortak biçimi ('27.11 08:12', tesis saatiyle).
+export const gunSaatMetni = (z: string): string => zamanMetni(z);
 
 // Geçmiş doluluğu göstergesi (kart 3680): değer yoksa "—", sıfır uydurulmaz.
 const MB = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });

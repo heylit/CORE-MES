@@ -1,8 +1,7 @@
 import { GECIS_ESIKLERI, type GecisOlcutu } from '#paylasilan/sozlesme/tezgah-deneme-sabitleri.ts';
 import type { TezgahGecisCevabi } from '#paylasilan/sozlesme/tezgah-deneme.ts';
 import { Kart, Rozet, Simge } from '../../ortak/arayuz/index.ts';
-import { GOLGE_NOTU, makineMetni, SorguDurumu, useDeneme } from './deneme-ortak.tsx';
-import { YOK } from './gosterim.ts';
+import { GOLGE_NOTU, Kirilmaz, makineMetni, SorguDurumu, useDeneme } from './deneme-ortak.tsx';
 import './tezgah-baglantisi.css';
 
 const yuzde = (n: number) => `%${String(n * 100).replace('.', ',')}`;
@@ -21,7 +20,7 @@ function MakineHazirligi({ m }: { m: Makine }) {
   return (
     <section className="tc-tzb-kart" aria-label={makineMetni(m.makine, m.cihazAdi)}>
       <span className="tc-tzb-kart-ust">
-        <span>{makineMetni(m.makine, m.cihazAdi)}</span>
+        <Kirilmaz>{makineMetni(m.makine, m.cihazAdi)}</Kirilmaz>
         {m.hazir ? <Rozet ton="tamam">Geçişe hazır</Rozet> : <Rozet ton="pasif">{m.olcutler.filter((o) => !o.tamam).length} eksik</Rozet>}
       </span>
       <ul className="tc-tzb-olcutler">
@@ -29,7 +28,7 @@ function MakineHazirligi({ m }: { m: Makine }) {
           <li key={o.olcut} className={o.tamam ? undefined : 'tc-tzb-eksik'}>
             <Simge ad={o.tamam ? 'check' : 'x'} boyut="k" />
             <span>{OLCUT_ADI[o.olcut]}</span>
-            <span className="tc-tzb-alt">{o.tamam ? 'Tamam' : 'Eksik'} · {o.deger ?? YOK}{o.neden !== null && ` · ${o.neden}`}</span>
+            <span className="tc-tzb-alt">{o.tamam ? 'Tamam' : 'Eksik'} · {o.deger ?? 'değer yok'}{o.neden !== null && ` · ${o.neden}`}</span>
           </li>
         ))}
       </ul>
@@ -46,7 +45,7 @@ export function GecisHazirligi() {
         <p className="tc-tzb-not">{GOLGE_NOTU}</p>
         <p className="tc-tzb-not">Son 7 gün, makine başına. Rozet hiçbir şey açmaz; geçiş kararı ve anahtarı ayrı karttır. Eşikler öneridir.</p>
         <SorguDurumu sorgu={sorgu} baslik="Geçiş hazırlığı" />
-        {v && <div className="tc-tzb-kartlar tc-tzb-kartlar-hep">{v.makineler.map((m) => <MakineHazirligi key={m.cihazAdi} m={m} />)}</div>}
+        {v && <div className="tc-tzb-kartlar-hep">{v.makineler.map((m) => <MakineHazirligi key={m.cihazAdi} m={m} />)}</div>}
       </div>
     </Kart>
   );

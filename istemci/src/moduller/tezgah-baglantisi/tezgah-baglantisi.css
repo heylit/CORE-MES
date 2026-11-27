@@ -165,7 +165,7 @@
 .tc-tzb-lejant { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-4); margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--yazi-s); }
 .tc-tzb-lejant li { display: inline-flex; align-items: center; gap: var(--b-2); }
 .tc-tzb-lejant-renk { display: inline-block; width: var(--b-4); height: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); }
-.tc-tzb-kartlar-hep { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
+.tc-tzb-kartlar-hep { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--b-3); }
 .tc-tzb-olcutler { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
 .tc-tzb-olcutler li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--b-2); align-items: start; color: var(--run); }
 .tc-tzb-olcutler li > span { color: var(--ink); }
@@ -173,3 +173,13 @@
 .tc-tzb-olcutler li.tc-tzb-eksik { color: var(--hold); }
 .tc-tzb-fark-deger { color: var(--hold); font-weight: 700; }
 .tc-tzb-sayi-girdi { width: 6rem; max-width: 100%; }
+
+/* Deneme ekranları, arayüz bakışı düzeltmeleri (kart 3811). */
+.tc-tzb-kirilmaz { white-space: nowrap; }
+.tc-tzb-not-satir { display: flex; align-items: center; justify-content: flex-end; gap: var(--b-1); white-space: nowrap; }
+[data-kip="kart"] .tc-tablo td .tc-tzb-not-satir { justify-content: flex-start; }
+/* Sekme çizgisi zaten ayırır; ilk bölümün üst çizgisi ikinci çizgi olmasın. */
+.tc-tzb > .tc-sekmeler ~ section.tc-tzb-bolum:first-of-type { border-top: 0; padding-top: 0; }
+.tc-tzb-cizgi-kap { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-tzb-cizgi-isaret { stroke: var(--edge2); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.tc-tzb-cizgi-saatler { display: flex; justify-content: space-between; gap: var(--b-2); margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--yazi-xs); }

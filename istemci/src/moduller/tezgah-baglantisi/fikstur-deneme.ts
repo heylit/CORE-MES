@@ -42,7 +42,7 @@ export const ORNEK_SAYIM = (): TezgahSayimCevabi => ({
 
 export const ORNEK_DURUS = (): TezgahDurusCevabi => ({
   pencere,
-  eksikler: ['makine başına terminal duruş kayıtları başka modülden okunamıyor (BASKA-MODUL-ISTEKLERI.md); terminal karşılaştırması yapılmadı'],
+  eksikler: ['terminal duruşları bu sürümde okunamıyor; terminal karşılaştırması yapılmadı'],
   makineler: [
     {
       cihazAdi: 'ORN-T01', makine: M1, durusEsigiDk: 5,
