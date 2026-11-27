@@ -116,7 +116,7 @@ const TEMEL_GORUNUMLER: Readonly<Record<string, RolGorunumu>> = {
     sayfalar: ['/uretim-emirleri', '/adim-durumu', '/plan', '/recete-rota', '/siparisler', '/satin-alma', '/stok', '/kalite-merkezi', '/finans', '/akis'],
     kartlar: [],
     kaynaklar: [
-      'istasyonlar-duran-is', 'siparisler-termin-is', 'uretim-emirleri-planlanacak-is', 'sevkiyat-is', 'malzemeler-onay-is', 'kalibrasyon-is',
+      'istasyonlar-duran-is', 'siparisler-onay-is', 'siparisler-termin-is', 'uretim-emirleri-planlanacak-is', 'sevkiyat-is', 'malzemeler-onay-is', 'kalibrasyon-is',
       'uretim-emirleri-uretim-olcu', 'oee-olcu', 'istasyonlar-makine-olcu', 'siparisler-aylik-olcu',
       'uretim-emirleri-uretim-grafik', 'istasyonlar-makine-grafik', 'oee-is-merkezi-grafik', 'uretim-emirleri-durus-grafik', 'siparisler-termin-grafik',
       'oee-bilesen-grafik', 'oee-makine-grafik', 'uretim-emirleri-hurda-grafik', 'siparisler-aylik-grafik',
