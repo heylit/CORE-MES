@@ -2289,7 +2289,6 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
             ...satir, baslangic: new Date(Math.min(...yeniParcalar.map((p) => p.baslangic.getTime()))),
             bitis: new Date(Math.max(...yeniParcalar.map((p) => p.bitis.getTime()))), parcalar: yeniParcalar,
           });
-          idler.push(isId);
         }
       }
       return { tur: 'sirala', ozet: `Reçete ve Rota kuyrukları yazıldı (${g.kuyruklar.length} kaynak, ${yazilan} iş)`, isEmriIdleri: [...new Set(idler)] };
