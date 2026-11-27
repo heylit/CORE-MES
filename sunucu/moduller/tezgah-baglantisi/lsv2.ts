@@ -1,29 +1,46 @@
 import { connect } from 'node:net';
 import type { Socket } from 'node:net';
-import { ISTEK_SURESI_MS } from './kurallar.ts';
-import type { Lsv2Hatasi, Lsv2Okumasi, Lsv2Uyarisi } from './kurallar.ts';
+import { ISTEK_SURESI_MS, takimTablosunuCoz } from './kurallar.ts';
+import type { Lsv2Ekseni, Lsv2Hatasi, Lsv2Okumasi, Lsv2TakimBilgisi, Lsv2TakimSatiri, Lsv2TaniAlani, Lsv2Tanisi, Lsv2Uyarisi } from './kurallar.ts';
 
 // Heidenhain kumandalarıyla yalnız bu dosya konuşur (ADR 0034). LSV2, TCP 19000, yalnız okuma. Gönderilebilen telgraflar
-// aşağıdaki sabit beyaz listededir; liste dışı komut, giriş düzeyi, okuma kodu ya da PLC adresi soket yazılmadan reddedilir. Parola
-// gönderilmez. Makine bağlantıyı reddederse (kapalı ya da başka sistem tutuyor) zorlanmaz, eski oturum düşürülmeye çalışılmaz.
-// Adres hata metnine ve günlüğe girmez. Telgraf biçimi: 4 bayt uzunluk (büyük uçlu, yalnız yük), 4 harf komut, yük.
+// aşağıdaki sabit beyaz listededir; liste dışı komut, giriş düzeyi, okuma kodu, dosya yolu ya da PLC adresi soket yazılmadan reddedilir.
+// C_ ile başlayan hiçbir komut listede yoktur. Parola gönderilmez. Makine bağlantıyı reddederse (kapalı ya da başka sistem tutuyor)
+// zorlanmaz, eski oturum düşürülmeye çalışılmaz. Adres hata metnine ve günlüğe girmez. Telgraf biçimi: 4 bayt uzunluk (büyük uçlu,
+// yalnız yük), 4 harf komut, yük. Komut ve cevap biçimleri pyLSV2 1.2 kaynağından alınmıştır (yalnız başvuru, paket değil).
 export const LSV2_KAPISI = 19000;
 export const AZAMI_CERCEVE = 64 * 1024;
 export const AZAMI_HATA_ILETISI = 16;
+// Takım tablosu aktarımının üst sınırı: aşılırsa aktarım kesilemediği için bağlantı kapatılır.
+export const AZAMI_DOSYA = 2 * 1024 * 1024;
 
-export const IZINLI_KOMUTLAR = ['A_LG', 'A_LO', 'R_VR', 'R_PR', 'R_RI', 'R_MB'] as const;
+// T_OK yalnız süren bir dosya aktarımında "sonraki bloğu gönder" onayıdır (yüksüz); kumandada bir şey değiştirmez.
+export const IZINLI_KOMUTLAR = ['A_LG', 'A_LO', 'R_VR', 'R_PR', 'R_RI', 'R_MB', 'R_FL', 'T_OK'] as const;
 export type Lsv2Komutu = (typeof IZINLI_KOMUTLAR)[number];
 
-// INSPECT okuma girişidir; DNC durum ve program okuması, PLCDEBUG PLC belleği okuması için istenir. Parola alanı hiç doldurulmaz.
-export const IZINLI_GIRISLER = ['INSPECT', 'DNC', 'PLCDEBUG'] as const;
+// INSPECT okuma girişidir; DNC durum ve program okuması, PLCDEBUG PLC belleği, FILE takım tablosu okuması için istenir. PLCDEBUG ve
+// FILE kumandada yazmayı da açar: yalnız o okuma için açılır, okunur okunmaz çıkılır. Parola alanı hiç doldurulmaz.
+export const IZINLI_GIRISLER = ['INSPECT', 'DNC', 'PLCDEBUG', 'FILE'] as const;
 export type Lsv2Girisi = (typeof IZINLI_GIRISLER)[number];
+const GECICI_GIRISLER = ['PLCDEBUG', 'FILE'] as const satisfies readonly Lsv2Girisi[];
 
-// R_RI okuma kodları: çalışma kipi, seçili program, oranlar, program durumu, ilk ve sonraki hata, iş milindeki takım.
-export const RRI = { kip: 23, program: 24, oranlar: 25, programDurumu: 26, ilkHata: 27, sonrakiHata: 28, takim: 51 } as const;
+// R_RI okuma kodları: eksen konumları, çalışma kipi, seçili program, oranlar, program durumu, ilk ve sonraki hata, iş milindeki takım.
+export const RRI = { eksenler: 22, kip: 23, program: 24, oranlar: 25, programDurumu: 26, ilkHata: 27, sonrakiHata: 28, takim: 51 } as const;
 const IZINLI_RRI: ReadonlySet<number> = new Set(Object.values(RRI));
+// R_VR alt kodları: kumanda tipi, NC sürümü, PLC sürümü, seçenekler.
+export const RVR = { kontrol: 1, nc: 2, plc: 3, secenekler: 4 } as const;
+const IZINLI_RVR: ReadonlySet<number> = new Set(Object.values(RVR));
+// R_FL ile okunabilen tek dosya: takım tablosu. NC program dosyalarının içeriği okunmaz.
+export const TAKIM_TABLOSU = 'TNC:\\table\\tool.t';
+export const IZINLI_DOSYALAR = [TAKIM_TABLOSU] as const;
+const METIN_KIPI = 0x00;
 
 // Cevap kodları ve kumandanın hata kodları (T_ER yükünün ikinci baytı).
 const HATA_KODU = { yetkiYok: 23, dncDurumu: 46, sonrakiHataYok: 57, cokFazlaBaglanti: 80 } as const;
+
+// Kumandadan gelen metinler Windows-1254 (Türkçe) ile çözülür; yerleşik çözücü, yeni paket yok.
+const CP1254 = new TextDecoder('windows-1254');
+export const kumandaMetni = (b: Uint8Array): string => CP1254.decode(b).replace(/\0+$/, '').trim();
 
 export class Lsv2YasakHatasi extends Error {
   override name = 'Lsv2YasakHatasi';
@@ -40,9 +57,11 @@ export class Lsv2BaglantiHatasi extends Error {
 }
 
 const girisYuku = (g: Lsv2Girisi): Buffer => Buffer.from(`${g}\0`, 'latin1');
+export const dosyaYuku = (yol: string): Buffer => Buffer.concat([Buffer.from(`${yol}\0`, 'latin1'), Buffer.from([METIN_KIPI])]);
 
-// Beyaz liste: komut ve yükü birlikte denetlenir. plcAdresi bu bağlantıda okunabilecek tek PLC bellek adresidir (ayardaki sayaç).
-export function telgrafKur(komut: string, yuk: Uint8Array, plcAdresi: number | null): Buffer {
+// Beyaz liste: komut ve yükü birlikte denetlenir. plcAdresi bu bağlantıda okunabilecek tek PLC bellek adresidir (ayardaki sayaç);
+// aktarim, hatta süren bir R_FL aktarımı olup olmadığıdır (T_OK yalnız o sırada gider).
+export function telgrafKur(komut: string, yuk: Uint8Array, plcAdresi: number | null, aktarim = false): Buffer {
   const y = Buffer.from(yuk);
   const yasak = (neden: string): never => { throw new Lsv2YasakHatasi(`LSV2 telgrafı gönderilmedi: ${neden}`); };
   if (!(IZINLI_KOMUTLAR as readonly string[]).includes(komut)) yasak(`${komut.slice(0, 8)} izin listesinde yok (yalnız okuma)`);
@@ -51,10 +70,12 @@ export function telgrafKur(komut: string, yuk: Uint8Array, plcAdresi: number | n
       if (!IZINLI_GIRISLER.some((g) => girisYuku(g).equals(y))) yasak('giriş düzeyi izin listesinde yok ya da parola taşıyor');
       break;
     case 'A_LO':
-      // Yüksüz çıkış ya da yalnız PLCDEBUG düzeyinden çıkış (sayaç okunduktan hemen sonra).
-      if (y.length !== 0 && !girisYuku('PLCDEBUG').equals(y)) yasak('çıkış yalnız yüksüz ya da PLCDEBUG düzeyinden');
+      // Yüksüz çıkış ya da yalnız geçici düzeyden (PLCDEBUG, FILE) çıkış.
+      if (y.length !== 0 && !GECICI_GIRISLER.some((g) => girisYuku(g).equals(y))) yasak('çıkış yalnız yüksüz ya da PLCDEBUG ve FILE düzeyinden');
       break;
     case 'R_VR':
+      if (y.length !== 0 && !(y.length === 1 && IZINLI_RVR.has(y[0] ?? -1))) yasak('sürüm alt kodu izin listesinde yok');
+      break;
     case 'R_PR':
       if (y.length !== 0) yasak(`${komut} yük taşımaz`);
       break;
@@ -63,6 +84,12 @@ export function telgrafKur(komut: string, yuk: Uint8Array, plcAdresi: number | n
       break;
     case 'R_MB':
       if (plcAdresi === null || y.length !== 5 || y.readUInt32BE(0) !== plcAdresi || y[4] !== 4) yasak('PLC adresi ayardaki sayaç adresi değil');
+      break;
+    case 'R_FL':
+      if (!IZINLI_DOSYALAR.some((d) => dosyaYuku(d).equals(y))) yasak('dosya yolu izin listesinde yok');
+      break;
+    case 'T_OK':
+      if (y.length !== 0 || !aktarim) yasak('aktarım onayı yalnız süren dosya aktarımında ve yüksüz');
       break;
   }
   const t = Buffer.alloc(8 + y.length);
@@ -94,6 +121,8 @@ export class Lsv2Hatti {
   private tampon = Buffer.alloc(0);
   private bekleyen: Bekleyen | null = null;
   private kapandi = false;
+  // Süren R_FL aktarımı: S_FL alındıkça açık, T_FD ya da başka cevapla kapanır.
+  private aktarim = false;
 
   private readonly adres: string;
   private readonly kapi: number;
@@ -137,7 +166,7 @@ export class Lsv2Hatti {
   }
 
   istek(komut: Lsv2Komutu, yuk: Uint8Array, plcAdresi: number | null): Promise<Lsv2Cevabi> {
-    const telgraf = telgrafKur(komut, yuk, plcAdresi);
+    const telgraf = telgrafKur(komut, yuk, plcAdresi, this.aktarim);
     const s = this.soket;
     if (s === null || this.kapandi) return Promise.reject(new Lsv2BaglantiHatasi('kapali', 'Makine bağlantıyı kapattı (kapalı ya da meşgul).'));
     if (this.bekleyen !== null) throw new Error('LSV2 hattında aynı anda tek istek olur.');
@@ -161,7 +190,10 @@ export class Lsv2Hatti {
     if (sonuc instanceof Lsv2BaglantiHatasi) {
       this.kapat();
       b.reddet(sonuc);
-    } else b.coz(sonuc);
+    } else {
+      this.aktarim = sonuc.kod === 'S_FL';
+      b.coz(sonuc);
+    }
   }
 
   private veri(parca: Buffer): void {
@@ -189,15 +221,22 @@ export class Lsv2Hatti {
 
   kapat(): void {
     this.kapandi = true;
+    this.aktarim = false;
     this.soket?.destroy();
   }
 }
 
 export type Lsv2Sonucu = { tur: 'basarili'; okuma: Lsv2Okumasi } | { tur: Lsv2HataTuru; ileti: string };
 
+export interface Lsv2OkumaSecenegi {
+  // Sistem Ayarları "PLC sayacı okuması"; kapalıyken PLCDEBUG girişi hiç yapılmaz.
+  plcSayaci?: boolean;
+  // Seyrek okuma turu (Sistem Ayarları "Seyrek okuma"); verilmezse FILE girişi hiç yapılmaz.
+  takimTablosu?: boolean;
+}
+
 export interface Lsv2Istemcisi {
-  // plcSayaci: Sistem Ayarları "PLC sayacı okuması"; kapalıyken PLCDEBUG girişi hiç yapılmaz.
-  oku(secenek?: { plcSayaci?: boolean }): Promise<Lsv2Sonucu>;
+  oku(secenek?: Lsv2OkumaSecenegi): Promise<Lsv2Sonucu>;
   kapat(): void;
 }
 
@@ -210,15 +249,51 @@ export interface Lsv2Secenegi {
 interface Oturum {
   kontrol: string | null;
   ncSurumu: string | null;
+  plcSurumu: string | null;
+  secenekler: string | null;
+  lsv2Surumu: number | null;
+  enBuyukBlok: number | null;
   plcAdresi: number | null;
   plcUyarisi: Lsv2Uyarisi | null;
+  tani: Lsv2Tanisi[];
 }
 
-const latin = (b: Buffer): string => b.toString('latin1').replace(/\0+$/, '').trim();
-
-// Sistem parametrelerinde (R_PR, 120 ya da 124 bayt) kelime alanının başlangıç adresi 40. bayttan, kelime sayısı 44. bayttan okunur.
+// Sistem parametreleri (R_PR, 120 ya da 124 bayt; pyLSV2 decode_system_parameters): kelime alanının başlangıç adresi 40. bayttan,
+// kelime sayısı 44. bayttan, LSV2 sürümü 96. bayttan (1 bayt), en büyük telgraf boyu 98. bayttan (2 bayt) okunur.
 const KELIME_BASI = 40;
 const KELIME_SAYISI = 44;
+const LSV2_SURUMU = 96;
+const EN_BUYUK_BLOK = 98;
+const EKSEN_ADI = ['X', 'Y', 'Z'] as const;
+
+const sonlu = (n: number): number | null => (Number.isFinite(n) ? n : null);
+
+// İş milindeki takım (R_RI 51): 4 bayt numara, 2 bayt indeks, 2 bayt eksen (0 X, 1 Y, 2 Z); varsa küçük uçlu double boy ve yarıçap.
+export function takimCoz(b: Buffer): Lsv2TakimBilgisi | null {
+  if (b.length < 4) return null;
+  const eksen = b.length >= 8 ? EKSEN_ADI[b.readUInt16BE(6)] ?? null : null;
+  return {
+    no: b.readUInt32BE(0), indeks: b.length >= 6 ? b.readUInt16BE(4) : null, eksen,
+    boy: b.length >= 16 ? sonlu(b.readDoubleLE(8)) : null, yaricap: b.length >= 24 ? sonlu(b.readDoubleLE(16)) : null,
+  };
+}
+
+// Eksen konumları (R_RI 22): 1 bayt bilinmeyen, 1 bayt eksen sayısı (n), sonra sıfırla biten n değer ve n eksen adı.
+export function eksenleriCoz(b: Buffer): Lsv2Ekseni[] | null {
+  if (b.length < 2) return null;
+  const n = b.readInt8(1);
+  if (n <= 0) return n === 0 ? [] : null;
+  const parcalar = b.subarray(2).toString('latin1').split('\0');
+  if (parcalar.length < 2 * n) return null;
+  const sonuc: Lsv2Ekseni[] = [];
+  for (let i = 0; i < n; i += 1) {
+    const deger = Number((parcalar[i] ?? '').trim());
+    const ad = kumandaMetni(Buffer.from(parcalar[n + i] ?? '', 'latin1'));
+    if (!Number.isFinite(deger) || ad === '') return null;
+    sonuc.push({ ad, deger });
+  }
+  return sonuc;
+}
 
 export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: Lsv2Secenegi = {}): Lsv2Istemcisi {
   const sure = secenek.istekSuresiMs ?? ISTEK_SURESI_MS;
@@ -234,6 +309,31 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
     return b;
   };
   const beklenmeyen = (): never => { throw new Lsv2BaglantiHatasi('bozuk', 'Makine beklenmeyen LSV2 cevabı verdi.'); };
+  // T_ER kodu tanıya yazılır; yetki ve DNC kodu ayrıca eski "DNC yok" uyarısını da verir.
+  const taniEkle = (tani: Lsv2Tanisi[], alan: Lsv2TaniAlani, c: Lsv2Cevabi): number | null => {
+    const k = hataKodu(c);
+    if (k !== null && !tani.some((t) => t.alan === alan)) tani.push({ alan, kod: k });
+    return k;
+  };
+
+  async function surumOku(h: Lsv2Hatti, tani: Lsv2Tanisi[]): Promise<Pick<Oturum, 'kontrol' | 'ncSurumu' | 'plcSurumu' | 'secenekler'>> {
+    const alt = async (kod: number): Promise<string | null> => {
+      const c = await iste(h, 'R_VR', Uint8Array.of(kod));
+      if (c.kod === 'S_VR') return kumandaMetni(c.icerik) || null;
+      if (c.kod === 'T_ER') return null;
+      return beklenmeyen();
+    };
+    const kontrol = await alt(RVR.kontrol);
+    if (kontrol !== null) return { kontrol, ncSurumu: await alt(RVR.nc), plcSurumu: await alt(RVR.plc), secenekler: await alt(RVR.secenekler) };
+    // Eski kumanda alt kodu tanımaz: yüksüz R_VR bütün sürümleri sıfırla ayrılmış tek cevapta verir.
+    const v = await iste(h, 'R_VR');
+    if (v.kod !== 'S_VR') {
+      if (v.kod === 'T_ER') taniEkle(tani, 'surum', v);
+      return { kontrol: null, ncSurumu: null, plcSurumu: null, secenekler: null };
+    }
+    const p = v.icerik.toString('latin1').split('\0').map((x) => kumandaMetni(Buffer.from(x, 'latin1')) || null);
+    return { kontrol: p[0] ?? null, ncSurumu: p[1] ?? null, plcSurumu: p[2] ?? null, secenekler: p[4] ?? null };
+  }
 
   async function oturumKur(h: Lsv2Hatti): Promise<Oturum> {
     const g = await giris(h, 'INSPECT');
@@ -241,54 +341,65 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
       if (hataKodu(g) === HATA_KODU.cokFazlaBaglanti) throw new Lsv2BaglantiHatasi('kapali', 'Makine yeni bağlantı kabul etmiyor (meşgul).');
       throw new Lsv2BaglantiHatasi('yetki', 'Makine okuma girişini kabul etmedi.');
     }
-    // Durum ve program okuması DNC girişi ister; kumanda izin vermezse okumalar T_ER döner, ilgili alan null kalır ve uyarı yazılır.
+    // Durum ve program okuması DNC girişi ister; kumanda izin vermezse okumalar T_ER döner, ilgili alan null kalır ve tanı yazılır.
     await giris(h, 'DNC');
-    const v = await iste(h, 'R_VR');
-    const parcalar = v.kod === 'S_VR' ? v.icerik.toString('latin1').split('\0') : [];
+    const tani: Lsv2Tanisi[] = [];
+    const surum = await surumOku(h, tani);
     const p = await iste(h, 'R_PR');
+    const pr = p.kod === 'S_PR' && (p.icerik.length === 120 || p.icerik.length === 124) ? p.icerik : null;
+    if (pr === null && p.kod === 'T_ER') taniEkle(tani, 'parametre', p);
     let plcAdresi: number | null = null;
     let plcUyarisi: Lsv2Uyarisi | null = null;
     if (sayac !== null) {
-      if (p.kod === 'S_PR' && (p.icerik.length === 120 || p.icerik.length === 124)) {
-        const bas = p.icerik.readUInt32BE(KELIME_BASI);
+      if (pr !== null) {
+        const bas = pr.readUInt32BE(KELIME_BASI);
         // Kelime alanı 16 bitlik kelime sayısının iki katı bayttır; çift kelime alanın içinde kalmalı.
-        const boyut = p.icerik.readUInt32BE(KELIME_SAYISI) * 2;
+        const boyut = pr.readUInt32BE(KELIME_SAYISI) * 2;
         if (sayac + 4 <= boyut) plcAdresi = bas + sayac;
         else plcUyarisi = 'sayac-adresi-yok';
       } else plcUyarisi = 'sayac-adresi-yok';
     }
-    return { kontrol: parcalar[0]?.trim() || null, ncSurumu: parcalar[1]?.trim() || null, plcAdresi, plcUyarisi };
+    return {
+      ...surum, lsv2Surumu: pr === null ? null : pr.readUInt8(LSV2_SURUMU), enBuyukBlok: pr === null ? null : pr.readUInt16BE(EN_BUYUK_BLOK),
+      plcAdresi, plcUyarisi, tani,
+    };
   }
 
-  async function okumaYap(h: Lsv2Hatti, o: Oturum, plcSayaci: boolean): Promise<Lsv2Okumasi> {
+  async function okumaYap(h: Lsv2Hatti, o: Oturum, s: Lsv2OkumaSecenegi): Promise<Lsv2Okumasi> {
     const uyarilar = new Set<Lsv2Uyarisi>();
-    const oku = async (kod: number): Promise<Buffer | null> => {
+    const tani: Lsv2Tanisi[] = [...o.tani];
+    const oku = async (kod: number, alan: Lsv2TaniAlani): Promise<Buffer | null> => {
       const c = await iste(h, 'R_RI', rri(kod));
       if (c.kod === 'S_RI') return c.icerik;
       if (c.kod !== 'T_ER') return beklenmeyen();
-      const k = hataKodu(c);
+      const k = taniEkle(tani, alan, c);
       if (k === HATA_KODU.yetkiYok || k === HATA_KODU.dncDurumu) uyarilar.add('dnc-yok');
       return null;
     };
     const u16 = (b: Buffer | null): number | null => (b !== null && b.length >= 2 ? b.readUInt16BE(0) : null);
-    const kip = u16(await oku(RRI.kip));
-    const programDurumu = u16(await oku(RRI.programDurumu));
-    const pb = await oku(RRI.program);
+    const kip = u16(await oku(RRI.kip, 'kip'));
+    const programDurumu = u16(await oku(RRI.programDurumu, 'program-durumu'));
+    const pb = await oku(RRI.program, 'program');
     // Seçili program: 4 bayt tümce numarası, sonra sıfırla biten ana program ve o an işlenen program yolu.
-    const program = pb !== null && pb.length > 4 ? pb.subarray(4).toString('latin1').split('\0')[0]?.trim() || null : null;
-    const ob = await oku(RRI.oranlar);
+    const program = pb !== null && pb.length > 4 ? kumandaMetni(pb.subarray(4, pb.indexOf(0, 4) < 0 ? undefined : pb.indexOf(0, 4))) || null : null;
+    const tumce = pb !== null && pb.length >= 4 ? pb.readUInt32BE(0) : null;
+    const ob = await oku(RRI.oranlar, 'oranlar');
     const oran = (i: number): number | null => (ob !== null && ob.length >= i + 4 ? ob.readUInt32BE(i) / 100 : null);
-    const tb = await oku(RRI.takim);
-    const takim = tb !== null && tb.length >= 4 ? tb.readUInt32BE(0) : null;
-    const hatalar = await hatalariOku(h, uyarilar);
-    const sayacDegeri = await sayacOku(h, o, plcSayaci, uyarilar);
-    return {
-      kontrol: o.kontrol, ncSurumu: o.ncSurumu, kip, programDurumu, program, ilerlemeOrani: oran(0), isMiliOrani: oran(4), takim,
-      hatalar, sayac: sayacDegeri, uyarilar: [...uyarilar],
+    const tb = await oku(RRI.takim, 'takim');
+    const eb = await oku(RRI.eksenler, 'eksenler');
+    const hatalar = await hatalariOku(h, uyarilar, tani);
+    const sayacDegeri = await sayacOku(h, o, s.plcSayaci ?? false, uyarilar, tani);
+    const okuma: Lsv2Okumasi = {
+      kontrol: o.kontrol, ncSurumu: o.ncSurumu, plcSurumu: o.plcSurumu, secenekler: o.secenekler, lsv2Surumu: o.lsv2Surumu, enBuyukBlok: o.enBuyukBlok,
+      kip, programDurumu, program, tumce, ilerlemeOrani: oran(0), isMiliOrani: oran(4), hizliOrani: oran(8),
+      takim: tb === null ? null : takimCoz(tb), eksenler: eb === null ? null : eksenleriCoz(eb),
+      hatalar, sayac: sayacDegeri, uyarilar: [...uyarilar], tani,
     };
+    if (s.takimTablosu === true) okuma.takimTablosu = await takimTablosuOku(h, tani);
+    return okuma;
   }
 
-  async function hatalariOku(h: Lsv2Hatti, uyarilar: Set<Lsv2Uyarisi>): Promise<Lsv2Hatasi[] | null> {
+  async function hatalariOku(h: Lsv2Hatti, uyarilar: Set<Lsv2Uyarisi>, tani: Lsv2Tanisi[]): Promise<Lsv2Hatasi[] | null> {
     const liste: Lsv2Hatasi[] = [];
     let kod: number = RRI.ilkHata;
     for (let i = 0; i < AZAMI_HATA_ILETISI; i += 1) {
@@ -296,45 +407,94 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
       if (c.kod === 'T_ER') {
         const k = hataKodu(c);
         if (k === HATA_KODU.sonrakiHataYok) return liste;
+        taniEkle(tani, 'alarm', c);
         if (k === HATA_KODU.yetkiYok || k === HATA_KODU.dncDurumu) uyarilar.add('dnc-yok');
         return i === 0 ? null : liste;
       }
       if (c.kod !== 'S_RI' || c.icerik.length < 8) return beklenmeyen();
-      liste.push({ sinif: c.icerik.readUInt16BE(0), grup: c.icerik.readUInt16BE(2), no: c.icerik.readInt32BE(4), metin: latin(c.icerik.subarray(8)) });
+      liste.push({ sinif: c.icerik.readUInt16BE(0), grup: c.icerik.readUInt16BE(2), no: c.icerik.readInt32BE(4), metin: kumandaMetni(c.icerik.subarray(8)) });
       kod = RRI.sonrakiHata;
     }
     return liste;
   }
 
-  // PLCDEBUG kumandada PLC yazmayı da açan giriş düzeyidir: yalnız sayaç okunurken açık kalır, okunduktan hemen sonra çıkılır.
-  // Çıkış kabul edilmezse bağlantı kapatılır; oturum hiçbir durumda PLCDEBUG düzeyinde bırakılmaz.
-  async function sayacOku(h: Lsv2Hatti, o: Oturum, plcSayaci: boolean, uyarilar: Set<Lsv2Uyarisi>): Promise<number | null> {
+  // PLCDEBUG ve FILE kumandada yazmayı da açan giriş düzeyleridir: yalnız o okuma sürerken açık kalır, okunduktan hemen sonra çıkılır.
+  // Çıkış kabul edilmezse bağlantı kapatılır; oturum hiçbir durumda bu düzeylerde bırakılmaz. Bağlantı yolda koptuysa (zaman aşımı)
+  // oturum zaten bitmiştir.
+  async function geciciDuzeyde<T>(h: Lsv2Hatti, g: (typeof GECICI_GIRISLER)[number], is: () => Promise<T>): Promise<T> {
+    let sonuc: { deger: T } | { hata: unknown };
+    try {
+      sonuc = { deger: await is() };
+    } catch (e) {
+      sonuc = { hata: e };
+    }
+    if (h.acik) {
+      const cikis = await iste(h, 'A_LO', girisYuku(g));
+      if (cikis.kod !== 'T_OK') {
+        h.kapat();
+        throw new Lsv2BaglantiHatasi('bozuk', 'Makine geçici giriş düzeyinden çıkışı kabul etmedi; bağlantı kapatıldı.');
+      }
+    }
+    if ('hata' in sonuc) throw sonuc.hata;
+    return sonuc.deger;
+  }
+
+
+  async function sayacOku(h: Lsv2Hatti, o: Oturum, plcSayaci: boolean, uyarilar: Set<Lsv2Uyarisi>, tani: Lsv2Tanisi[]): Promise<number | null> {
     if (o.plcUyarisi !== null) uyarilar.add(o.plcUyarisi);
     if (o.plcAdresi === null) return null;
     if (!plcSayaci) {
       uyarilar.add('sayac-kapali');
       return null;
     }
-    if ((await giris(h, 'PLCDEBUG')).kod !== 'T_OK') {
+    const g = await giris(h, 'PLCDEBUG');
+    if (g.kod !== 'T_OK') {
+      taniEkle(tani, 'sayac', g);
       uyarilar.add('sayac-yetki-yok');
       return null;
     }
-    let deger: number | null = null;
-    try {
+    const plcAdresi = o.plcAdresi;
+    return geciciDuzeyde(h, 'PLCDEBUG', async () => {
       const yuk = Buffer.alloc(5);
-      yuk.writeUInt32BE(o.plcAdresi, 0);
+      yuk.writeUInt32BE(plcAdresi, 0);
       yuk[4] = 4;
       const c = await iste(h, 'R_MB', yuk);
-      if (c.kod === 'S_MB' && c.icerik.length === 4) deger = c.icerik.readInt32LE(0);
-      else if (c.kod !== 'T_ER') beklenmeyen();
-      else uyarilar.add(hataKodu(c) === HATA_KODU.yetkiYok ? 'sayac-yetki-yok' : 'sayac-adresi-yok');
-    } finally {
-      if (h.acik) {
-        const cikis = await iste(h, 'A_LO', girisYuku('PLCDEBUG'));
-        if (cikis.kod !== 'T_OK') throw new Lsv2BaglantiHatasi('bozuk', 'Makine PLC giriş düzeyinden çıkışı kabul etmedi; bağlantı kapatıldı.');
-      }
+      if (c.kod === 'S_MB' && c.icerik.length === 4) return c.icerik.readInt32LE(0);
+      if (c.kod !== 'T_ER') return beklenmeyen();
+      taniEkle(tani, 'sayac', c);
+      uyarilar.add(hataKodu(c) === HATA_KODU.yetkiYok ? 'sayac-yetki-yok' : 'sayac-adresi-yok');
+      return null;
+    });
+  }
+
+  // Takım tablosu: FILE girişi, tek sabit yol (R_FL), her bloktan sonra yüksüz T_OK, T_FD ile biter; sonra FILE'dan çıkılır.
+  async function takimTablosuOku(h: Lsv2Hatti, tani: Lsv2Tanisi[]): Promise<Lsv2TakimSatiri[] | null> {
+    const g = await giris(h, 'FILE');
+    if (g.kod !== 'T_OK') {
+      taniEkle(tani, 'takim-tablosu', g);
+      return null;
     }
-    return deger;
+    const icerik = await geciciDuzeyde(h, 'FILE', async () => {
+      const bloklar: Buffer[] = [];
+      let toplam = 0;
+      let c = await iste(h, 'R_FL', dosyaYuku(TAKIM_TABLOSU));
+      while (c.kod === 'S_FL') {
+        toplam += c.icerik.length;
+        if (toplam > AZAMI_DOSYA) {
+          h.kapat();
+          throw new Lsv2BaglantiHatasi('bozuk', 'Takım tablosu beklenenden büyük; aktarım kesildi, bağlantı kapatıldı.');
+        }
+        bloklar.push(c.icerik);
+        c = await iste(h, 'T_OK');
+      }
+      if (c.kod === 'T_FD') return Buffer.concat(bloklar);
+      if (c.kod === 'T_ER' || c.kod === 'T_BD') {
+        taniEkle(tani, 'takim-tablosu', c);
+        return null;
+      }
+      return beklenmeyen();
+    });
+    return icerik === null ? null : takimTablosunuCoz(CP1254.decode(icerik));
   }
 
   return {
@@ -349,7 +509,7 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
           oturum = await oturumKur(h);
         }
         if (oturum === null) throw new Lsv2BaglantiHatasi('bozuk', 'LSV2 oturumu kurulamadı.');
-        return { tur: 'basarili', okuma: await okumaYap(hat, oturum, secenek.plcSayaci ?? false) };
+        return { tur: 'basarili', okuma: await okumaYap(hat, oturum, secenek) };
       } catch (hata) {
         hat?.kapat();
         hat = null;

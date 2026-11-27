@@ -18,7 +18,25 @@ export interface SahteMakine {
   // Yüzde (100 = %100): ilerleme, iş mili, hızlı.
   oranlar?: readonly [number, number, number];
   takim?: number;
+  // İş milindeki takımın ayrıntısı (R_RI 51 uzun cevap): indeks, eksen kodu, boy, yarıçap.
+  takimAyrintisi?: { indeks: number; eksen: number; boy: number; yaricap: number };
+  tumce?: number;
+  eksenler?: { ad: string; deger: string }[];
   hatalar?: SahteHata[];
+  // Ham bayt olarak gönderilecek hata metni (Windows-1254 denemesi için).
+  hataMetniBayt?: Buffer;
+  // R_RI kodu -> T_ER kodu: o okuma bu kodla reddedilir.
+  reddedilenOkumalar?: Map<number, number>;
+  // Takım tablosu (TOOL.T) metni; verilmezse R_FL 32 (dosya yok) döner. Blok boyu bayt.
+  takimTablosu?: string;
+  blokBoyu?: number;
+  fileYetkiYok?: boolean;
+  // Aktarımın ortasında (ikinci blokta) verilecek cevap: T_ER ya da hiç cevap.
+  aktarimHatasi?: 'hata' | 'cevapsiz';
+  // Bu düzeyden çıkış reddedilir (T_ER).
+  cikisReddi?: 'PLCDEBUG' | 'FILE';
+  // R_VR alt kodlarını tanımayan eski kumanda.
+  eskiSurum?: boolean;
   // PLC çift kelime değerleri, kelime alanına göre bayt numarasıyla (D10000 -> 10000).
   plc?: Map<number, number>;
   kelimeBasi?: number;
@@ -57,22 +75,38 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
   const soketler = new Set<Socket>();
   let kabul = 0;
 
-  const cevap = (girisler: Set<string>, hataSirasi: { n: number }, komut: string, yuk: Buffer): Buffer | null => {
+  const cevap = (girisler: Set<string>, hataSirasi: { n: number }, aktarim: { kalan: Buffer | null; blok: number }, komut: string, yuk: Buffer): Buffer | null => {
     const m = makine;
+    const sonrakiBlok = (): Buffer => {
+      const k = aktarim.kalan ?? Buffer.alloc(0);
+      if (k.length === 0) {
+        aktarim.kalan = null;
+        return cerceve('T_FD');
+      }
+      const boy = m.blokBoyu ?? 256;
+      aktarim.kalan = k.subarray(boy);
+      return cerceve('S_FL', k.subarray(0, boy));
+    };
     switch (komut) {
       case 'A_LG': {
         const g = yuk.toString('latin1').replace(/\0$/, '');
         if (g === 'DNC' && m.dncYok) return hata(23);
         if (g === 'PLCDEBUG' && m.plcYetkiYok) return hata(23);
+        if (g === 'FILE' && m.fileYetkiYok) return hata(23);
         girisler.add(g);
         return cerceve('T_OK');
       }
       case 'A_LO':
+        if (m.cikisReddi !== undefined && yuk.toString('latin1') === `${m.cikisReddi}\0`) return hata(24);
         if (yuk.length === 0) girisler.clear();
         else girisler.delete(yuk.toString('latin1').replace(/\0$/, ''));
         return cerceve('T_OK');
-      case 'R_VR':
-        return cerceve('S_VR', Buffer.from('ORN-TNC640\0ORN-NC 01\0ORN-PLC 01\0ORN-SPLC\0ORN-SECENEK\0', 'latin1'));
+      case 'R_VR': {
+        if (yuk.length === 0) return cerceve('S_VR', Buffer.from('ORN-TNC640\0ORN-NC 01\0ORN-PLC 01\0ORN-SPLC\0ORN-SECENEK\0', 'latin1'));
+        if (m.eskiSurum) return hata(24);
+        const s = ['', 'ORN-TNC640', 'ORN-NC 01', 'ORN-PLC 01', 'ORN-SECENEK'][yuk[0] ?? 0];
+        return s === undefined || s === '' ? hata(24) : cerceve('S_VR', Buffer.from(`${s}\0`, 'latin1'));
+      }
       case 'R_PR': {
         const b = Buffer.alloc(120);
         b.writeUInt32BE(m.kelimeBasi ?? 0x2000, 40);
@@ -84,14 +118,27 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
         if (m.bozuk === 'yarim') return cerceve('S_RI', u16(4)).subarray(0, 9);
         if (!girisler.has('DNC')) return hata(46);
         const kod = yuk.readUInt16BE(0);
+        const red = m.reddedilenOkumalar?.get(kod);
+        if (red !== undefined) return hata(red);
+        if (kod === 22) {
+          const e = m.eksenler ?? [];
+          return cerceve('S_RI', Buffer.concat([Buffer.from([0, e.length]), Buffer.from(`${e.map((x) => `${x.deger}\0`).join('')}${e.map((x) => `${x.ad}\0`).join('')}`, 'latin1')]));
+        }
         if (kod === 23) return m.kip === undefined ? hata(46) : cerceve('S_RI', u16(m.kip));
         if (kod === 26) return m.programDurumu === undefined ? hata(46) : cerceve('S_RI', u16(m.programDurumu));
-        if (kod === 24) return cerceve('S_RI', Buffer.concat([u32(12), Buffer.from(`${m.program ?? ''}\0${m.program ?? ''}\0`, 'latin1')]));
+        if (kod === 24) return cerceve('S_RI', Buffer.concat([u32(m.tumce ?? 12), Buffer.from(`${m.program ?? ''}\0${m.program ?? ''}\0`, 'latin1')]));
         if (kod === 25) {
           const [f, s, r] = m.oranlar ?? [100, 100, 100];
           return cerceve('S_RI', Buffer.concat([u32(f * 100), u32(s * 100), u32(r * 100)]));
         }
-        if (kod === 51) return cerceve('S_RI', Buffer.concat([u32(m.takim ?? 0), u16(0), u16(2)]));
+        if (kod === 51) {
+          const a = m.takimAyrintisi;
+          if (a === undefined) return cerceve('S_RI', Buffer.concat([u32(m.takim ?? 0), u16(0), u16(2)]));
+          const d = Buffer.alloc(16);
+          d.writeDoubleLE(a.boy, 0);
+          d.writeDoubleLE(a.yaricap, 8);
+          return cerceve('S_RI', Buffer.concat([u32(m.takim ?? 0), u16(a.indeks), u16(a.eksen), d]));
+        }
         if (kod === 27 || kod === 28) {
           if (kod === 27) hataSirasi.n = 0;
           const h = (m.hatalar ?? [])[hataSirasi.n];
@@ -101,7 +148,7 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
           b.writeUInt16BE(h.sinif, 0);
           b.writeUInt16BE(h.grup, 2);
           b.writeInt32BE(h.no, 4);
-          return cerceve('S_RI', Buffer.concat([b, Buffer.from(`${h.metin}\0`, 'latin1')]));
+          return cerceve('S_RI', Buffer.concat([b, m.hataMetniBayt ?? Buffer.from(`${h.metin}\0`, 'latin1')]));
         }
         return hata(24);
       }
@@ -114,6 +161,22 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
         b.writeInt32LE(deger, 0);
         return cerceve('S_MB', b);
       }
+      case 'R_FL': {
+        if (!girisler.has('FILE')) return hata(23);
+        if (m.takimTablosu === undefined) return hata(32);
+        aktarim.kalan = Buffer.from(m.takimTablosu.replace(/\r?\n/g, '\0'), 'latin1');
+        aktarim.blok = 0;
+        return sonrakiBlok();
+      }
+      case 'T_OK':
+        if (aktarim.kalan === null) return hata(21);
+        aktarim.blok += 1;
+        if (m.aktarimHatasi === 'cevapsiz') return null;
+        if (m.aktarimHatasi === 'hata') {
+          aktarim.kalan = null;
+          return hata(33);
+        }
+        return sonrakiBlok();
       default:
         return hata(22);
     }
@@ -130,6 +193,7 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
     s.on('error', () => undefined);
     const girisler = new Set<string>();
     const hataSirasi = { n: 0 };
+    const aktarim: { kalan: Buffer | null; blok: number } = { kalan: null, blok: 0 };
     let tampon = Buffer.alloc(0);
     s.on('data', (parca: Buffer) => {
       tampon = Buffer.concat([tampon, parca]);
@@ -140,7 +204,7 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
         const yuk = Buffer.from(tampon.subarray(8, 8 + uzunluk));
         tampon = tampon.subarray(8 + uzunluk);
         gelenler.push({ komut, yuk });
-        const c = cevap(girisler, hataSirasi, komut, yuk);
+        const c = cevap(girisler, hataSirasi, aktarim, komut, yuk);
         if (c === null) continue;
         s.write(c);
         if (makine.bozuk === 'yarim' && komut === 'R_RI') {

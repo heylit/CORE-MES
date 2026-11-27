@@ -1,4 +1,4 @@
-import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
+import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi, TezgahTakimTablosuCevabi } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
 
 type Tezgah = TezgahBaglantisiDurumCevabi['tezgahlar'][number];
 
@@ -92,3 +92,49 @@ export const ORNEK_DOLULUK = (seviye: 'normal' | 'uyari' | 'kritik' = 'normal'):
     olcum: { pencereDakika: 60, yazilan: 156_000, atlanan: 786_000, yazilanDakikada: 2600, atlananDakikada: 13_100 } },
 })[seviye];
 
+
+// Heidenhain (LSV2) ayrıntısı (kart 3790): Takım, Eksenler ve Kumanda grupları; eksen konumu ve tümce no geçmişsizdir (eğri yok).
+export const ORNEK_LSV2_AYRINTI = (): TezgahAyrintisiCevabi => {
+  const a = ORNEK_AYRINTI();
+  const l = (kimlik: string, tur: string, bilesen: string, deger: string | null, birim: string | null = null, ad: string | null = null) => ({
+    kimlik, tur, ad, bilesen, bilesenAdi: null, birim, kategori: 'EVENT' as const, deger, sonDegisme: once(12), egri: [],
+  });
+  return {
+    ...a, cihazAdi: 'ORN-H01', tezgahTuru: null, varlikDurumu: 'yok', varliklar: [], kosullar: [],
+    alanlar: [
+      l('lsv2-erisim', 'Availability', 'Device', 'AVAILABLE'),
+      l('lsv2-mod', 'ControllerMode', 'Controller', 'AUTOMATIC'),
+      l('lsv2-kumanda-tipi', 'ControlType', 'Controller', 'ORN-TNC640'),
+      l('lsv2-nc-surumu', 'NcVersion', 'Controller', 'ORN-NC 01'),
+      l('lsv2-plc-surumu', 'PlcVersion', 'Controller', 'ORN-PLC 01'),
+      l('lsv2-secenekler', 'Options', 'Controller', 'ORN-SECENEK'),
+      l('lsv2-calisma', 'Execution', 'Path', 'ACTIVE'),
+      l('lsv2-program', 'Program', 'Path', 'TNC:/ORN/P100.h'),
+      l('lsv2-tumce', 'BlockNumber', 'Path', '345'),
+      l('lsv2-sayac', 'PartCount', 'Path', null),
+      l('lsv2-ilerleme-orani', 'PathFeedrateOverride', 'Path', '110', 'PERCENT'),
+      l('lsv2-hizli-orani', 'RapidOverride', 'Path', '100', 'PERCENT'),
+      l('lsv2-takim', 'ToolNumber', 'Tool', '1'),
+      l('lsv2-takim-indeksi', 'ToolIndex', 'Tool', '0'),
+      l('lsv2-takim-ekseni', 'ToolAxis', 'Tool', 'Z'),
+      l('lsv2-takim-boyu', 'ToolLength', 'Tool', '75.5', 'MILLIMETER'),
+      l('lsv2-takim-yaricapi', 'ToolRadius', 'Tool', '5', 'MILLIMETER'),
+      l('lsv2-eksen-X', 'Position', 'Axes', '112.4', null, 'X'),
+      l('lsv2-eksen-Y', 'Position', 'Axes', '214.35', null, 'Y'),
+      l('lsv2-eksen-Z', 'Position', 'Axes', '-38.1', null, 'Z'),
+      l('lsv2-is-mili-orani', 'RotaryVelocityOverride', 'Rotary', '95', 'PERCENT'),
+      l('lsv2-protokol-surumu', 'Lsv2Version', 'Control', '4'),
+      l('lsv2-en-buyuk-blok', 'MaxBlockLength', 'Control', '4096', 'BYTE'),
+      l('lsv2-tani', 'Diagnosis', 'Control', 'Alarm: yetki yok (kod 23)'),
+    ],
+  };
+};
+
+export const ORNEK_TAKIM_TABLOSU = (seyrekAcik = true): TezgahTakimTablosuCevabi => ({
+  cihazAdi: 'ORN-H01', seyrekAcik, okundu: seyrekAcik ? once(240) : null, tani: null, gecmisSayisi: seyrekAcik ? 6 : 0,
+  takimlar: seyrekAcik ? [
+    { no: 1, ad: 'ORN-FREZE-10', boy: 75.5, yaricap: 5, omur: 60, kullanilan: 12.5, kilitli: false },
+    { no: 2, ad: 'ORN-MATKAP-8', boy: 90, yaricap: 4, omur: 30, kullanilan: 30, kilitli: true },
+    { no: 12, ad: 'ORN-KILAVUZ-M6', boy: 60.25, yaricap: 3, omur: null, kullanilan: null, kilitli: false },
+  ] : [],
+});

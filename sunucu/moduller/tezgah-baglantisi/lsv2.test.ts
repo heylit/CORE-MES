@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, test } from 'node:test';
-import { lsv2Ogeleri, ozetle } from './kurallar.ts';
-import { IZINLI_KOMUTLAR, lsv2IstemcisiKur, Lsv2Hatti, Lsv2YasakHatasi, telgrafKur } from './lsv2.ts';
+import { lsv2Ogeleri, lsv2TaniMetni, ozetle } from './kurallar.ts';
+import { dosyaYuku, IZINLI_KOMUTLAR, lsv2IstemcisiKur, Lsv2Hatti, Lsv2YasakHatasi, TAKIM_TABLOSU, telgrafKur } from './lsv2.ts';
 import type { Lsv2Komutu } from './lsv2.ts';
 import { sahteLsv2Ac } from './sahte-lsv2.ts';
 import type { SahteLsv2, SahteMakine } from './sahte-lsv2.ts';
@@ -36,16 +36,16 @@ describe('LSV2 beyaz liste (kabul 1)', () => {
     }
   });
 
-  test('giriş yalnız INSPECT, DNC ve PLCDEBUG; parola eklenemez', () => {
-    for (const g of ['INSPECT', 'DNC', 'PLCDEBUG']) assert.doesNotThrow(() => telgrafKur('A_LG', Buffer.from(`${g}\0`, 'latin1'), null));
-    for (const g of ['FILE\0', 'MONITOR\0', 'DIAGNOSTICS\0', 'DATA\0', 'OSZI\0', 'PLCDEBUG\0ORN-PAROLA\0', 'INSPECT']) {
+  test('giriş yalnız INSPECT, DNC, PLCDEBUG ve FILE; parola eklenemez', () => {
+    for (const g of ['INSPECT', 'DNC', 'PLCDEBUG', 'FILE']) assert.doesNotThrow(() => telgrafKur('A_LG', Buffer.from(`${g}\0`, 'latin1'), null));
+    for (const g of ['FILE\0ORN-PAROLA\0', 'FILESYS\0', 'FILEPLC\0', 'MONITOR\0', 'DIAGNOSTICS\0', 'DATA\0', 'OSZI\0', 'PLCDEBUG\0ORN-PAROLA\0', 'INSPECT']) {
       assert.throws(() => telgrafKur('A_LG', Buffer.from(g, 'latin1'), null), Lsv2YasakHatasi, g);
     }
   });
 
   test('R_RI yalnız izinli okuma kodlarıyla; R_VR, R_PR, A_LO yük taşımaz', () => {
-    for (const kod of [23, 24, 25, 26, 27, 28, 51]) assert.doesNotThrow(() => telgrafKur('R_RI', yuk(0, kod), null));
-    for (const kod of [20, 21, 22, 30, 31, 32]) assert.throws(() => telgrafKur('R_RI', yuk(0, kod), null), Lsv2YasakHatasi);
+    for (const kod of [22, 23, 24, 25, 26, 27, 28, 51]) assert.doesNotThrow(() => telgrafKur('R_RI', yuk(0, kod), null));
+    for (const kod of [20, 21, 29, 30, 31, 32, 50, 52]) assert.throws(() => telgrafKur('R_RI', yuk(0, kod), null), Lsv2YasakHatasi);
     assert.throws(() => telgrafKur('R_RI', yuk(0, 23, 0), null), Lsv2YasakHatasi);
     assert.throws(() => telgrafKur('R_VR', yuk(5), null), Lsv2YasakHatasi);
     assert.throws(() => telgrafKur('R_PR', yuk(1), null), Lsv2YasakHatasi);
@@ -265,5 +265,220 @@ describe('LSV2 hata halleri (kabul 3)', () => {
     assert.equal((await smartes.oku()).tur, 'basarili', 'ilk bağlantının okuması sürer');
     smartes.kapat();
     core.kapat();
+  });
+});
+
+// ---- Kart 3790: bütün okumalar, yazma yok ----
+const TABLO = [
+  'BEGIN TOOL.T MM',
+  'T    NAME             L          R          TL TIME1 CUR_TIME',
+  '0    ORN-SIFIR        +0         +0            0     0',
+  '1    ORN-FREZE-10     +75.5      +5            60    12.5',
+  '2    ORN-MATKAP-8     +90        +4         L  30    30',
+  '[END]',
+].join('\n');
+const tamOkuma = (): SahteMakine => ({
+  ...calisan(), tumce: 345, eksenler: [{ ad: 'X', deger: '+12.500' }, { ad: 'Y', deger: '-3.25' }, { ad: 'Z', deger: '+100' }],
+  takimAyrintisi: { indeks: 1, eksen: 2, boy: 75.5, yaricap: 5 }, takimTablosu: TABLO, blokBoyu: 64,
+});
+const metinler = (s: SahteLsv2) => s.gelenler.map((g) => `${g.komut} ${g.yuk.toString('latin1').replace(/\0/g, '|')}`.trim());
+
+describe('Kart 3790 beyaz liste: yalnız A_LG, A_LO, R_ okumaları ve aktarım onayı', () => {
+  test('C_ ile başlayan her komut, liste dışı dosya yolu ve aktarım dışı T_OK soket yazılmadan reddedilir', () => {
+    for (const komut of ['C_CC', 'C_DC', 'C_DD', 'C_DM', 'C_DT', 'C_EK', 'C_FA', 'C_FC', 'C_FD', 'C_FL', 'C_FR', 'C_LK', 'C_MC', 'C_ST', 'R_DR', 'R_DT', 'R_DI', 'R_FI']) {
+      assert.throws(() => telgrafKur(komut, dosyaYuku(TAKIM_TABLOSU), null, true), Lsv2YasakHatasi, komut);
+    }
+    assert.doesNotThrow(() => telgrafKur('R_FL', dosyaYuku(TAKIM_TABLOSU), null));
+    for (const yol of ['TNC:\\nc_prog\\P100.h', 'TNC:\\TABLE\\TOOL.T', 'TNC:\\table\\tool_p.tch', 'PLC:\\table\\tool.t', 'TNC:\\table\\tool.t\\..\\x.h']) {
+      assert.throws(() => telgrafKur('R_FL', dosyaYuku(yol), null), Lsv2YasakHatasi, yol);
+    }
+    // İkili kip ya da kipsiz yol da reddedilir.
+    assert.throws(() => telgrafKur('R_FL', Buffer.concat([Buffer.from(`${TAKIM_TABLOSU}\0`, 'latin1'), yuk(1)]), null), Lsv2YasakHatasi);
+    assert.throws(() => telgrafKur('R_FL', Buffer.from(`${TAKIM_TABLOSU}\0`, 'latin1'), null), Lsv2YasakHatasi);
+    assert.throws(() => telgrafKur('T_OK', yuk(), null, false), Lsv2YasakHatasi);
+    assert.throws(() => telgrafKur('T_OK', yuk(1), null, true), Lsv2YasakHatasi);
+    assert.doesNotThrow(() => telgrafKur('T_OK', yuk(), null, true));
+    for (const k of [1, 2, 3, 4]) assert.doesNotThrow(() => telgrafKur('R_VR', yuk(k), null));
+    for (const k of [0, 5, 6, 7]) assert.throws(() => telgrafKur('R_VR', yuk(k), null), Lsv2YasakHatasi);
+    assert.doesNotThrow(() => telgrafKur('A_LO', Buffer.from('FILE\0', 'latin1'), null));
+    assert.throws(() => telgrafKur('A_LO', Buffer.from('DNC\0', 'latin1'), null), Lsv2YasakHatasi);
+  });
+
+  test('hatta T_OK yalnız S_FL cevabından sonra gider', async () => {
+    const s = await ac(tamOkuma());
+    const hat = new Lsv2Hatti('127.0.0.1', s.kapi, 1000);
+    await hat.ac();
+    assert.throws(() => hat.istek('T_OK', yuk(), null), Lsv2YasakHatasi);
+    await hat.istek('A_LG', Buffer.from('FILE\0', 'latin1'), null);
+    assert.equal((await hat.istek('R_FL', dosyaYuku(TAKIM_TABLOSU), null)).kod, 'S_FL');
+    assert.equal((await hat.istek('T_OK', yuk(), null)).kod, 'S_FL');
+    hat.kapat();
+    assert.deepEqual(s.gelenler.map((g) => g.komut), ['A_LG', 'R_FL', 'T_OK']);
+  });
+
+  test('seyrek okumalı tam okumada giden her telgraf beyaz listede; NC program okunmaz, C_ gitmez', async () => {
+    const s = await ac(tamOkuma());
+    const i = istemci(s);
+    const r = await i.oku({ plcSayaci: true, takimTablosu: true });
+    i.kapat();
+    assert.equal(r.tur, 'basarili');
+    for (const g of s.gelenler) {
+      assert.ok((IZINLI_KOMUTLAR as readonly string[]).includes(g.komut), g.komut);
+      if (g.komut === 'R_FL') assert.ok(g.yuk.equals(dosyaYuku(TAKIM_TABLOSU)));
+      if (g.komut === 'R_RI') assert.ok([22, 23, 24, 25, 26, 27, 28, 51].includes(g.yuk.readUInt16BE(0)));
+    }
+    assert.deepEqual(s.gelenler.filter((g) => g.komut === 'R_FL').length, 1);
+  });
+
+  test('seyrek anahtarı kapalıyken FILE girişi hiç yapılmaz', async () => {
+    const s = await ac(tamOkuma());
+    const i = istemci(s);
+    for (let n = 0; n < 2; n += 1) {
+      const r = await i.oku({ plcSayaci: true });
+      assert.equal(r.tur === 'basarili' ? r.okuma.takimTablosu : 'hata', undefined);
+    }
+    i.kapat();
+    assert.ok(!s.gelenler.some((g) => g.komut === 'R_FL' || g.komut === 'T_OK' || g.yuk.toString('latin1') === 'FILE\0'));
+  });
+});
+
+describe('Kart 3790 giriş düzeyleri: FILE ve PLCDEBUG her yolda kapanır', () => {
+  test('başarı: FILE girişi, R_FL, bloklar arası T_OK, T_FD, hemen FILE çıkışı', async () => {
+    const s = await ac(tamOkuma());
+    const i = istemci(s);
+    const r = await i.oku({ takimTablosu: true });
+    i.kapat();
+    const m = metinler(s);
+    const bas = m.indexOf('A_LG FILE|');
+    assert.ok(bas >= 0);
+    const dilim = m.slice(bas);
+    assert.equal(dilim[1], `R_FL ${TAKIM_TABLOSU}||`);
+    const cikis = dilim.indexOf('A_LO FILE|');
+    assert.ok(cikis > 1);
+    assert.ok(dilim.slice(2, cikis).every((x) => x === 'T_OK'));
+    assert.ok(cikis - 2 >= 2, 'tablo birden çok blokta gelir');
+    assert.equal(r.tur === 'basarili' ? r.okuma.takimTablosu?.length : -1, 3);
+  });
+
+  test('T_ER (dosya yok ya da aktarım ortasında hata): tanı yazılır, FILE çıkışı yine yapılır', async () => {
+    for (const m of [{ ...tamOkuma(), takimTablosu: undefined }, { ...tamOkuma(), aktarimHatasi: 'hata' as const }]) {
+      const s = await ac(m);
+      const i = istemci(s);
+      const r = await i.oku({ takimTablosu: true });
+      i.kapat();
+      assert.equal(r.tur, 'basarili');
+      if (r.tur !== 'basarili') return;
+      assert.equal(r.okuma.takimTablosu, null);
+      assert.equal(r.okuma.tani.find((t) => t.alan === 'takim-tablosu')?.kod, m.takimTablosu === undefined ? 32 : 33);
+      assert.equal(metinler(s).at(-1), 'A_LO FILE|');
+    }
+  });
+
+  test('zaman aşımı aktarım ortasında: bağlantı kapatılır, oturum FILE düzeyinde kalmaz', async () => {
+    const s = await ac({ ...tamOkuma(), aktarimHatasi: 'cevapsiz' });
+    const i = istemci(s, D10000, 200);
+    const r = await i.oku({ takimTablosu: true });
+    assert.equal(r.tur, 'zaman-asimi');
+    await new Promise((coz) => setTimeout(coz, 50));
+    assert.equal(s.baglantiSayisi(), 0);
+    i.kapat();
+  });
+
+  test('FILE ya da PLCDEBUG çıkışı reddedilince bağlantı kapanır, okuma düşer', async () => {
+    for (const duzey of ['FILE', 'PLCDEBUG'] as const) {
+      const s = await ac({ ...tamOkuma(), cikisReddi: duzey });
+      const i = istemci(s);
+      const r = await i.oku({ plcSayaci: true, takimTablosu: true });
+      assert.equal(r.tur, 'bozuk', duzey);
+      await new Promise((coz) => setTimeout(coz, 50));
+      assert.equal(s.baglantiSayisi(), 0, duzey);
+      i.kapat();
+    }
+  });
+
+  test('FILE girişi reddedilirse tablo okunmaz, tanı yazılır, R_FL gitmez', async () => {
+    const s = await ac({ ...tamOkuma(), fileYetkiYok: true });
+    const i = istemci(s);
+    const r = await i.oku({ takimTablosu: true });
+    i.kapat();
+    assert.equal(r.tur === 'basarili' ? r.okuma.takimTablosu : 'hata', null);
+    assert.ok(!s.gelenler.some((g) => g.komut === 'R_FL'));
+    assert.equal(r.tur === 'basarili' ? lsv2TaniMetni(r.okuma.tani[0] ?? { alan: 'takim', kod: 0 }) : '', 'Takım tablosu: yetki yok (kod 23)');
+  });
+});
+
+describe('Kart 3790 okumalar ve tanı', () => {
+  test('tümce, eksenler, iş milindeki takım, hızlı oranı, sürüm ve sistem parametreleri', async () => {
+    const s = await ac(tamOkuma());
+    const i = istemci(s);
+    const r = await i.oku();
+    i.kapat();
+    assert.equal(r.tur, 'basarili');
+    if (r.tur !== 'basarili') return;
+    const o = r.okuma;
+    assert.equal(o.tumce, 345);
+    assert.deepEqual(o.eksenler, [{ ad: 'X', deger: 12.5 }, { ad: 'Y', deger: -3.25 }, { ad: 'Z', deger: 100 }]);
+    assert.deepEqual(o.takim, { no: 12, indeks: 1, eksen: 'Z', boy: 75.5, yaricap: 5 });
+    assert.equal(o.hizliOrani, 100);
+    assert.deepEqual([o.kontrol, o.ncSurumu, o.plcSurumu, o.secenekler], ['ORN-TNC640', 'ORN-NC 01', 'ORN-PLC 01', 'ORN-SECENEK']);
+    assert.deepEqual(s.gelenler.filter((g) => g.komut === 'R_VR').map((g) => g.yuk[0]), [1, 2, 3, 4]);
+    assert.deepEqual(o.tani, []);
+    const ogeler = lsv2Ogeleri(o, ZAMAN);
+    assert.deepEqual(ogeler.filter((x) => x.bilesen === 'Axes').map((x) => [x.kimlik, x.ad, x.deger]), [['lsv2-eksen-X', 'X', '12.5'], ['lsv2-eksen-Y', 'Y', '-3.25'], ['lsv2-eksen-Z', 'Z', '100']]);
+    assert.deepEqual(ogeler.filter((x) => x.bilesen === 'Tool').map((x) => x.deger), ['12', '1', 'Z', '75.5', '5']);
+  });
+
+  test('alt kodu tanımayan eski kumandada sürüm yüksüz R_VR ile okunur', async () => {
+    const s = await ac({ ...tamOkuma(), eskiSurum: true });
+    const i = istemci(s);
+    const r = await i.oku();
+    i.kapat();
+    assert.deepEqual(r.tur === 'basarili' ? [r.okuma.kontrol, r.okuma.ncSurumu, r.okuma.plcSurumu] : [], ['ORN-TNC640', 'ORN-NC 01', 'ORN-PLC 01']);
+  });
+
+  test('her okuma kodunda T_ER: 23, 46, 57, 80 ve bilinmeyen kod tanıya alan adı ve kodla yazılır', async () => {
+    const red = new Map([[51, 23], [22, 46], [25, 80], [23, 57], [24, 99]]);
+    const s = await ac({ ...tamOkuma(), reddedilenOkumalar: red });
+    const i = istemci(s);
+    const r = await i.oku();
+    i.kapat();
+    assert.equal(r.tur, 'basarili');
+    if (r.tur !== 'basarili') return;
+    assert.deepEqual([r.okuma.takim, r.okuma.eksenler, r.okuma.ilerlemeOrani, r.okuma.kip, r.okuma.program, r.okuma.tumce], [null, null, null, null, null, null]);
+    assert.deepEqual(r.okuma.tani.map(lsv2TaniMetni), [
+      'Çalışma kipi: sonraki hata yok (kod 57)',
+      'Seçili program: kumanda kodu 99',
+      'Oranlar: çok fazla bağlantı (kod 80)',
+      'Takım: yetki yok (kod 23)',
+      'Eksenler: DNC durumu (kod 46)',
+    ]);
+    const tani = lsv2Ogeleri(r.okuma, ZAMAN).find((x) => x.kimlik === 'lsv2-tani');
+    assert.match(tani?.deger ?? '', /^Çalışma kipi: sonraki hata yok/);
+  });
+
+  test('alarm koşulu: hata yok Normal, hata Fault, okunamayınca Unavailable ve nedeni', async () => {
+    const durumlar: [SahteMakine, string, string | null][] = [
+      [tamOkuma(), 'Normal', null],
+      [{ ...tamOkuma(), hatalar: [{ sinif: 1, grup: 2, no: 1101, metin: 'ORN hata' }] }, 'Fault', 'ORN hata'],
+      [{ ...tamOkuma(), reddedilenOkumalar: new Map([[27, 23]]) }, 'Unavailable', 'Alarm: yetki yok (kod 23)'],
+    ];
+    for (const [m, kosul, deger] of durumlar) {
+      const s = await ac(m);
+      const i = istemci(s);
+      const r = await i.oku();
+      i.kapat();
+      assert.equal(r.tur, 'basarili');
+      if (r.tur !== 'basarili') return;
+      const alarm = lsv2Ogeleri(r.okuma, ZAMAN).find((x) => x.kimlik === 'lsv2-alarm');
+      assert.deepEqual([alarm?.kosul, alarm?.deger], [kosul, deger]);
+    }
+  });
+
+  test('kumanda metni Windows-1254 ile çözülür: 0xFD "ı" olur', async () => {
+    const s = await ac({ ...tamOkuma(), hatalar: [{ sinif: 1, grup: 1, no: 7, metin: '' }], hataMetniBayt: Buffer.from([0x41, 0xfd, 0x6b, 0x20, 0xdd, 0xfe, 0xf0, 0]) });
+    const i = istemci(s);
+    const r = await i.oku();
+    i.kapat();
+    assert.equal(r.tur === 'basarili' ? r.okuma.hatalar?.[0]?.metin : '', 'Aık İşğ');
   });
 });

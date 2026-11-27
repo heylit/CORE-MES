@@ -3,13 +3,13 @@ import { lsv2ListesiniCoz } from '#paylasilan/lsv2-makineleri.ts';
 import type { Lsv2Makinesi } from '#paylasilan/lsv2-makineleri.ts';
 import { bulunamadi } from '#cekirdek/hata.ts';
 import { TEZGAH_TURLERI } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
-import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi, TezgahDoluluguCevabi, TezgahTuru } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
+import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi, TezgahDoluluguCevabi, TezgahTakimTablosuCevabi, TezgahTuru } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { smartesMakineDegerleri } from '../smartes/disari.ts';
 import type { TezgahIstemcisi } from './istemci.ts';
 import type { Lsv2Bellegi } from './lsv2-tur.ts';
 import {
-  akislariOku, ARALIK_AYARI, LSV2_MAKINELERI_AYARI, LSV2_OKUMA_AYARI, lsv2UyariMetni, AZAMI_SAMPLE_SAYFASI, baslikOku, cihazSayisiOku, diziyiDurumaCevir, dolulukSeviyesi, dolulukYuzdesi, durumaIsle, durumdanDiziye, eskiMi,
+  akislariOku, ARALIK_AYARI, LSV2_MAKINELERI_AYARI, LSV2_OKUMA_AYARI, LSV2_SEYREK_OKUMA_AYARI, lsv2UyariMetni, AZAMI_SAMPLE_SAYFASI, baslikOku, cihazSayisiOku, diziyiDurumaCevir, dolulukSeviyesi, dolulukYuzdesi, durumaIsle, durumdanDiziye, eskiMi,
   etkinAralikMs, farklar, GECMIS_SAKLAMA_MS, gecmisiBosalt, gecmisiSuz, OKUMA_AYARI, ORNEK_SAKLAMA_GUNU, ozetle, sayaciArttir, sayaciOzetle, SAMPLE_SAYISI,
   SATIR_SINIRI_AYARI, sonrakiSira, tamponAsildiMi, tanimlariOku, TEMIZLIK_ARALIGI_MS, TEMIZLIK_PARCASI, TEMIZLIK_TUR_BUTCESI_MS, TEMIZLIK_TUR_PARCASI,
   varliklariOku, VARLIK_ARALIGI_MS, VARSAYILAN_ARALIK_SN, VARSAYILAN_SATIR_SINIRI, yeniSatirSayaci,
@@ -394,5 +394,15 @@ export async function ayrinti(db: Db, cihazAdi: string, simdi: Date, bellek: Tur
     varliklar: await s.varliklar(db),
     bosluklar: await s.bosluklar(db, new Date(simdi.getTime() - BOSLUK_PENCERESI_MS)),
     egriBasi: baslangic.toISOString(), egriSonu: simdi.toISOString(),
+  };
+}
+
+// Takım tablosu son durumu; okunmamış tezgâh için boş liste ve okundu null (sıfır uydurulmaz).
+export async function takimTablosu(db: Db, cihazAdi: string): Promise<TezgahTakimTablosuCevabi> {
+  if (await s.okumaGetir(db, cihazAdi) === null) throw bulunamadi('Tezgâh bulunamadı.');
+  const seyrek = await s.lsv2SeyrekGetir(db, cihazAdi);
+  return {
+    cihazAdi, seyrekAcik: (await sistemAyariOku(db, LSV2_SEYREK_OKUMA_AYARI)) === true, okundu: seyrek?.okundu ?? null, tani: seyrek?.takimTani ?? null,
+    gecmisSayisi: await s.lsv2TakimGecmisiSay(db, cihazAdi), takimlar: await s.lsv2TakimlariGetir(db, cihazAdi),
   };
 }

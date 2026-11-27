@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { ORNEK_AYRINTI } from './fikstur.ts';
+import { ORNEK_AYRINTI, ORNEK_LSV2_AYRINTI } from './fikstur.ts';
 import { Simulasyon } from './Simulasyon.tsx';
 import { anDegeri, bosluktaMi, eksenleriBul, oranla, oynatmaAnlari } from './simulasyon.ts';
 
@@ -23,6 +23,11 @@ describe('simülasyon: saf kurallar', () => {
     const bos = a.alanlar.map((x) => (x.kimlik === 'zpos' ? { ...x, deger: '' } : x));
     expect(eksenleriBul(bos).find((s) => s.eksen === 'Z')?.simdi).toBeNull();
     expect(eksenleriBul(konumsuz().alanlar)).toEqual([]);
+  });
+
+  it('Heidenhain eksenleri Axes bileşeninde öğe adından bulunur; geçmişsiz olduğu için eğri boştur (kart 3790)', () => {
+    const s = eksenleriBul(ORNEK_LSV2_AYRINTI().alanlar);
+    expect(s.map((x) => [x.eksen, x.simdi, x.nokta.length])).toEqual([['X', 112.4, 0], ['Y', 214.35, 0], ['Z', -38.1, 0]]);
   });
 
   it('saat fikstür kurulurken ilerlese de eksenlerin geri oynatma anları ortaktır', () => {

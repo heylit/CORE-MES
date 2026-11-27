@@ -37,3 +37,8 @@ SAYAC `D` ve 4'ün katı (pyLSV2 ile aynı bayt hesabı: kelime alanı başı + 
 ## Kart 3757: makine listesi Sistem Ayarları'nda
 
 Kullanıcı kararı "Satır satır, ağ aralığı yok" (26.11.2026). `TMIV2_TEZGAH_LSV2_MAKINELERI` kalktı; liste "Heidenhain makineleri" metin ayarıdır (biçim `lsv2-makineleri`, sunucu ve ekran aynı kuralla doğrular), her turda okunur. Listeden çıkan ya da adresi/sayacı değişen makinenin bağlantısı kapatılır. Ekranda satır satır düzenleyici (`istemci/src/moduller/ayarlar/Lsv2MakineListesi.tsx`). CLAUDE.md kırmızı çizgi satırı, ADR 0034 madde 3 ve README çapası kullanıcının yazılı onayıyla (26.11.2026 13:39) aynı committe değişti.
+
+## Kart 3790: LSV2 ile bütün okumalar, yazma yok
+
+Beyaz liste genişledi (R_RI 22, R_VR alt kodları, A_LG/A_LO FILE, R_FL yalnız `TNC:\table\tool.t`, T_OK yalnız R_FL aktarımında); C_ yine yasak. Her okumada tümce no, hızlı hareket oranı, iş milindeki takımın indeks/eksen/boy/yarıçapı ve eksen konumları okunur; eksen, tümce ve tanı geçmişe yazılmaz. Bağlantı başında R_VR alt kodları ve R_PR (LSV2 sürümü, en büyük telgraf). Her T_ER alan adı ve kumanda koduyla "Okunamayan veri" öğesine yazılır. Kumanda metni Windows-1254 ile çözülür. Takım tablosu ayrı anahtar ve aralıkla FILE girişiyle okunur; yeni tablolar `tezgah_lsv2_takim`, `tezgah_lsv2_takim_gecmisi`, `tezgah_lsv2_seyrek` (yalnız ekleyen göç). Yeni uç `GET /tezgah-baglantisi/tezgahlar/:cihazAdi/takim-tablosu`. Ekranda Takım, Eksenler, Kumanda grupları ve Heidenhain'e özel "Takım tablosu" sekmesi. Program listesi ve kumanda saati okunmaz (C_DC ve DIAGNOSTICS gerekir; Soru Merkezi). ADR 0034 değişikliği kullanıcı onayına bağlı (CEKIRDEK-ISTEKLERI-3790).
+

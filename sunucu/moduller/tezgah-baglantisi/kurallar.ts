@@ -538,22 +538,71 @@ export interface Lsv2Hatasi {
   metin: string;
 }
 
+// Okunamayan alanın tanısı: alan adı ve kumandanın T_ER cevabındaki hata kodu (kart 3790). Bilinen kodlar Türkçe yazılır, bilinmeyen
+// kod sayıyla kalır; değer uydurulmaz.
+export const LSV2_TANI_ALANI = {
+  kip: 'Çalışma kipi', 'program-durumu': 'Program durumu', program: 'Seçili program', oranlar: 'Oranlar', alarm: 'Alarm', takim: 'Takım',
+  eksenler: 'Eksenler', surum: 'Kumanda sürümü', parametre: 'Sistem parametreleri', sayac: 'Sayaç', 'takim-tablosu': 'Takım tablosu',
+} as const;
+export type Lsv2TaniAlani = keyof typeof LSV2_TANI_ALANI;
+export interface Lsv2Tanisi { alan: Lsv2TaniAlani; kod: number }
+export const LSV2_KUMANDA_KODU: Readonly<Record<number, string>> = { 23: 'yetki yok', 46: 'DNC durumu', 57: 'sonraki hata yok', 80: 'çok fazla bağlantı' };
+export function lsv2TaniMetni(t: Lsv2Tanisi): string {
+  const ad = LSV2_KUMANDA_KODU[t.kod];
+  return `${LSV2_TANI_ALANI[t.alan]}: ${ad === undefined ? `kumanda kodu ${String(t.kod)}` : `${ad} (kod ${String(t.kod)})`}`;
+}
+
+export interface Lsv2TakimBilgisi {
+  no: number;
+  indeks: number | null;
+  // İş mili ekseni: X, Y ya da Z; kumanda başka kod verirse null.
+  eksen: string | null;
+  boy: number | null;
+  yaricap: number | null;
+}
+
+export interface Lsv2Ekseni { ad: string; deger: number }
+
+// Takım tablosunun (TOOL.T) okunan sütunları; ömür ve kullanılan süre dakikadır, kilit TL sütunudur.
+export interface Lsv2TakimSatiri {
+  no: number;
+  ad: string | null;
+  boy: number | null;
+  yaricap: number | null;
+  omur: number | null;
+  kullanilan: number | null;
+  kilitli: boolean | null;
+}
+
 export interface Lsv2Okumasi {
   kontrol: string | null;
   ncSurumu: string | null;
+  plcSurumu: string | null;
+  secenekler: string | null;
+  // Sistem parametrelerinden (R_PR): LSV2 protokol sürümü ve en büyük telgraf boyu (bayt).
+  lsv2Surumu: number | null;
+  enBuyukBlok: number | null;
   // ExecState: 0 elle, 1 MDI, 2 referans, 3 tek tümce, 4 otomatik.
   kip: number | null;
   // PgmState: 0 başladı, 1 durdu, 2 bitti, 3 iptal, 4 kesildi, 5 hata, 6 hata silindi, 7 boşta, 8 tanımsız.
   programDurumu: number | null;
   program: string | null;
+  // Çalışan tümce numarası: yalnız son durumda tutulur, geçmişe yazılmaz.
+  tumce: number | null;
   // Yüzde (100 = %100).
   ilerlemeOrani: number | null;
   isMiliOrani: number | null;
-  takim: number | null;
+  hizliOrani: number | null;
+  takim: Lsv2TakimBilgisi | null;
+  // Eksen konumları: yalnız son durumda tutulur, geçmişe yazılmaz. Okunamadıysa null.
+  eksenler: Lsv2Ekseni[] | null;
   // Kumandanın hata penceresindeki iletiler; okunamadıysa null, ileti yoksa boş.
   hatalar: Lsv2Hatasi[] | null;
   sayac: number | null;
   uyarilar: Lsv2Uyarisi[];
+  tani: Lsv2Tanisi[];
+  // Yalnız seyrek okuma turunda: okunan takım tablosu; okunamadıysa null (neden tanıda), bu turda okunmadıysa undefined.
+  takimTablosu?: Lsv2TakimSatiri[] | null;
 }
 
 const PROGRAM_DURUMU_CALISMA: Readonly<Record<number, string>> = {
@@ -562,50 +611,165 @@ const PROGRAM_DURUMU_CALISMA: Readonly<Record<number, string>> = {
 const KIP_MODU: Readonly<Record<number, string>> = { 0: 'MANUAL', 1: 'MANUAL_DATA_INPUT', 2: 'MANUAL', 3: 'SEMI_AUTOMATIC', 4: 'AUTOMATIC' };
 
 // LSV2 öğeleri MTConnect adlarıyla kurulur: özet, farklar, geçmiş süzgeci ve ekranlar değişmeden çalışır. Kimlikler sabittir.
+// Bileşenler ekranın gruplarıdır: Tool "Takım", Axes "Eksenler", Control "Kumanda", Controller "Denetleyici".
 interface Lsv2Alani { kimlik: string; tur: string; bilesen: string; kategori: AlanTanimi['kategori']; birim: string | null }
 const LSV2_ALANLARI = {
   erisim: { kimlik: 'lsv2-erisim', tur: 'Availability', bilesen: 'Device', kategori: 'EVENT', birim: null },
   calisma: { kimlik: 'lsv2-calisma', tur: 'Execution', bilesen: 'Path', kategori: 'EVENT', birim: null },
   mod: { kimlik: 'lsv2-mod', tur: 'ControllerMode', bilesen: 'Controller', kategori: 'EVENT', birim: null },
   program: { kimlik: 'lsv2-program', tur: 'Program', bilesen: 'Path', kategori: 'EVENT', birim: null },
+  tumce: { kimlik: 'lsv2-tumce', tur: 'BlockNumber', bilesen: 'Path', kategori: 'EVENT', birim: null },
   sayac: { kimlik: 'lsv2-sayac', tur: 'PartCount', bilesen: 'Path', kategori: 'EVENT', birim: null },
-  takim: { kimlik: 'lsv2-takim', tur: 'ToolNumber', bilesen: 'Path', kategori: 'EVENT', birim: null },
   ilerlemeOrani: { kimlik: 'lsv2-ilerleme-orani', tur: 'PathFeedrateOverride', bilesen: 'Path', kategori: 'SAMPLE', birim: 'PERCENT' },
+  hizliOrani: { kimlik: 'lsv2-hizli-orani', tur: 'RapidOverride', bilesen: 'Path', kategori: 'SAMPLE', birim: 'PERCENT' },
   isMiliOrani: { kimlik: 'lsv2-is-mili-orani', tur: 'RotaryVelocityOverride', bilesen: 'Rotary', kategori: 'SAMPLE', birim: 'PERCENT' },
+  takim: { kimlik: 'lsv2-takim', tur: 'ToolNumber', bilesen: 'Tool', kategori: 'EVENT', birim: null },
+  takimIndeksi: { kimlik: 'lsv2-takim-indeksi', tur: 'ToolIndex', bilesen: 'Tool', kategori: 'EVENT', birim: null },
+  takimEkseni: { kimlik: 'lsv2-takim-ekseni', tur: 'ToolAxis', bilesen: 'Tool', kategori: 'EVENT', birim: null },
+  takimBoyu: { kimlik: 'lsv2-takim-boyu', tur: 'ToolLength', bilesen: 'Tool', kategori: 'EVENT', birim: 'MILLIMETER' },
+  takimYaricapi: { kimlik: 'lsv2-takim-yaricapi', tur: 'ToolRadius', bilesen: 'Tool', kategori: 'EVENT', birim: 'MILLIMETER' },
+  kontrol: { kimlik: 'lsv2-kumanda-tipi', tur: 'ControlType', bilesen: 'Controller', kategori: 'EVENT', birim: null },
+  ncSurumu: { kimlik: 'lsv2-nc-surumu', tur: 'NcVersion', bilesen: 'Controller', kategori: 'EVENT', birim: null },
+  plcSurumu: { kimlik: 'lsv2-plc-surumu', tur: 'PlcVersion', bilesen: 'Controller', kategori: 'EVENT', birim: null },
+  secenekler: { kimlik: 'lsv2-secenekler', tur: 'Options', bilesen: 'Controller', kategori: 'EVENT', birim: null },
+  lsv2Surumu: { kimlik: 'lsv2-protokol-surumu', tur: 'Lsv2Version', bilesen: 'Control', kategori: 'EVENT', birim: null },
+  enBuyukBlok: { kimlik: 'lsv2-en-buyuk-blok', tur: 'MaxBlockLength', bilesen: 'Control', kategori: 'EVENT', birim: 'BYTE' },
+  tani: { kimlik: 'lsv2-tani', tur: 'Diagnosis', bilesen: 'Control', kategori: 'EVENT', birim: null },
   alarm: { kimlik: 'lsv2-alarm', tur: 'SYSTEM', bilesen: 'Controller', kategori: 'CONDITION', birim: null },
 } as const satisfies Record<string, Lsv2Alani>;
 
-export const LSV2_ALAN_TANIMLARI: AlanTanimi[] = Object.values(LSV2_ALANLARI).map((a) => ({
-  kimlik: a.kimlik, tur: a.tur, altTur: null, bilesen: a.bilesen, bilesenAdi: null, birim: a.birim, kategori: a.kategori,
-}));
+const EKSEN_ONEKI = 'lsv2-eksen-';
+const eksenAlani = (ad: string): Lsv2Alani => ({ kimlik: `${EKSEN_ONEKI}${ad}`, tur: 'Position', bilesen: 'Axes', kategori: 'SAMPLE', birim: null });
+// Eksen adı kumandadan gelir; kimliğe yalnız harf, rakam ve alt çizgi girer.
+const eksenAdi = (ad: string): string | null => {
+  const a = ad.replace(/[^A-Za-z0-9_]/g, '').slice(0, 20);
+  return a === '' ? null : a;
+};
+
+const tanim = (a: Lsv2Alani): AlanTanimi => ({ kimlik: a.kimlik, tur: a.tur, altTur: null, bilesen: a.bilesen, bilesenAdi: null, birim: a.birim, kategori: a.kategori });
+export const LSV2_ALAN_TANIMLARI: AlanTanimi[] = Object.values(LSV2_ALANLARI).map(tanim);
+// Okunan eksenlerle birlikte tanımlar: eksen takımı değişince tanım yeniden yazılır.
+export function lsv2AlanTanimlari(o: Lsv2Okumasi | null): AlanTanimi[] {
+  const eksenler = (o?.eksenler ?? []).map((e) => eksenAdi(e.ad)).filter((a) => a !== null);
+  return [...LSV2_ALAN_TANIMLARI, ...[...new Set(eksenler)].map((a) => tanim(eksenAlani(a)))];
+}
+export const lsv2TanimImzasi = (o: Lsv2Okumasi | null): string => lsv2AlanTanimlari(o).map((a) => a.kimlik).join(',');
 export const LSV2_KATEGORILERI: ReadonlyMap<string, GecmisKategorisi> = new Map(LSV2_ALAN_TANIMLARI.map((a) => [a.kimlik, a.kategori]));
+// Yalnız son durumda tutulan öğeler: eksen konumu, tümce numarası ve tanı geçmişe hiç yazılmaz.
+export const lsv2GecmisteYok = (kimlik: string | null): boolean =>
+  kimlik === null || kimlik.startsWith(EKSEN_ONEKI) || kimlik === LSV2_ALANLARI.tumce.kimlik || kimlik === LSV2_ALANLARI.tani.kimlik;
 
 const metin = (n: number | null): string | null => (n === null ? null : String(n));
+const bos = (s: string | null): string | null => (s === null || s.trim() === '' ? null : s.trim());
 
 // Okuma yoksa (makineye bağlanılamadı) yalnız erişim öğesi kalır, değeri null: durum "bağlantı yok" olur, öteki değerler uydurulmaz.
-// Hata iletileri tek koşul öğesinde birleşir: ileti varsa Fault, yoksa Normal; okunamadıysa Unavailable.
+// Hata iletileri tek koşul öğesinde birleşir: ileti varsa Fault, yoksa Normal; okunamadıysa Unavailable ve değeri nedenidir.
 export function lsv2Ogeleri(o: Lsv2Okumasi | null, zaman: Date): TezgahOgesi[] {
   const z = zaman.toISOString();
   const sira = zaman.getTime();
-  const oge = (a: Lsv2Alani, deger: string | null, kosul: string | null = null): TezgahOgesi => ({
-    tur: a.tur, ad: null, bilesen: a.bilesen, deger: deger === null ? null : deger.slice(0, AZAMI_DEGER_UZUNLUGU), zaman: z, kosul, kimlik: a.kimlik, sira,
+  const oge = (a: Lsv2Alani, deger: string | null, kosul: string | null = null, ad: string | null = null): TezgahOgesi => ({
+    tur: a.tur, ad, bilesen: a.bilesen, deger: deger === null ? null : deger.slice(0, AZAMI_DEGER_UZUNLUGU), zaman: z, kosul, kimlik: a.kimlik, sira,
   });
   if (o === null) return [oge(LSV2_ALANLARI.erisim, null)];
   const hatalar = o.hatalar;
-  const alarm = hatalar === null ? oge(LSV2_ALANLARI.alarm, null, 'Unavailable')
+  const alarmTanisi = o.tani.find((t) => t.alan === 'alarm');
+  const alarm = hatalar === null ? oge(LSV2_ALANLARI.alarm, alarmTanisi === undefined ? null : lsv2TaniMetni(alarmTanisi), 'Unavailable')
     : hatalar.length === 0 ? oge(LSV2_ALANLARI.alarm, null, 'Normal')
-      : oge(LSV2_ALANLARI.alarm, hatalar.map((h) => (h.metin === '' ? `Hata ${h.no}` : h.metin)).join(' · '), 'Fault');
+      : oge(LSV2_ALANLARI.alarm, hatalar.map((h) => (h.metin === '' ? `Hata ${String(h.no)}` : h.metin)).join(' · '), 'Fault');
+  const t = o.takim;
+  const eksenler: TezgahOgesi[] = [];
+  for (const e of o.eksenler ?? []) {
+    const ad = eksenAdi(e.ad);
+    if (ad !== null) eksenler.push(oge(eksenAlani(ad), String(e.deger), null, ad));
+  }
   return [
     oge(LSV2_ALANLARI.erisim, 'AVAILABLE'),
     oge(LSV2_ALANLARI.calisma, o.programDurumu === null ? null : PROGRAM_DURUMU_CALISMA[o.programDurumu] ?? null),
     oge(LSV2_ALANLARI.mod, o.kip === null ? null : KIP_MODU[o.kip] ?? null),
-    oge(LSV2_ALANLARI.program, o.program === null || o.program.trim() === '' ? null : o.program.trim()),
+    oge(LSV2_ALANLARI.program, bos(o.program)),
+    oge(LSV2_ALANLARI.tumce, metin(o.tumce)),
     oge(LSV2_ALANLARI.sayac, metin(o.sayac)),
-    oge(LSV2_ALANLARI.takim, metin(o.takim)),
     oge(LSV2_ALANLARI.ilerlemeOrani, metin(o.ilerlemeOrani)),
+    oge(LSV2_ALANLARI.hizliOrani, metin(o.hizliOrani)),
     oge(LSV2_ALANLARI.isMiliOrani, metin(o.isMiliOrani)),
+    oge(LSV2_ALANLARI.takim, metin(t?.no ?? null)),
+    oge(LSV2_ALANLARI.takimIndeksi, metin(t?.indeks ?? null)),
+    oge(LSV2_ALANLARI.takimEkseni, t?.eksen ?? null),
+    oge(LSV2_ALANLARI.takimBoyu, metin(t?.boy ?? null)),
+    oge(LSV2_ALANLARI.takimYaricapi, metin(t?.yaricap ?? null)),
+    ...eksenler,
+    oge(LSV2_ALANLARI.kontrol, bos(o.kontrol)),
+    oge(LSV2_ALANLARI.ncSurumu, bos(o.ncSurumu)),
+    oge(LSV2_ALANLARI.plcSurumu, bos(o.plcSurumu)),
+    oge(LSV2_ALANLARI.secenekler, bos(o.secenekler)),
+    oge(LSV2_ALANLARI.lsv2Surumu, metin(o.lsv2Surumu)),
+    oge(LSV2_ALANLARI.enBuyukBlok, metin(o.enBuyukBlok)),
+    oge(LSV2_ALANLARI.tani, o.tani.length === 0 ? null : o.tani.map(lsv2TaniMetni).join(' · ')),
     alarm,
   ];
+}
+
+// ---- Takım tablosu (kart 3790) ----
+export const LSV2_SEYREK_OKUMA_AYARI = 'tezgah-baglantisi.lsv2-seyrek-okuma';
+export const LSV2_SEYREK_ARALIK_AYARI = 'tezgah-baglantisi.lsv2-seyrek-aralik-dk';
+export const VARSAYILAN_SEYREK_ARALIK_DK = 10;
+export const EN_AZ_SEYREK_ARALIK_DK = 2;
+export const AZAMI_TAKIM_SATIRI = 5_000;
+export const seyrekAralikMs = (dk: number | null): number => Math.max(EN_AZ_SEYREK_ARALIK_DK, dk ?? VARSAYILAN_SEYREK_ARALIK_DK) * 60_000;
+
+const sayiMi = (s: string | undefined): number | null => {
+  const t = (s ?? '').trim();
+  if (t === '') return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+};
+
+// Heidenhain tablo dosyası: "BEGIN TOOL.T ..." başlığı, isteğe bağlı açıklama bloğu, sütun adları satırı, sabit genişlikli satırlar,
+// "[END]". Sütun sınırı ad satırındaki konumdur (ad + ardından gelen boşluklar). Ad satırı bulunamazsa ya da T sütunu yoksa null.
+export function takimTablosunuCoz(metin: string): Lsv2TakimSatiri[] | null {
+  const satirlar = metin.split(/\r?\n|\0/);
+  if (!/^BEGIN\s/i.test(satirlar[0]?.trim() ?? '')) return null;
+  let i = 1;
+  if (satirlar[i]?.includes('#STRUCTBEGIN') === true) {
+    while (i < satirlar.length && !(satirlar[i]?.startsWith('#STRUCTEND') ?? false)) i += 1;
+    i += 1;
+  } else if (satirlar[i]?.includes('TableDescription') === true) {
+    while (i < satirlar.length && !(satirlar[i]?.startsWith(')') ?? false)) i += 1;
+    i += 1;
+  }
+  const baslik = satirlar[i] ?? '';
+  const sutunlar: { ad: string; bas: number; son: number }[] = [];
+  for (const m of baslik.matchAll(/([A-Za-z\d_:.-]+)\s*/g)) sutunlar.push({ ad: (m[1] ?? '').toUpperCase(), bas: m.index, son: m.index + m[0].length });
+  const sutun = (...adlar: string[]) => sutunlar.find((s) => adlar.includes(s.ad));
+  const tNo = sutun('T');
+  if (tNo === undefined) return null;
+  const al = (satir: string, s: { bas: number; son: number } | undefined, son: boolean): string | undefined =>
+    (s === undefined ? undefined : satir.slice(s.bas, son ? undefined : s.son));
+  const sonSutun = sutunlar[sutunlar.length - 1];
+  const hucre = (satir: string, s: ReturnType<typeof sutun>) => al(satir, s, s === sonSutun);
+  const [ad, boy, yaricap, kilit, omur, kullanilan] = [sutun('NAME'), sutun('L'), sutun('R'), sutun('TL'), sutun('TIME1'), sutun('CUR_TIME', 'CUR.TIME')];
+  const sonuc: Lsv2TakimSatiri[] = [];
+  for (const satir of satirlar.slice(i + 1)) {
+    if (satir.startsWith('[END]') || sonuc.length >= AZAMI_TAKIM_SATIRI) break;
+    const no = sayiMi(hucre(satir, tNo));
+    if (no === null || !Number.isInteger(no)) continue;
+    const k = hucre(satir, kilit);
+    sonuc.push({
+      no, ad: ad === undefined ? null : bos(hucre(satir, ad) ?? null), boy: sayiMi(hucre(satir, boy)), yaricap: sayiMi(hucre(satir, yaricap)),
+      omur: sayiMi(hucre(satir, omur)), kullanilan: sayiMi(hucre(satir, kullanilan)), kilitli: kilit === undefined ? null : (k ?? '').trim().toUpperCase() === 'L',
+    });
+  }
+  return sonuc;
+}
+
+// Geçmişe yalnız ömür (ömür sınırı ya da kullanılan süre) ya da kilit değişen takım yazılır. İlk okumada ve yeni görülen takımda
+// geçmiş satırı yazılmaz: değişiklik değil, başlangıç durumudur.
+export function takimDegisenleri(onceki: ReadonlyMap<number, Lsv2TakimSatiri> | null, yeni: readonly Lsv2TakimSatiri[]): Lsv2TakimSatiri[] {
+  if (onceki === null) return [];
+  return yeni.filter((t) => {
+    const e = onceki.get(t.no);
+    return e !== undefined && (e.omur !== t.omur || e.kullanilan !== t.kullanilan || e.kilitli !== t.kilitli);
+  });
 }
 
 // Anlık görüntüde değeri ya da koşulu değişen (ya da ilk kez görülen) öğeler: son duruma ve değer geçmişine yalnız bunlar işlenir.

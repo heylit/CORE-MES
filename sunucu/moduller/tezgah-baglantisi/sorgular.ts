@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { TezgahDurumu } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
-import type { AlanTanimi, GecmisKaydi, GecmisKategorisi, OmurDegeri, TezgahOgesi, TezgahOzeti, TezgahTanimi, TezgahVarligi } from './kurallar.ts';
+import type { AlanTanimi, GecmisKaydi, GecmisKategorisi, Lsv2TakimSatiri, OmurDegeri, TezgahOgesi, TezgahOzeti, TezgahTanimi, TezgahVarligi } from './kurallar.ts';
 
 export interface OkumaSatiri extends TezgahOzeti {
   cihazAdi: string;
@@ -212,4 +212,49 @@ export async function turYaz(db: Db, cihazAdi: string, tur: string | null): Prom
     'INSERT INTO tezgah_turu (cihaz_adi, tur) VALUES ($1, $2) ON CONFLICT (cihaz_adi) DO UPDATE SET tur = EXCLUDED.tur, guncellendi = now()',
     [cihazAdi, tur],
   );
+}
+
+// ---- Heidenhain takım tablosu (kart 3790) ----
+const TAKIM_SUTUNLARI = 'takim_no AS no, ad, boy, yaricap, omur, kullanilan, kilitli';
+
+export function lsv2TakimlariGetir(db: Db, cihazAdi: string): Promise<Lsv2TakimSatiri[]> {
+  return db.sorgu<Lsv2TakimSatiri>(`SELECT ${TAKIM_SUTUNLARI} FROM tezgah_lsv2_takim WHERE cihaz_adi = $1 ORDER BY takim_no`, [cihazAdi]);
+}
+
+// Son durum makine başına bütünüyle yenilenir: tablodan çıkan takım son durumdan da çıkar.
+export async function lsv2TakimlariYaz(db: Db, cihazAdi: string, satirlar: readonly Lsv2TakimSatiri[], zaman: Date): Promise<void> {
+  await db.sorgu('DELETE FROM tezgah_lsv2_takim WHERE cihaz_adi = $1', [cihazAdi]);
+  if (satirlar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO tezgah_lsv2_takim (cihaz_adi, takim_no, ad, boy, yaricap, omur, kullanilan, kilitli, okundu)
+     SELECT $1, * , $9 FROM unnest($2::int[], $3::text[], $4::float8[], $5::float8[], $6::float8[], $7::float8[], $8::bool[])
+     ON CONFLICT DO NOTHING`,
+    [cihazAdi, satirlar.map((s) => s.no), satirlar.map((s) => s.ad?.slice(0, 100) ?? null), satirlar.map((s) => s.boy), satirlar.map((s) => s.yaricap),
+      satirlar.map((s) => s.omur), satirlar.map((s) => s.kullanilan), satirlar.map((s) => s.kilitli), zaman],
+  );
+}
+
+export async function lsv2TakimGecmisiYaz(db: Db, cihazAdi: string, satirlar: readonly Lsv2TakimSatiri[], zaman: Date): Promise<void> {
+  if (satirlar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO tezgah_lsv2_takim_gecmisi (cihaz_adi, takim_no, zaman, omur, kullanilan, kilitli)
+     SELECT $1, n, $2, o, k, l FROM unnest($3::int[], $4::float8[], $5::float8[], $6::bool[]) AS u(n, o, k, l)`,
+    [cihazAdi, zaman, satirlar.map((s) => s.no), satirlar.map((s) => s.omur), satirlar.map((s) => s.kullanilan), satirlar.map((s) => s.kilitli)],
+  );
+}
+
+export async function lsv2TakimGecmisiSay(db: Db, cihazAdi: string): Promise<number> {
+  return (await db.tek<{ n: number }>('SELECT count(*)::int AS n FROM tezgah_lsv2_takim_gecmisi WHERE cihaz_adi = $1', [cihazAdi]))?.n ?? 0;
+}
+
+export async function lsv2SeyrekYaz(db: Db, cihazAdi: string, zaman: Date, takimTani: string | null): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO tezgah_lsv2_seyrek (cihaz_adi, okundu, takim_tani) VALUES ($1, $2, $3)
+     ON CONFLICT (cihaz_adi) DO UPDATE SET okundu = EXCLUDED.okundu, takim_tani = EXCLUDED.takim_tani`,
+    [cihazAdi, zaman, takimTani?.slice(0, 200) ?? null],
+  );
+}
+
+export function lsv2SeyrekGetir(db: Db, cihazAdi: string): Promise<{ okundu: string; takimTani: string | null } | null> {
+  return db.tek(`SELECT ${zamanMetni('okundu')} AS okundu, takim_tani AS "takimTani" FROM tezgah_lsv2_seyrek WHERE cihaz_adi = $1`, [cihazAdi]);
 }

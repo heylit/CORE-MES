@@ -7,7 +7,7 @@ import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { TezgahBaglantisiDurumCevabi } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { DolulukGostergesi } from './DolulukGostergesi.tsx';
-import { ORNEK_AYRINTI, ORNEK_DOLULUK, ORNEK_DURUM, ORNEK_LSV2_TEZGAHI } from './fikstur.ts';
+import { ORNEK_AYRINTI, ORNEK_DOLULUK, ORNEK_DURUM, ORNEK_LSV2_AYRINTI, ORNEK_LSV2_TEZGAHI, ORNEK_TAKIM_TABLOSU } from './fikstur.ts';
 import { boyutMetni, kayitYasiMetni } from './gosterim.ts';
 import { Karsilastirma } from './Karsilastirma.tsx';
 import { TezgahAyrintisi } from './TezgahAyrintisi.tsx';
@@ -237,5 +237,52 @@ describe('Geçmiş doluluğu göstergesi (kart 3680)', () => {
     ac(<Karsilastirma />);
     expect(await screen.findByRole('region', { name: 'Geçmiş doluluğu' })).toBeTruthy();
     expect(screen.getByText('%84')).toBeTruthy();
+  });
+
+  it('Heidenhain makinesinde Takım, Eksenler ve Kumanda grupları; eksen adıyla konum; Takım tablosu sekmesi (kart 3790)', async () => {
+    let seyrek = true;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      const yol = adres.replace('/api', '');
+      if (yol === '/tezgah-baglantisi/durum') return json(200, { ...ORNEK_DURUM(), lsv2Baglanti: 'acik', tezgahlar: [ORNEK_LSV2_TEZGAHI()] });
+      if (yol.endsWith('/takim-tablosu')) return json(200, ORNEK_TAKIM_TABLOSU(seyrek));
+      if (yol.startsWith('/tezgah-baglantisi/tezgahlar/')) return json(200, ORNEK_LSV2_AYRINTI());
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' } satisfies HataGovdesi);
+    }));
+    ac(<TezgahAyrintisi />);
+    const takim = await screen.findByRole('group', { name: 'Takım' });
+    expect(within(takim).getByText('75,5 mm')).toBeTruthy();
+    expect(within(takim).getByText('Takım ekseni')).toBeTruthy();
+    const eksenler = screen.getByRole('group', { name: 'Eksenler' });
+    expect(within(eksenler).getByText('X konumu')).toBeTruthy();
+    expect(within(eksenler).getByText('-38,1')).toBeTruthy();
+    const kumanda = screen.getByRole('group', { name: 'Kumanda' });
+    expect(within(kumanda).getByText('Okunamayan veri')).toBeTruthy();
+    expect(within(kumanda).getByText('Alarm: yetki yok (kod 23)')).toBeTruthy();
+    expect(within(screen.getByRole('group', { name: 'Denetleyici' })).getByText('ORN-TNC640')).toBeTruthy();
+    expect(within(screen.getByRole('group', { name: 'Yol' })).getByText('Tümce no')).toBeTruthy();
+    expect(screen.queryByText(/eksen konumu göndermiyor/)).toBeNull();
+    expect(within(kumanda).getAllByText(/Değişti/)).toHaveLength(1);
+    expect(screen.getByText(/Heidenhain takımları takım tablosundadır/)).toBeTruthy();
+    expect(screen.queryByText(/\/assets/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Takım tablosunu aç/ }));
+    const tablo = await screen.findByRole('table', { name: 'Takım tablosu' });
+    expect(within(tablo).getByText('ORN-MATKAP-8')).toBeTruthy();
+    expect(within(tablo).getByText('Kilitli')).toBeTruthy();
+    expect(within(tablo).getAllByRole('row')[1]?.textContent).toContain('ORN-MATKAP-8');
+    expect(screen.getByText(/ömür ya da kilit değişikliği geçmişi: 6 kayıt/)).toBeTruthy();
+    expect(screen.getByText(/Program dosya listesi okunmuyor/)).toBeTruthy();
+    cleanup();
+    seyrek = false;
+    ac(<TezgahAyrintisi />);
+    fireEvent.click(await screen.findByRole('tab', { name: /Takım tablosu/ }));
+    expect(await screen.findByText(/Seyrek okuma kapalı/)).toBeTruthy();
+    expect(screen.getByText(/Takım tablosu henüz okunmadı/)).toBeTruthy();
+  });
+
+  it('MTConnect makinesinde Takım tablosu sekmesi çıkmaz', async () => {
+    sunucuKur(ORNEK_DURUM());
+    ac(<TezgahAyrintisi />);
+    await screen.findByRole('group', { name: 'Denetleyici' });
+    expect(screen.queryByRole('tab', { name: /Takım tablosu/ })).toBeNull();
   });
 });

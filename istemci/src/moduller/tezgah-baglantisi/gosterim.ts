@@ -29,12 +29,15 @@ export const saatMetni = (z: string | null): string => (z === null ? YOK : SAAT.
 // MTConnect birimleri büyük harf ve İngilizce gelir; bilinenler kısa Türkçe yazılır, bilinmeyen olduğu gibi (küçük harf) kalır.
 const BIRIM: Record<string, string> = {
   PERCENT: '%', 'REVOLUTION/MINUTE': 'dev/dk', MILLIMETER: 'mm', 'MILLIMETER/SECOND': 'mm/sn', 'MILLIMETER/MINUTE': 'mm/dk', CELSIUS: '°C', AMPERE: 'A', VOLT: 'V',
-  WATT: 'W', HERTZ: 'Hz', SECOND: 'sn', MINUTE: 'dk', COUNT: 'adet', DEGREE: '°', NEWTON_METER: 'Nm', KILOWATT_HOUR: 'kWh', PASCAL: 'Pa',
+  WATT: 'W', HERTZ: 'Hz', SECOND: 'sn', MINUTE: 'dk', COUNT: 'adet', DEGREE: '°', NEWTON_METER: 'Nm', KILOWATT_HOUR: 'kWh', PASCAL: 'Pa', BYTE: 'bayt',
 };
 export const birimMetni = (b: string | null): string => (b === null ? '' : BIRIM[b] ?? b.toLowerCase());
 
-const BILESEN: Record<string, string> = { Device: 'Tezgâh', Controller: 'Denetleyici', Linear: 'Doğrusal eksen', Rotary: 'Dönel eksen', Path: 'Yol', Axes: 'Eksenler', Systems: 'Sistemler' };
-export const BILESEN_SIRASI = ['Device', 'Controller', 'Path', 'Axes', 'Linear', 'Rotary'];
+// Tool ve Control Heidenhain (LSV2) okumasının gruplarıdır: iş milindeki takım ve kumanda bilgisi (kart 3790).
+const BILESEN: Record<string, string> = {
+  Device: 'Tezgâh', Controller: 'Denetleyici', Linear: 'Doğrusal eksen', Rotary: 'Dönel eksen', Path: 'Yol', Axes: 'Eksenler', Systems: 'Sistemler', Tool: 'Takım', Control: 'Kumanda',
+};
+export const BILESEN_SIRASI = ['Device', 'Controller', 'Path', 'Tool', 'Axes', 'Linear', 'Rotary', 'Control'];
 export function bilesenMetni(bilesen: string | null, ad: string | null): string {
   const b = bilesen === null ? 'Diğer' : BILESEN[bilesen] ?? bilesen;
   return ad === null || ad.toLowerCase() === (bilesen ?? '').toLowerCase() ? b : `${b} · ${ad}`;
@@ -71,7 +74,13 @@ const TUR_ADI: Record<string, string> = {
   Availability: 'Erişim', Execution: 'Çalışma durumu', ControllerMode: 'Çalışma kipi', Program: 'Program', PartCount: 'Sayaç', ToolNumber: 'Takım',
   PathFeedrate: 'İlerleme hızı', Load: 'Yük', SpindleSpeed: 'İş mili hızı', RotaryVelocity: 'İş mili hızı', Position: 'Konum', EmergencyStop: 'Acil durdurma',
   Temperature: 'Sıcaklık', Block: 'Satır', Line: 'Satır no',
+  PathFeedrateOverride: 'İlerleme oranı', RotaryVelocityOverride: 'İş mili oranı', RapidOverride: 'Hızlı hareket oranı', BlockNumber: 'Tümce no',
+  ToolIndex: 'İndeks', ToolAxis: 'Takım ekseni', ToolLength: 'Boy', ToolRadius: 'Yarıçap', ControlType: 'Kumanda tipi', NcVersion: 'NC sürümü',
+  PlcVersion: 'PLC sürümü', Options: 'Seçenekler', Lsv2Version: 'LSV2 sürümü', MaxBlockLength: 'En büyük telgraf', Diagnosis: 'Okunamayan veri',
 };
+// Eksen konumu öğesi eksen adını taşır (Heidenhain): "X konumu".
+export const alanAdi = (a: { tur: string; ad: string | null; bilesen: string | null }): string =>
+  (a.bilesen === 'Axes' && a.tur === 'Position' && a.ad !== null ? `${a.ad} konumu` : turAdi(a.tur));
 export const turAdi = (tur: string): string => TUR_ADI[tur] ?? tur;
 
 const DEGER_ADI: Record<string, string> = {
