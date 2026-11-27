@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import type { IstasyonSepetleriCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { IsMalzemeleriCevabi, IstasyonSepetleriCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { DurumKutusu, Rozet, Simge } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
-import { TESLIM_KUTUSU } from './is-malzeme-durumu.ts';
+import { TESLIM_KUTUSU, useIsMalzemeleri } from './is-malzeme-durumu.ts';
 import { hataMetni } from './ortak.tsx';
 import { GelenTeslim, OncekiSepetSatiri, SepetSatiri } from './sepet-satirlari.tsx';
 import './stok.css';
@@ -19,14 +19,29 @@ const useIstasyonSepetleri = (istasyonId: number | null, uretimEmriId: number | 
   retry: false,
 });
 
-// Terminal çipi için iki sepetin sayısı (aynı okuma, aynı önbellek); okunamadıysa null.
-// 3742: terminalin tüpleri satır değil adet gösterir (gelenAdet: alınabilecek, cikanAdet: teslim edilebilecek).
-export function useIstasyonSepetiSayilari(istasyonId: number | null, uretimEmriId: number | null): { gelen: number; cikan: number; gelenAdet: number; cikanAdet: number } | null {
+// Terminal tüpleri adet gösterir; sepette kg ya da metre satırı da olabilir, onlar adete katılmaz. Birim işin girdilerinden bilinir
+// (is-malzemeleri, kartın birimi). Girdi olmayan satır emrin ürünüyse (kodu ürün kodu) üretilen parçadır, adet sayılır. Birimi
+// adet olmayan ya da bilinmeyen satır toplama girmez; bütün satırlar sepet penceresinde birimiyle görünür.
+export function sepetAdetleri(d: IstasyonSepetleriCevabi, isler: IsMalzemeleriCevabi['isler'], uretimEmriId: number, urunKodu: string | null): { gelenAdet: number; cikanAdet: number } {
+  const birimler = new Map(isler.filter((x) => x.uretimEmriId === uretimEmriId).flatMap((x) => x.malzemeler).map((m) => [m.malzemeId, m.birim] as const));
+  const kodlar = new Map([...d.gelen.bekleyen, ...d.cikan].map((x) => [x.malzemeId, x.kod] as const));
+  const adetMi = (malzemeId: number): boolean => {
+    if (birimler.has(malzemeId)) return birimler.get(malzemeId)?.trim().toLocaleLowerCase('tr') === 'adet';
+    const kod = kodlar.get(malzemeId) ?? null;
+    return urunKodu !== null && kod !== null && kod === urunKodu;
+  };
+  const topla = (l: readonly { malzemeId: number; miktar: string }[]) => l.reduce((t, x) => (adetMi(x.malzemeId) ? t + Number(x.miktar) : t), 0);
+  return { gelenAdet: topla(d.gelen.bekleyen) + topla(d.gelen.yolda), cikanAdet: topla(d.cikan) };
+}
+
+// Terminal çipi için iki sepetin satır sayısı ve tüpler için adetleri (aynı okumalar, aynı önbellek); okunamadıysa null.
+export function useIstasyonSepetiSayilari(istasyonId: number | null, uretimEmriId: number | null, urunKodu: string | null = null): { gelen: number; cikan: number; gelenAdet: number | null; cikanAdet: number | null } | null {
   const s = useIstasyonSepetleri(istasyonId, uretimEmriId);
-  if (!s.data) return null;
-  const topla = (l: readonly { miktar: string }[]) => l.reduce((t, x) => t + Number(x.miktar), 0);
+  const girdiler = useIsMalzemeleri(istasyonId, uretimEmriId);
+  if (!s.data || uretimEmriId === null) return null;
   const d = s.data;
-  return { gelen: d.gelen.bekleyen.length + d.gelen.yolda.length, cikan: d.cikan.length, gelenAdet: topla(d.gelen.bekleyen) + topla(d.gelen.yolda), cikanAdet: topla(d.cikan) };
+  const adet = girdiler.data ? sepetAdetleri(d, girdiler.data.isler, uretimEmriId, urunKodu) : null;
+  return { gelen: d.gelen.bekleyen.length + d.gelen.yolda.length, cikan: d.cikan.length, gelenAdet: adet?.gelenAdet ?? null, cikanAdet: adet?.cikanAdet ?? null };
 }
 
 export function IstasyonSepetleri({ istasyonId, uretimEmriId }: { istasyonId: number; uretimEmriId: number }) {

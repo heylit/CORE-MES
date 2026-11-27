@@ -25,9 +25,13 @@ async function kur(page: Page, malzemeli: boolean): Promise<void> {
     uretimEmriId: 9903, emirNo: 'UE-ORN-TUP', opNo: 10, adimAd: 'Tornalama', calisiyor: true, kalanAdet: 15,
     malzemeler: [{ malzemeId: 7, kod: 'ORN-CUBUK-40', ad: null, birim: 'm', birAdet: '0.400', gereken: '6.000', istasyonda: '4.000', eksik: false, yerler: [], istek: null, tasinan: false }],
   }] : [] } }));
+  // Parça (ürün kodu ORN-PRC-1) adet sayılır; metre birimli çubuk satırı tüpe katılmaz (3742-2).
   await page.route('**/api/stok/teslim-kutusu/istasyon-sepetleri*', (r) => r.fulfill({ json: {
-    gelen: { bekleyen: [{ istasyonId: 1, kaynakIstasyonId: 2, malzemeId: 7, partiId: null, statuId: null, miktar: '6' }], yolda: [] },
-    cikan: [{ malzemeId: 7, partiId: null, statuId: null, miktar: '4' }],
+    gelen: { bekleyen: [
+      { istasyonId: 1, kaynakIstasyonId: 2, malzemeId: 8, kod: 'ORN-PRC-1', partiId: null, statuId: null, miktar: '6' },
+      { istasyonId: 1, kaynakIstasyonId: 2, malzemeId: 7, kod: 'ORN-CUBUK-40', partiId: null, statuId: null, miktar: '2.5' },
+    ], yolda: [] },
+    cikan: [{ malzemeId: 8, kod: 'ORN-PRC-1', partiId: null, statuId: null, miktar: '4' }, { malzemeId: 7, kod: 'ORN-CUBUK-40', partiId: null, statuId: null, miktar: '1.2' }],
   } }));
 }
 
