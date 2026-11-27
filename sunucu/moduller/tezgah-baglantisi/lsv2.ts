@@ -1,6 +1,6 @@
 import { connect } from 'node:net';
 import type { Socket } from 'node:net';
-import { AZAMI_SAAT_FARKI_SN, ISTEK_SURESI_MS, takimTablosunuCoz } from './kurallar.ts';
+import { AZAMI_SAAT_FARKI_SN, ISTEK_SURESI_MS, LSV2_ISTEMCI_KODU, takimTablosunuCoz } from './kurallar.ts';
 import type { Lsv2Ekseni, Lsv2Hatasi, Lsv2Okumasi, Lsv2ProgramDosyasi, Lsv2TakimBilgisi, Lsv2TaniAlani, Lsv2Tanisi, Lsv2Uyarisi } from './kurallar.ts';
 
 // Heidenhain kumandalarıyla yalnız bu dosya konuşur (ADR 0034). LSV2, TCP 19000, yalnız okuma. Gönderilebilen telgraflar
@@ -330,6 +330,9 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
   const kapi = secenek.kapi ?? LSV2_KAPISI;
   let hat: Lsv2Hatti | null = null;
   let oturum: Oturum | null = null;
+  // Çıkışı bir kez reddedilen geçici düzeye bu istemci bir daha girmez (kapan-aç döngüsü olmasın). PLCDEBUG ve FILE okumaları
+  // anahtarla kapatılabilir; DIAGNOSTICS (saat) yalnız burada durur.
+  const cikisiReddedilen = new Set<string>();
 
   const iste = (h: Lsv2Hatti, komut: Lsv2Komutu, yuk: Uint8Array = new Uint8Array()) => h.istek(komut, yuk, oturum?.plcAdresi ?? null);
   const giris = async (h: Lsv2Hatti, g: Lsv2Girisi): Promise<Lsv2Cevabi> => iste(h, 'A_LG', girisYuku(g));
@@ -399,6 +402,10 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
   // Kumanda saati (R_DT, 4 bayt Unix saniyesi): bağlantı başında bir kez, DIAGNOSTICS düzeyinde okunur ve hemen çıkılır.
   async function saatOku(h: Lsv2Hatti, tani: Lsv2Tanisi[]): Promise<Pick<Oturum, 'kumandaSaati' | 'saatFarki'>> {
     const yok = { kumandaSaati: null, saatFarki: null };
+    if (cikisiReddedilen.has('DIAGNOSTICS')) {
+      tani.push({ alan: 'saat', kod: LSV2_ISTEMCI_KODU.cikisReddedildi });
+      return yok;
+    }
     const g = await giris(h, 'DIAGNOSTICS');
     if (g.kod !== 'T_OK') {
       taniEkle(tani, 'saat', g);
@@ -410,7 +417,11 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
         taniEkle(tani, 'saat', c);
         return yok;
       }
-      if (c.kod !== 'S_DT' || c.icerik.length < 4) return beklenmeyen();
+      // Biçim gerçek kumandada denenmedi: tanınmayan cevap bağlantıyı düşürmez, saat boş kalır.
+      if (c.kod !== 'S_DT' || c.icerik.length < 4) {
+        tani.push({ alan: 'saat', kod: LSV2_ISTEMCI_KODU.beklenmeyen });
+        return yok;
+      }
       const ms = c.icerik.readUInt32BE(0) * 1000;
       return { kumandaSaati: new Date(ms).toISOString(), saatFarki: Math.round((ms - Date.now()) / 1000) };
     });
@@ -483,6 +494,7 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
     if (h.acik) {
       const cikis = await iste(h, 'A_LO', girisYuku(g));
       if (cikis.kod !== 'T_OK') {
+        cikisiReddedilen.add(g);
         h.kapat();
         throw new Lsv2BaglantiHatasi('bozuk', 'Makine geçici giriş düzeyinden çıkışı kabul etmedi; bağlantı kapatıldı.');
       }
@@ -519,7 +531,7 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
     });
   }
 
-  // Seyrek okuma: tek FILE oturumunda önce açılış klasörünün listesi (R_DR), sonra takım tablosu (R_FL); sonra FILE'dan çıkılır.
+  // Seyrek okuma: tek FILE oturumunda önce takım tablosu (R_FL), sonra açılış klasörünün listesi (R_DR); sonra FILE'dan çıkılır.
   async function seyrekOku(h: Lsv2Hatti, tani: Lsv2Tanisi[]): Promise<Pick<Lsv2Okumasi, 'takimTablosu' | 'programListesi'>> {
     const g = await giris(h, 'FILE');
     if (g.kod !== 'T_OK') {
@@ -528,8 +540,9 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
       return { takimTablosu: null, programListesi: null };
     }
     return geciciDuzeyde(h, 'FILE', async () => {
-      const programListesi = await aktar(h, 'R_DR', Uint8Array.of(RDR_TEK), 'S_DR', 'program-listesi', tani);
+      // Önce takım tablosu: klasör listesi sınırı aşıp bağlantıyı kapatırsa tablo kaybolmasın.
       const tablo = await aktar(h, 'R_FL', dosyaYuku(TAKIM_TABLOSU), 'S_FL', 'takim-tablosu', tani);
+      const programListesi = await aktar(h, 'R_DR', Uint8Array.of(RDR_TEK), 'S_DR', 'program-listesi', tani);
       return {
         programListesi: programListesi === null ? null : programListesiCoz(programListesi),
         takimTablosu: tablo === null ? null : takimTablosunuCoz(CP1254.decode(Buffer.concat(tablo))),

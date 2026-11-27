@@ -550,7 +550,11 @@ export const LSV2_TANI_ALANI = {
 export type Lsv2TaniAlani = keyof typeof LSV2_TANI_ALANI;
 export interface Lsv2Tanisi { alan: Lsv2TaniAlani; kod: number }
 export const LSV2_KUMANDA_KODU: Readonly<Record<number, string>> = { 23: 'yetki yok', 46: 'DNC durumu', 57: 'sonraki hata yok', 80: 'çok fazla bağlantı' };
+// Eksi kodlar kumandadan gelmez, istemcinin kendi nedenleridir.
+export const LSV2_ISTEMCI_KODU = { beklenmeyen: -1, cikisReddedildi: -2 } as const;
+const ISTEMCI_KODU_METNI: Readonly<Record<number, string>> = { [-1]: 'beklenmeyen cevap', [-2]: 'önceki çıkış reddedildiği için okunmuyor' };
 export function lsv2TaniMetni(t: Lsv2Tanisi): string {
+  if (t.kod < 0) return `${LSV2_TANI_ALANI[t.alan]}: ${ISTEMCI_KODU_METNI[t.kod] ?? 'okunamadı'}`;
   const ad = LSV2_KUMANDA_KODU[t.kod];
   return `${LSV2_TANI_ALANI[t.alan]}: ${ad === undefined ? `kumanda kodu ${String(t.kod)}` : `${ad} (kod ${String(t.kod)})`}`;
 }

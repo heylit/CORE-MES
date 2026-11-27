@@ -37,6 +37,8 @@ export interface SahteMakine {
   // Kumanda saati (R_DT, Unix saniyesi); verilmezse sunucu saati. DIAGNOSTICS girişi reddedilebilir.
   saat?: number;
   diagYetkiYok?: boolean;
+  // R_DT'ye kısa (tanınmayan) cevap.
+  saatBozuk?: boolean;
   // Aktarımın ortasında (ikinci blokta) verilecek cevap: T_ER ya da hiç cevap.
   aktarimHatasi?: 'hata' | 'cevapsiz' | 'beklenmeyen';
   // Bu düzeyden çıkış reddedilir (T_ER).
@@ -188,6 +190,7 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
       }
       case 'R_DT': {
         if (!girisler.has('DIAGNOSTICS')) return hata(23);
+        if (m.saatBozuk) return cerceve('S_DT', Buffer.alloc(2));
         const b = Buffer.alloc(4);
         b.writeUInt32BE(m.saat ?? Math.floor(Date.now() / 1000), 0);
         return cerceve('S_DT', b);

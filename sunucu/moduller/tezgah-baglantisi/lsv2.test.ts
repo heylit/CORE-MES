@@ -346,7 +346,7 @@ describe('Kart 3790 beyaz liste: yalnız A_LG, A_LO, R_ okumaları ve aktarım o
 });
 
 describe('Kart 3790 giriş düzeyleri: FILE ve PLCDEBUG her yolda kapanır', () => {
-  test('başarı: FILE girişi, R_DR ve R_FL, bloklar arası T_OK, T_FD, hemen FILE çıkışı', async () => {
+  test('başarı: FILE girişi, R_FL ve R_DR, bloklar arası T_OK, T_FD, hemen FILE çıkışı', async () => {
     const s = await ac(tamOkuma());
     const i = istemci(s);
     const r = await i.oku({ takimTablosu: true });
@@ -355,12 +355,12 @@ describe('Kart 3790 giriş düzeyleri: FILE ve PLCDEBUG her yolda kapanır', () 
     const bas = m.indexOf('A_LG FILE|');
     assert.ok(bas >= 0);
     const dilim = m.slice(bas);
-    assert.equal(dilim[1], 'R_DR |');
-    const rfl = dilim.indexOf(`R_FL ${TAKIM_TABLOSU}||`);
-    assert.deepEqual(dilim.slice(2, rfl), ['T_OK', 'T_OK'], 'iki klasör kaydı: her kayıttan sonra T_OK');
+    assert.equal(dilim[1], `R_FL ${TAKIM_TABLOSU}||`, 'önce takım tablosu');
+    const rdr = dilim.indexOf('R_DR |');
+    assert.ok(dilim.slice(2, rdr).every((x) => x === 'T_OK'));
+    assert.ok(rdr - 2 >= 2, 'tablo birden çok blokta gelir');
     const cikis = dilim.indexOf('A_LO FILE|');
-    assert.ok(dilim.slice(rfl + 1, cikis).every((x) => x === 'T_OK'));
-    assert.ok(cikis - rfl - 1 >= 2, 'tablo birden çok blokta gelir');
+    assert.deepEqual(dilim.slice(rdr + 1, cikis), ['T_OK', 'T_OK'], 'iki klasör kaydı: her kayıttan sonra T_OK');
     assert.equal(cikis, dilim.length - 1, 'FILE çıkışından sonra telgraf yok');
     assert.equal(r.tur === 'basarili' ? r.okuma.takimTablosu?.length : -1, 3);
     assert.deepEqual(r.tur === 'basarili' ? r.okuma.programListesi : null, [
@@ -426,7 +426,28 @@ describe('Kart 3790 giriş düzeyleri: FILE ve PLCDEBUG her yolda kapanır', () 
     assert.equal(r3.tur, 'bozuk');
     await new Promise((coz) => setTimeout(coz, 50));
     assert.equal(s3.baglantiSayisi(), 0);
+    // Çıkış bir kez reddedildiyse sonraki bağlantıda DIAGNOSTICS'e girilmez: canlı okuma sürer, saat boş, neden yazılı.
+    const r4 = await i3.oku();
     i3.kapat();
+    assert.equal(r4.tur, 'basarili');
+    if (r4.tur !== 'basarili') return;
+    assert.equal(s3.gelenler.filter((g) => g.komut === 'A_LG' && g.yuk.toString('latin1') === 'DIAGNOSTICS\0').length, 1);
+    assert.equal(r4.okuma.kumandaSaati, null);
+    assert.equal(lsv2TaniMetni(r4.okuma.tani.find((t) => t.alan === 'saat') ?? { alan: 'saat', kod: 0 }), 'Kumanda saati: önceki çıkış reddedildiği için okunmuyor');
+    assert.equal(r4.okuma.tumce, 345);
+  });
+
+  test('kumanda saati tanınmayan cevap verirse bağlantı düşmez: saat boş, neden yazılı, canlı okuma sürer', async () => {
+    const s = await ac({ ...tamOkuma(), saatBozuk: true });
+    const i = istemci(s);
+    const r = await i.oku();
+    i.kapat();
+    assert.equal(r.tur, 'basarili');
+    if (r.tur !== 'basarili') return;
+    assert.deepEqual([r.okuma.kumandaSaati, r.okuma.saatFarki, r.okuma.tumce], [null, null, 345]);
+    assert.equal(lsv2TaniMetni(r.okuma.tani.find((t) => t.alan === 'saat') ?? { alan: 'saat', kod: 0 }), 'Kumanda saati: beklenmeyen cevap');
+    const m = metinler(s);
+    assert.equal(m[m.indexOf('R_DT') + 1], 'A_LO DIAGNOSTICS|');
   });
 
   test('R_DR yalnız tek kayıt kipinde; T_OK süren R_DR aktarımında da gider; program içeriği hiç istenmez', async () => {
