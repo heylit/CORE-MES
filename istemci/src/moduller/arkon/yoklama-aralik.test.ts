@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgHatasi, ApiHatasi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
-import { ILETI_ARALIGI_MS, ILETI_AZAMI_ARALIK_MS, SANAL_SUNUCU, YETKI_YOK, anlikIletimKur, bagla, yoklamaAraligi } from './baglanti.ts';
+import { ILETI_ARALIGI_MS, ILETI_AZAMI_ARALIK_MS, ILETI_GIZLI_ARALIK_MS, SANAL_SUNUCU, YETKI_YOK, anlikIletimKur, bagla, yoklamaAraligi } from './baglanti.ts';
 import type { Istemci } from './baglanti.ts';
 import { tasiyiciYap } from './yeni/veri/tasiyici.ts';
 
@@ -34,6 +34,51 @@ describe('yoklama aralığı', () => {
   it('hatasızken sabit, ardışık hatada ikiye katlanır ve sınırda kalır', () => {
     expect([0, 1, 2, 3, 4, 5, 6, 100].map(yoklamaAraligi)).toEqual([2000, 2000, 4000, 8000, 16000, 30000, 30000, 30000]);
     expect(yoklamaAraligi(1000)).toBe(ILETI_AZAMI_ARALIK_MS);
+  });
+});
+
+// 3778: sayfa gizliyken ileti yoklaması 15 saniyede bir gider; sayfa görünür olunca beklemeden yoklar.
+describe('gizli sayfada yoklama', () => {
+  const gorunurluk = (deger: 'hidden' | 'visible') => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => deger });
+    document.dispatchEvent(new Event('visibilitychange'));
+  };
+  afterEach(() => { Reflect.deleteProperty(document, 'visibilityState'); });
+
+  it('gizliyken aralık 15 saniyedir, görününce hemen yoklar', async () => {
+    vi.useFakeTimers();
+    gorunurluk('hidden');
+    const { istemci, yollar } = sahteIstemci([]);
+    const iletim = anlikIletimKur(istemci, 'cihaz-1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(yollar).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(ILETI_ARALIGI_MS * 3);
+    expect(yollar).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(ILETI_GIZLI_ARALIK_MS);
+    expect(yollar).toHaveLength(2);
+    gorunurluk('visible');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(yollar).toHaveLength(3);
+    await vi.advanceTimersByTimeAsync(ILETI_ARALIGI_MS);
+    expect(yollar).toHaveLength(4);
+    iletim.close();
+  });
+
+  it('görünürken başlayan bekleme bitince sayfa gizliyse sonraki aralık 15 saniyedir', async () => {
+    vi.useFakeTimers();
+    gorunurluk('visible');
+    const { istemci, yollar } = sahteIstemci([]);
+    const iletim = anlikIletimKur(istemci, 'cihaz-1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(yollar).toHaveLength(1);
+    gorunurluk('hidden');
+    await vi.advanceTimersByTimeAsync(ILETI_ARALIGI_MS);
+    expect(yollar).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(ILETI_ARALIGI_MS * 3);
+    expect(yollar).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(ILETI_GIZLI_ARALIK_MS);
+    expect(yollar).toHaveLength(3);
+    iletim.close();
   });
 });
 

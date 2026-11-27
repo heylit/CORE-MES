@@ -120,6 +120,23 @@ export interface IstekGirdisi {
 }
 
 // Arkon sunucu sözleşmesi (Arkon web/src/data/store.ts) -> TMI /api/arkon uçları.
+// Başlatma her basışta istasyon listesini yeniden okumasın: kod -> kimlik eşlemesi kısa süre bellekte kalır. Listede bulunmayan kod
+// için liste yeniden okunur (atama yeni eklenmiş olabilir).
+export const ISTASYON_SECIMI_SURE_MS = 5 * 60_000;
+type SecilebilenIstasyon = IstasyonSecimiCevabi['gruplar'][number]['istasyonlar'][number];
+const istasyonSecimleri = new WeakMap<Istemci, { zaman: number; istasyonlar: readonly SecilebilenIstasyon[] }>();
+async function secilebilenIstasyon(istemci: Istemci, kod: string): Promise<SecilebilenIstasyon | undefined> {
+  const onbellek = istasyonSecimleri.get(istemci);
+  if (onbellek !== undefined && Date.now() - onbellek.zaman < ISTASYON_SECIMI_SURE_MS) {
+    const bulunan = onbellek.istasyonlar.find((x) => x.kod === kod);
+    if (bulunan !== undefined) return bulunan;
+  }
+  const { gruplar } = await istemci.get<IstasyonSecimiCevabi>('/istasyonlar/secim');
+  const istasyonlar = gruplar.flatMap((x) => x.istasyonlar);
+  istasyonSecimleri.set(istemci, { zaman: Date.now(), istasyonlar });
+  return istasyonlar.find((x) => x.kod === kod);
+}
+
 export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => void): Promise<Cevap> {
   const p = g.yol.split('/').filter(Boolean).map(decodeURIComponent);
   const kaynak = g.sorgu.get('c') ?? 'tmi';
@@ -290,8 +307,7 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
     const govde = govdeyiOku(g.govde) as { emirId?: unknown; istasyon?: unknown } | undefined;
     const emirId = govde?.emirId;
     if (typeof emirId !== 'number' || !Number.isSafeInteger(emirId) || emirId <= 0 || typeof govde?.istasyon !== 'string') return ret(400, 'Emir ya da istasyon yok');
-    const { gruplar } = await istemci.get<IstasyonSecimiCevabi>('/istasyonlar/secim');
-    const istasyon = gruplar.flatMap((x) => x.istasyonlar).find((x) => x.kod === govde.istasyon);
+    const istasyon = await secilebilenIstasyon(istemci, govde.istasyon);
     if (istasyon === undefined) return tamam({ hazir: true, denetlenmedi: true });
     const c = await istemci.post<UretimHazirligiCevabi>('/stok/uretim-hazirligi', { uretimEmriId: emirId, istasyonId: istasyon.id });
     const metin = hazirlikMetni(c);
@@ -415,6 +431,22 @@ export const YETKI_YOK = 'Bu ekran için yetkiniz yok; ileti akışı durduruldu
 // Geçici hatada (ağ, 5xx, öteki) bekleme her denemede ikiye katlanır, bu sınırda kalır; başarılı okuma aralığı başa döndürür.
 export const ILETI_AZAMI_ARALIK_MS = 30_000;
 
+// Sayfa gizliyken (sekme arkada, tablet ekranı kapalı) ileti yoklaması seyrekleşir; sayfa görünür olunca beklemeden yoklar.
+// Sunucu iletileri 15 dakika tutar, bu aralık kaçırma sınırının çok altındadır.
+export const ILETI_GIZLI_ARALIK_MS = 15_000;
+
+const sayfaGizli = (): boolean => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+
+function gizliyken(bekle: (ms: number) => Promise<unknown>, ms: number): Promise<void> {
+  return new Promise((coz) => {
+    let bitti = false;
+    const son = () => { if (bitti) return; bitti = true; document.removeEventListener('visibilitychange', degisti); coz(); };
+    const degisti = () => { if (!sayfaGizli()) son(); };
+    document.addEventListener('visibilitychange', degisti);
+    void bekle(ms).then(son, son);
+  });
+}
+
 export function yoklamaAraligi(ardisikHata: number): number {
   if (ardisikHata <= 0) return ILETI_ARALIGI_MS;
   return Math.min(ILETI_AZAMI_ARALIK_MS, ILETI_ARALIGI_MS * 2 ** Math.min(ardisikHata - 1, 30));
@@ -461,7 +493,8 @@ export function anlikIletimKur(
         iletim.readyState = 0;
         iletim.onerror?.(new Event('error'));
       }
-      await bekle(yoklamaAraligi(ardisikHata));
+      const aralik = yoklamaAraligi(ardisikHata);
+      await (sayfaGizli() ? gizliyken(bekle, Math.max(aralik, ILETI_GIZLI_ARALIK_MS)) : bekle(aralik));
     }
   })();
   return iletim;
