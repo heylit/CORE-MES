@@ -296,6 +296,19 @@ describe('Satış siparişi ayrıntısı', () => {
     expect(screen.getByText('Taslak sipariş')).toBeTruthy();
   });
 
+  it('3773 b: onaylayamayan taslakta onaylayanı ve İşlerim yolunu görür; onaylayan görmez', async () => {
+    sunucuKur(YAZAR);
+    ac('/siparisler/5');
+    const not = (await screen.findByText('Taslak sipariş')).closest('p')!;
+    expect(not.textContent).toContain('Onaylayan: siparişleri onaylama yetkisi olan kişiler.');
+    expect(not.textContent).toContain('İşlerim listesinde "Onay bekleyen sipariş"');
+    cleanup();
+    sunucuKur(YONETICI);
+    ac('/siparisler/5');
+    const yonetici = (await screen.findByText('Taslak sipariş')).closest('p')!;
+    expect(yonetici.textContent).not.toContain('Onaylayan:');
+  });
+
   it('3244 b: kalem termini tarihle ve işaretle görünür; partiler adet ve çeşitle, partisiz kalem Seri', async () => {
     const partili = { ...AYRINTI_TASLAK, satirlar: [
       { ...SATIR, partiler: [{ id: 1, emirTuru: 'fai', adet: '10.000', rotaId: null }, { id: 2, emirTuru: 'seri', adet: '90.000', rotaId: null }] },

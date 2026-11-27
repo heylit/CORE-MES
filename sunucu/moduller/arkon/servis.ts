@@ -127,18 +127,20 @@ async function ekipIstasyonlari(db: Db, kisiId: number | null): Promise<Map<numb
 
 // Kişi başına tek istasyon, Arkon'un istasyon kimliği olan kodla: en yüksek yüzdeli aktif istasyon ataması (istasyonlar
 // `istasyonKisileri`); istasyon ataması yoksa en yüksek yüzdeli makine atamasının istasyonu, o da yoksa ekibinin istasyonu.
-async function kisiIstasyonlari(db: Db): Promise<Map<number, string>> {
+// Kişi verilirse yalnız onun ataması okunur: terminal açılışı (`ben`) bütün personelin atamasını taramasın.
+async function kisiIstasyonlari(db: Db, yalnizKisi: number | null = null): Promise<Map<number, string>> {
   const kodlar = new Map((await istasyonlar(db, { pasiflerDahil: false })).map((i) => [i.id, i.kod]));
   const sonuc = new Map<number, string>();
-  for (const [kisiId, [istasyonId]] of await ekipIstasyonlari(db, null)) {
+  for (const [kisiId, [istasyonId]] of await ekipIstasyonlari(db, yalnizKisi)) {
     const kod = istasyonId === undefined ? undefined : kodlar.get(istasyonId);
     if (kod !== undefined) sonuc.set(kisiId, kod);
   }
-  for (const [kisiId, [istasyonId]] of await makineIstasyonlari(db, null)) {
+  for (const [kisiId, [istasyonId]] of await makineIstasyonlari(db, yalnizKisi)) {
     const kod = istasyonId === undefined ? undefined : kodlar.get(istasyonId);
     if (kod !== undefined) sonuc.set(kisiId, kod);
   }
   for (const a of await istasyonKisileri(db)) {
+    if (yalnizKisi !== null && a.kisiId !== yalnizKisi) continue;
     const kod = kodlar.get(a.istasyonId);
     if (kod !== undefined) sonuc.set(a.kisiId, kod);
   }
@@ -193,7 +195,7 @@ export async function ben(db: Db, kullanici: Kullanici): Promise<ArkonKisi> {
   const rol = await rolGerekli(db, kullanici);
   return {
     kimlik: String(kullanici.id), ad: kullanici.ad, rol, isMerkezleri: await isMerkeziKodlari(db, kullanici.id),
-    istasyon: (await kisiIstasyonlari(db)).get(kullanici.id) ?? null,
+    istasyon: (await kisiIstasyonlari(db, kullanici.id)).get(kullanici.id) ?? null,
     istasyonlar: (await yetkiliIstasyonKodlari(db, kullanici.id)).get(kullanici.id) ?? [],
     ...(await kisiBayrakliMi(db, kullanici.id) ? {} : { makineler: (await calisabildigiMakineler(db))(kullanici.id) }), aktif: true,
   };

@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import type { GidisatOlcusu, IsKalemi } from '#paylasilan/sozlesme/pano.ts';
-import type { SiparisOzetiCevabi, TerminAraligi, TerminDagilimiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { SiparisListesiCevabi, SiparisOzetiCevabi, TerminAraligi, TerminDagilimiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
 import { CubukGrafikKarti, YatayCubukKarti, type KategoriSatiri } from '../../ortak/arayuz/grafik/grafikler.tsx';
 import { useKaynakBildir } from '../../ortak/arayuz/pano-baglami.ts';
 import type { AnaSayfaKaynagi } from '../../ortak/rota/ana-sayfa.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { tarihMetni } from './gorunum.ts';
 
 // Rol panosu kaynakları (kart 1585): pano kartlarıyla aynı özet ucu; liste taşınmaz, fiyat yoktur.
 const useOzet = () => useQuery({ queryKey: anahtarlar.ozet, queryFn: () => api.get<SiparisOzetiCevabi>('/siparisler/ozet') });
@@ -28,6 +29,21 @@ export function terminKalemleri(o: SiparisOzetiCevabi): IsKalemi[] {
   return kalemler;
 }
 
+// 3773 b: onay bekleyen taslak, onaylama yetkisi olanın İşlerim listesinde; liste ucu okunur, yeni uç yok. Taslağı açan onaylayabiliyorsa
+// kendi taslağı da çıkar (onay kuralı değişmez). Erken termin önce gelir; termin tarihtir, gün başı fabrikanın saatiyle (tek sunucu, +03:00).
+type TaslakSatiri = Pick<SiparisListesiCevabi['satirlar'][number], 'id' | 'no' | 'firmaId' | 'firmaAd' | 'termin' | 'olusturma'>;
+const GUN_MS = 86_400_000;
+export function onayBekleyenKalemleri(satirlar: readonly TaslakSatiri[], simdi: number): IsKalemi[] {
+  return satirlar.map((s) => {
+    const gun = Math.max(0, Math.floor((simdi - Date.parse(s.olusturma)) / GUN_MS));
+    return {
+      anahtar: `taslak-${s.id}`, baslik: `${s.no} · ${s.firmaAd ?? `Firma ${s.firmaId}`}`,
+      ayrinti: `Onay bekleyen sipariş · termin ${tarihMetni(s.termin)} · ${gun === 0 ? 'bugün açıldı' : `${sayi(gun)} gündür taslak`}`,
+      aciliyet: 'bekliyor', sonTarih: `${s.termin}T00:00:00+03:00`, yol: `/siparisler/${s.id}`, eylem: 'Aç', neden: 'Onaylanmadan proje ve üretim emri açılmaz.',
+    };
+  });
+}
+
 // Kıyas bir önceki aydır; ay bitmeden düşük görünmesi beklenir, bu yüzden yön verilmez.
 export function aylikOlcu(o: SiparisOzetiCevabi): GidisatOlcusu[] {
   const son = o.aylik.at(-1);
@@ -43,6 +59,14 @@ export function aylikOlcu(o: SiparisOzetiCevabi): GidisatOlcusu[] {
 function Termin() {
   const o = useOzet();
   useKaynakBildir(o.isError ? null : o.data === undefined ? undefined : terminKalemleri(o.data));
+  return null;
+}
+function OnayBekleyen() {
+  const l = useQuery({
+    queryKey: [...anahtarlar.ozet, 'onay-bekleyen'],
+    queryFn: () => api.get<SiparisListesiCevabi>('/siparisler?durum=taslak&arsiv=hayir&sirala=termin&yon=artan&sayfaBoyu=50'),
+  });
+  useKaynakBildir(l.isError ? null : l.data === undefined ? undefined : onayBekleyenKalemleri(l.data.satirlar, Date.now()));
   return null;
 }
 function Aylik() {
@@ -76,6 +100,7 @@ function AylikGrafik() {
 }
 
 export const anaSayfaKaynaklari: AnaSayfaKaynagi[] = [
+  { anahtar: 'siparisler-onay-is', tur: 'is', baslik: 'Sipariş onayı', simge: 'check', sira: 140, islem: 'siparisler.onayla', yolunda: 'Onay bekleyen sipariş yok', kaynak: OnayBekleyen },
   { anahtar: 'siparisler-termin-is', tur: 'is', baslik: 'Termin', simge: 'clock', sira: 150, islem: 'siparisler.oku', yolunda: 'Termini geçen sipariş yok', kaynak: Termin },
   { anahtar: 'siparisler-aylik-olcu', tur: 'gidisat', baslik: 'Sipariş', simge: 'chart', sira: 500, islem: 'siparisler.oku', kaynak: Aylik },
   { anahtar: 'siparisler-termin-grafik', tur: 'grafik', baslik: 'Termin', simge: 'truck', sira: 100, bolum: 'teslim', anaSayfada: true, islem: 'siparisler.oku', kaynak: TerminGrafigi },

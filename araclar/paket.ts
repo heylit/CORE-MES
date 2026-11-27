@@ -6,8 +6,8 @@ import { AZAMI_DEGISIKLIK, AZAMI_DEGISIKLIK_METNI, PAKET_IMLECI } from '../sunuc
 // Güncelleme paketinin üretici yarısı (kart #886): biçim ve sınırlar doğrulayan kodla aynı kaynaktan gelir.
 export const YAYIN_ETIKETI = 'yayin/';
 export const GOC_ADI = /^[0-9]{14}_[a-z0-9_]+\.sql$/;
-// git log --format değeri: kayıt ayırıcı 0x1e, alan ayırıcı 0x1f; PR başlığı birleşme commit'inin gövdesindedir.
-export const BIRLESME_BICIMI = '%s%x1f%b%x1e';
+// git log --format değeri: kayıt ayırıcı 0x1e, alan ayırıcı 0x1f; alanlar konu, gövde, kısa commit.
+export const BIRLESME_BICIMI = '%s%x1f%b%x1f%h%x1e';
 
 // Sürüm adı tesis gününden çıkar: aynı gün ikinci yayın -2 olur. Etiketler `yayin/` önekiyle verilir.
 export function surumAdi(an: Date, etiketler: readonly string[]): string {
@@ -24,19 +24,33 @@ function kirp(metin: string): string {
   return metin.length > AZAMI_DEGISIKLIK_METNI ? `${metin.slice(0, AZAMI_DEGISIKLIK_METNI - 1)}…` : metin;
 }
 
-// Yalnız GitHub'ın PR birleşmeleri sayılır; dal içi birleşmeler (`Merge #840 into batch`) değişiklik değildir.
-export function birlesmeleriAyikla(gunluk: string): { no: number; baslik: string }[] {
-  const birlesmeler: { no: number; baslik: string }[] = [];
+export interface Birlesme { kimlik: string; baslik: string }
+
+// main'in birinci ebeveyn zincirindeki her commit bir değişikliktir: PR birleşme commit'i (başlık gövdede), sıkıştırılmış PR
+// (`Başlık (#123)`) ya da toplu birleşmede tek tek giren kart commit'i (PR numarası yok, kimlik kısa commit). Dal içi
+// birleşmeler (`Merge #840 into batch`, `Merge branch ...`) değişiklik değildir.
+const DAL_ICI_BIRLESME = /^Merge (branch |remote-tracking branch |tag |commit |#\d+ into )/;
+
+export function birlesmeleriAyikla(gunluk: string): Birlesme[] {
+  const birlesmeler: Birlesme[] = [];
   for (const kayit of gunluk.split('\x1e')) {
-    const [konu = '', govde = ''] = kayit.split('\x1f');
-    const eslesme = /^Merge pull request #(\d+) /.exec(konu.trim());
-    if (eslesme === null) continue;
-    birlesmeler.push({ no: Number(eslesme[1]), baslik: govde.trim().split('\n')[0]?.trim() ?? '' });
+    const [hamKonu = '', govde = '', hamSha = ''] = kayit.split('\x1f');
+    const konu = hamKonu.trim();
+    const sha = hamSha.trim();
+    const pr = /^Merge pull request #(\d+) /.exec(konu);
+    if (pr !== null) {
+      birlesmeler.push({ kimlik: `#${pr[1] ?? ''}`, baslik: govde.trim().split('\n')[0]?.trim() ?? '' });
+      continue;
+    }
+    if (konu === '' || DAL_ICI_BIRLESME.test(konu)) continue;
+    const sikistirilmis = /^(.*\S)\s+\(#(\d+)\)$/.exec(konu);
+    if (sikistirilmis !== null) birlesmeler.push({ kimlik: `#${sikistirilmis[2] ?? ''}`, baslik: sikistirilmis[1] ?? '' });
+    else if (sha !== '') birlesmeler.push({ kimlik: sha, baslik: konu });
   }
   return birlesmeler;
 }
 
-const birlesmeSatiri = (b: { no: number; baslik: string }): string => (b.baslik === '' ? `#${String(b.no)}` : `#${String(b.no)}: ${b.baslik}`);
+const birlesmeSatiri = (b: Birlesme): string => (b.baslik === '' ? b.kimlik : `${b.kimlik}: ${b.baslik}`);
 
 // Paket bildirimindeki liste sunucunun sınırlarına kırpılır; tam liste sürüm notundadır.
 export function degisiklikleriAyikla(gunluk: string): string[] {
@@ -129,7 +143,7 @@ export function surumNotu(g: SurumNotuGirdisi): string {
     ...(birlesmeler.length === 0 ? ['Yok.'] : birlesmeler.map((b) => `- ${birlesmeSatiri(b)}`)),
   ];
   const kartsiz = birlesmeler.filter((b) => !kartNoVarMi(b.baslik));
-  if (kartsiz.length > 0) satirlar.push('', `Kart numarası olmayan başlık: ${kartsiz.map((b) => `#${String(b.no)}`).join(', ')}`);
+  if (kartsiz.length > 0) satirlar.push('', `Kart numarası olmayan başlık: ${kartsiz.map((b) => b.kimlik).join(', ')}`);
   return `${satirlar.join('\n')}\n`;
 }
 

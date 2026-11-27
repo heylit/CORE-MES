@@ -125,6 +125,17 @@ describe('arkon kişisi ekip istasyonu (gerçek PostgreSQL)', () => {
     assert.deepEqual([kisi.istasyon, kisi.istasyonlar], [atanan.kod, [atanan.kod, ekipIst.kod].sort((a, b) => a.localeCompare(b))]);
   });
 
+  test('başka kişinin istasyon ve ekip ataması oturumdaki kişinin açılış istasyonunu değiştirmez (yalnız kendi ataması okunur)', async () => {
+    const once = await ben();
+    const baskasinin = await istasyonKur();
+    await atamaYaz(ortam!.vt, 'istasyon', baskasinin.id, yoneticiId, '50');
+    const ekipId = await ekipKur(baskasinin.id);
+    const c = await istek(yonetici, 'POST', `/ekipler/${ekipId}/uyeler/ata`, { kisiId: yoneticiId, yuzde: '50' });
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const sonra = await ben();
+    assert.deepEqual([sonra.istasyon, sonra.istasyonlar], [once.istasyon, once.istasyonlar]);
+  });
+
   test('ekip üyeleri ekip başına değil tek okumayla gelir; sonuç ekip başına okumayla aynıdır', async () => {
     const ist1 = await istasyonKur();
     const ist2 = await istasyonKur();

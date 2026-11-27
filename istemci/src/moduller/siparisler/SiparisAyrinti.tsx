@@ -50,6 +50,8 @@ const KOMUT_METNI: Record<Komut, { baslik: string; dugme: string; basari: string
     govde: 'Sipariş taslağa döner. Üretim emri, satın alma talebi ya da sevk işi açılmış kalemlerde yalnız termin değişir. Yeniden onaylanınca bağlı proje bitişi ve başlamamış emir teslimi yeni termine kayar. Nedeni yazın.',
   },
 };
+// 3773 b: onaylayamayan kişi taslağın kimde beklediğini görür; aynı taslak onaylayanın İşlerim listesine düşer (pano-kaynaklari.tsx).
+export const ONAYLAYAN_BILGISI = 'Onaylayan: siparişleri onaylama yetkisi olan kişiler. Taslak onların Ana sayfa · İşlerim listesinde "Onay bekleyen sipariş" olarak görünür.';
 const GEREKCELI: ReadonlySet<Komut> = new Set(['iptal', 'onay-geri-al']);
 
 // SIP-41: eksik listesi ve gerekçe. Eksikler okunamadıysa gerekçe alanı yine açıktır; kapatmada sunucu denetler.
@@ -221,11 +223,11 @@ export function SiparisAyrinti() {
       />
 
       {s.durum === 'taslak' && !emreBagliVar && (
-        <p className="tc-sp-bildirim" role="status"><strong>Taslak sipariş</strong> Onaylanana kadar düzenlenebilir; onaylanınca satırlar değişmez.</p>
+        <p className="tc-sp-bildirim" role="status"><strong>Taslak sipariş</strong> Onaylanana kadar düzenlenebilir; onaylanınca satırlar değişmez.{!onaylayabilir && <> {ONAYLAYAN_BILGISI}</>}</p>
       )}
       {s.durum === 'taslak' && emreBagliVar && (
         <p className="tc-sp-bildirim tc-sp-bildirim-uyari" role="status">
-          <strong>Onay geri alındı</strong> Üretim emri, satın alma talebi ya da sevk işi açılmış kalemlerde yalnız termin değişir. Yeniden onaylanana kadar bu siparişten proje ya da emir açılmaz.
+          <strong>Onay geri alındı</strong> Üretim emri, satın alma talebi ya da sevk işi açılmış kalemlerde yalnız termin değişir. Yeniden onaylanana kadar bu siparişten proje ya da emir açılmaz.{!onaylayabilir && <> {ONAYLAYAN_BILGISI}</>}
         </p>
       )}
       {fiyatGorur && s.durum === 'taslak' && sifirFiyatliKalem > 0 && (

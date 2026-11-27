@@ -158,7 +158,8 @@ function paketYap(s: PaketSecenekleri): void {
   // Önceki yayın: HEAD'in geçmişindeki en yeni yayın etiketi. Yoksa son 50 birleşme yazılır.
   const onceki = satirlar(git(['tag', '--merged', 'HEAD', '--list', `${YAYIN_ETIKETI}*`, '--sort=-creatordate']))[0] ?? null;
   const aralik = onceki === null ? ['-n', '50', 'HEAD'] : [`${onceki}..HEAD`];
-  const gunluk = git(['log', '--first-parent', '--merges', `--format=${BIRLESME_BICIMI}`, ...aralik]);
+  // --merges konmaz: main'e PR'lar sıkıştırılarak da girer, o commit'ler birleşme değildir.
+  const gunluk = git(['log', '--first-parent', `--format=${BIRLESME_BICIMI}`, ...aralik]);
   const degisiklikler = degisiklikleriAyikla(gunluk);
   const oncekiGocler = new Set(onceki === null ? [] : satirlar(git(['ls-tree', '--name-only', onceki, 'sunucu/gocler/']))
     .map((y) => y.slice('sunucu/gocler/'.length)));
