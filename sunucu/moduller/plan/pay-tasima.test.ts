@@ -98,4 +98,53 @@ describe('bölünmüş adımın payını taşıma (3791)', () => {
     // Başlamamış adımda aynı tezgâhta iki pay serbest.
     assert.equal(tasimaHesabi(calisma(elleOps, { elleBol: bol }), 8, { isId: 'S1.10~2', tezgah: 'T1', baslangic: 12 }).gecerli, true);
   });
+
+  // Test2 E1: sayımı olan ama çalışmayan (act 0) pay da başka tezgâha taşınmaz.
+  test('sayımı olan pay (sayilan > 0, act 0) başka tezgâha taşınmaz; aynı tezgâhta saati kayar', () => {
+    const ops = { ...elleOps, 'S1.10~2': { ...elleOps['S1.10~2'], ...pay(2, 2, 2, { elle: 1, sayilan: 1 }) } };
+    const c = calisma(ops, { elleBol: bol });
+    const r = tasimaHesabi(c, 8, { isId: 'S1.10~2', tezgah: 'T3', baslangic: 12 });
+    assert.equal(r.gecerli, false);
+    assert.match(r.ileti ?? '', /tezgâhı bölmede kalır/);
+    assert.equal(tasimaHesabi(c, 8, { isId: 'S1.10~2', tezgah: 'T2', baslangic: 12 }).gecerli, true);
+  });
+
+  // Test2 E2: geri listesi uygulanınca kilit ve bölme kaydı eski haline döner (kayıt yoksa anahtar silinir, vardı ise eski değer).
+  const geriUygula = (deger: Record<string, unknown>, geri: { yol: string[]; id?: string; once?: unknown }[]): Record<string, unknown> => {
+    const y = structuredClone(deger);
+    for (const g of geri) {
+      const kap = (y[g.yol[0]!] ?? {}) as Record<string, unknown>;
+      if (g.once === undefined) delete kap[g.id!]; else kap[g.id!] = g.once;
+      y[g.yol[0]!] = kap;
+    }
+    return y;
+  };
+  const sonGeri = (d: Record<string, unknown>) => (d['bekleyen'] as { geri: { yol: string[]; id?: string; once?: unknown }[] }[]).at(-1)!.geri;
+  test('geri listesi: bölme kaydı vardı → eski kayıt ve eski kilitler döner', () => {
+    const c = calisma(elleOps, { elleBol: bol, locks: { 'S1.10': { m: 'T1', S: 20 } } });
+    const d = yazilan(isTasi(c, { isId: 'S1.10~2', tezgah: 'T3', baslangic: 12 }, KISI, tasimaHesabi));
+    assert.notDeepEqual(d.elleBol, bol);
+    const geri = geriUygula(d, sonGeri(d));
+    assert.deepEqual(geri['elleBol'], bol);
+    assert.deepEqual(geri['locks'], { 'S1.10': { m: 'T1', S: 20 } });
+  });
+  test('geri listesi: bölme kaydı yoktu (rotada paralel böl) → elleBol anahtarı silinir, kilit silinir', () => {
+    const ops = { 'S1.10': { ...op('T1', 8), ...pay(1, 2, 2) }, 'S1.10~2': { ...op('T2', 8), ...pay(2, 2, 2) } };
+    const d = yazilan(isTasi(calisma(ops), { isId: 'S1.10', tezgah: 'T1', baslangic: 12 }, KISI, tasimaHesabi));
+    assert.deepEqual(d.elleBol, bol);
+    const geri = geriUygula(d, sonGeri(d));
+    assert.deepEqual(geri['elleBol'], {});
+    assert.deepEqual(geri['locks'], {});
+  });
+
+  // Test2 E3: kilit zaten istenen yerdeyse yalnız bölme kaydı değişir; yazım yine yapılır ve geri listesi yalnız bölmeyi taşır.
+  test('kilit değişmeden yalnız bölme kaydı değişen yazım yazılır', () => {
+    const c = calisma(elleOps, { elleBol: bol, locks: { 'S1.10~2': { m: 'T3', S: 12 } } });
+    const r = isTasi(c, { isId: 'S1.10~2', tezgah: 'T3', baslangic: 12 }, KISI, tasimaHesabi);
+    assert.equal('deger' in r && r.degisti, true);
+    const d = yazilan(r);
+    assert.deepEqual(d.elleBol, { 'S1.10': [{ adet: 2, m: 'T1' }, { adet: 2, m: 'T3' }] });
+    assert.deepEqual(d.locks, { 'S1.10~2': { m: 'T3', S: 12 } });
+    assert.deepEqual(sonGeri(d), [{ yol: ['elleBol'], id: 'S1.10', once: bol['S1.10'] }]);
+  });
 });
