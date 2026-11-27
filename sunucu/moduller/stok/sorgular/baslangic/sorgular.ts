@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { BaslangicDuzeltmesi, CikisNedeni, HareketTuru, KonumTuru } from '#paylasilan/sozlesme/stok.ts';
 
@@ -30,9 +31,10 @@ export async function gozBakiyeleri(db: Db, ciftler: readonly { malzemeId: numbe
 export const tekrarBelgesi = (db: Db, ozet: string): Promise<{ id: number; no: string } | null> => db.tek(
   `SELECT m.id, m.no FROM stok_mal_kabul m WHERE m.tur = 'baslangic' AND m.dosya_ozeti = $1
       AND NOT EXISTS (SELECT 1 FROM stok_mal_kabul d WHERE d.duzeltilen_id = m.id) ORDER BY m.id LIMIT 1`, [ozet]);
-// İki yükleme aynı anda gelirse ikincisi birincinin bitmesini bekler; tekrar denetimi böylece yarışsızdır.
+// İki yükleme aynı anda gelirse ikincisi birincinin bitmesini bekler; tekrar denetimi böylece yarışsızdır. Kilit şemalıdır:
+// aynı veritabanındaki başka şemanın (paralel test dosyası) uzun yüklemesi bu şemanın yüklemesini ve takım açılışını bekletmez.
 export async function baslangicKilidi(db: Db): Promise<void> {
-  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('stok.baslangic-stogu'))");
+  await islemKilidiAl(db, 'stok.baslangic-stogu');
 }
 export const baslangicBelgesiAc = async (db: Db, b: {
   no: string; kisiId: number; dosyaOzeti: string; dosyaAdi: string; duzeltmeler: readonly BaslangicDuzeltmesi[];

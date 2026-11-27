@@ -15,6 +15,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { baslangicSatirDenetimi, logoyaGiderMi, type BaslangicSatirBaglami } from './kurallar.ts';
+import { baslangicKilidi } from './sorgular.ts';
 
 // 3129 (3134 a, 3144 a): başlangıç stoğu Excel'den tek mal kabul belgesiyle girer; denetim tutmazsa hiçbir şey yazılmaz, belge bütün
 // olarak ve yalnız hareket görmemişse geri alınır, aynı dosya geri alınmamış belgeyle ikinci kez girmez. Veriler uydurmadır (ORN-).
@@ -295,6 +296,33 @@ describe('stok: başlangıç stoğu (gerçek PostgreSQL)', () => {
     assert.equal(hl.length, 1, 'geri alma hareketi de başlangıç stoğu süzgecindedir');
     const asil = malKabullerCevabi.parse((await istek('depo', 'GET', '/stok/mal-kabuller?tur=baslangic&asil=1')).govde).satirlar;
     assert.ok(!asil.some((x) => x.duzeltilenId === temiz.id), 'geri alma kaydı asıl belgeler listesinde yok');
+  });
+
+  // 3823: test dosyaları aynı veritabanında ayrı şemalarda koşar; danışma kilidi bütün veritabanınındır. Başka şemanın yüklemesi
+  // kilidi tutarken (2000 satır ~48 sn) bu şemanın yüklemesi beklememeli. Başka şema, arama yolu değiştirilmiş transaction'la taklit edilir.
+  test('başka şemadaki başlangıç yüklemesinin kilidi bu şemanın yüklemesini bekletmez (3823)', async () => {
+    const k = await kart();
+    const g = await konum();
+    let tutuldu!: () => void, birak!: () => void;
+    const tutulduSoz = new Promise<void>((t) => { tutuldu = t; });
+    const birakSoz = new Promise<void>((t) => { birak = t; });
+    const baska = o().vt.tx(async (db) => {
+      await db.sorgu('SET LOCAL search_path TO pg_catalog');
+      await baslangicKilidi(db);
+      tutuldu();
+      await birakSoz;
+    });
+    await tutulduSoz;
+    try {
+      const bas = performance.now();
+      const y = await yukleKomutu([satir({ malzemeKodu: k.kod, konumKodu: g })], await yukle());
+      assert.equal(y.durum, 200, JSON.stringify(y.govde));
+      assert.equal(baslangicYukleCevabi.parse(y.govde).belge?.satirSayisi, 1);
+      assert.ok(performance.now() - bas < 5000, 'yükleme başka şemanın kilidini beklemedi');
+    } finally {
+      birak();
+      await baska;
+    }
   });
 
   test('K4: mal kabul formu başlangıç türü açamaz; başlangıç belgesi mal kabul düzeltmesiyle değişmez', async () => {
