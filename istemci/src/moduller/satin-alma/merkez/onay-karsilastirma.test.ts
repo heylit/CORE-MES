@@ -4,7 +4,8 @@ import { DEFAULT_SETTINGS } from './constants.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import { S, bump } from './store.ts';
 import { viewApproval } from './roles.ts';
-import { enIyiler, onayUyarilari } from './onay-karsilastirma.ts';
+import { enIyiler, onayUyarilari, teklifKartlariHTML } from './onay-karsilastirma.ts';
+import { money } from './util.ts';
 import { evaluate } from './calc.ts';
 
 // 3466-1 (karar C): onaylayanın ekranında teklifler tedarikçi kartları olarak yan yana.
@@ -134,5 +135,24 @@ describe('enIyiler', () => {
     expect([...enIyiler([3, 1, 2], 'min', [true, false, true])]).toEqual([2]);
     expect([...enIyiler([5, null], 'max', [true, true])]).toEqual([]);
     expect([...enIyiler([4, 4], 'max', [true, true])]).toEqual([]);
+  });
+});
+
+// 3799: onaya gönderimde sabitlenen kur onaycının kartında TL karşılığını verir; bugünkü kurla karşılığı yalnız not.
+describe('onay kartında sabit kur (3799)', () => {
+  it('kilitli onayda kur "sabit" işaretli, TL sabit kurla, bugünkü kurla notu ve nakliyenin TL karşılığı', () => {
+    const r = talep();
+    r.quotes[1] = teklif('qb', 'fb', { prices: { k1: 2, k2: 1 }, currency: 'EUR', fxRate: 38, deliveryIncluded: false, shipping: 3 });
+    r.award = { ...r.award!, quoteId: 'qb', fx: { EUR: 39 }, kurKilidi: '2026-11-25T11:20:00Z' };
+    S.requests = { t1: r };
+    S.settings = { ...DEFAULT_SETTINGS, approvalLimits: [{ max: null, role: 'Genel müdür' }], currencies: { ...DEFAULT_SETTINGS.currencies, EUR: { rate: 40, monthly: 0 } } };
+    bump();
+    const ev = evaluate(r);
+    const html = teklifKartlariHTML(r, ev, new Set(['qb']), 0);
+    expect(ev.all.find((x) => x.q.id === 'qb')!.c.totalTRY).toBe(25 * 39);
+    expect(html).toContain('<span class="flag info">sabit</span>');
+    expect(html).toContain('onaya gönderimde sabit, ');
+    expect(html).toContain('Bugünkü kurla');
+    expect(html).toContain(money(3 * 39));
   });
 });

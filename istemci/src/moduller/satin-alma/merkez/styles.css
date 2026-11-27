@@ -329,6 +329,12 @@
 .sa-kok .live{ display:flex; gap:var(--b-5); flex-wrap:wrap; font-size:var(--yazi-s); }
 .sa-kok .live b{ font-variant-numeric:tabular-nums; font-size:var(--yazi-m); display:block; color:var(--sa-ink); }
 .sa-kok .live span{ color:var(--sa-muted); }
+/* 3799: tutar bölünmez; dar ekranda üç kutu iki sütun, kur ve tarih etiketi sarılır. Kur kayma uyarısı dar kartta sarılır. */
+.sa-kok .live b{ white-space:nowrap; }
+@media (max-width: 480px){ .sa-kok .mf{ flex-wrap:wrap; } .sa-kok .live{ flex:1 1 100%; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:var(--b-2) var(--b-4); } }
+.sa-kok .flag.sa-kur-uyari{ white-space:normal; display:inline-block; max-width:100%; text-align:left; }
+/* 3799: uzun değer (kur uyarısı) satır adını ezmesin; ad en çok satırın %45i kadar yer tutar. */
+.sa-kok .sa-oy-satir > .sa-oy-k{ flex:0 0 auto; max-width:45%; }
 .sa-kok .rating{ display:flex; gap:var(--b-1); }
 .sa-kok .rating label{ cursor:pointer; }
 .sa-kok .rating input{ position:absolute; opacity:0; width:0; height:0; }

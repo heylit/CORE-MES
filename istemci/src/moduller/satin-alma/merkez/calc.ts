@@ -32,6 +32,9 @@ export function rateOf(q: Quote, set: Settings): number {
  * Sipariş verilince kurlar karara sabitlenir; sabit kur yoksa teklif günü kuru kullanılır.
  */
 export const liveRates = (req: PurchaseRequest): boolean => OPEN.includes(req.status);
+/** Onaya gönderilince sunucu kuru karara sabitler (1096 a). Onaydaki talep TL karşılığını bu kurla gösterir; sunucunun onay
+ *  basamağı ve karar tutarı da bu kurla hesaplanır, onaycının gördüğü sayı kur oynadıkça değişmez. */
+export const kurKilitli = (req: PurchaseRequest): boolean => req.status === "approval" && !!req.award?.kurKilidi;
 /** Finansın güncel kuru; finansta yoksa boş (SA3 a). */
 export function liveRate(c: Currency, set: Settings): number | null {
   if (c === "TRY") return 1;
@@ -43,10 +46,19 @@ export function rateFor(req: PurchaseRequest, q: Quote, set: Settings): number {
   if (q.currency === "TRY") return 1;
   const own = isNum(q.fxRate) && q.fxRate > 0 ? q.fxRate : null;
   const cur = liveRate(q.currency, set);
-  if (liveRates(req)) return cur ?? own ?? 1;
+  if (liveRates(req) && !kurKilitli(req)) return cur ?? own ?? 1;
   const fx = req.award?.fx?.[q.currency];
   if (isNum(fx) && fx > 0) return fx;
   return own ?? cur ?? 1;
+}
+/** Sabit kurlu tutarın bugünkü kurla karşılığı ve farkı (yalnız bilgi). Kilit yoksa, TL teklifte, güncel kur yoksa ya da kur
+ *  aynıysa boş. */
+export function guncelKurFarki(req: PurchaseRequest, q: Quote, c: Pick<QuoteCalc, "rate" | "total" | "totalTRY">, set: Settings): { tl: number; yuzde: number } | null {
+  if (!kurKilitli(req) || q.currency === "TRY") return null;
+  const g = liveRate(q.currency, set);
+  if (g === null || Math.abs(g - c.rate) < 1e-9) return null;
+  const tl = c.total * g;
+  return { tl, yuzde: c.totalTRY > 0 ? ((tl - c.totalTRY) / c.totalTRY) * 100 : 0 };
 }
 /** Sipariş anında sabitlenen kur: güncel kur, finansta yoksa o para birimindeki ilk teklifin kuru. */
 export function fixedRates(r: PurchaseRequest, set: Settings): Record<string, number> {
@@ -550,9 +562,17 @@ export function esitVadeAyari(req: PurchaseRequest, set: Settings): Settings {
   const currencies = Object.fromEntries(Object.entries(set.currencies).map(([k, v]) => [k, { ...v, monthly: null }])) as Settings["currencies"];
   return { ...set, currencies };
 }
+/** Onaydaki kilitli kararda vade faizi de onaya gönderimde sabitlenendir (sunucunun kararKurlari'yla aynı); sabit faizi boş
+ *  para birimi "faiz girilmedi" sayılır. Kilit yoksa ayar olduğu gibi döner. */
+export function kararFaizAyari(req: PurchaseRequest, set: Settings): Settings {
+  const sabit = kurKilitli(req) ? req.award?.sabitFaiz : undefined;
+  if (!sabit || Object.keys(sabit).length === 0) return set;
+  const currencies = Object.fromEntries(Object.entries(set.currencies).map(([k, v]) => [k, k in sabit ? { ...v, monthly: sabit[k] ?? null } : v])) as Settings["currencies"];
+  return { ...set, currencies };
+}
 export function evaluate(req: PurchaseRequest, wOverride?: Weights | null): Evaluation {
   const run = (): Evaluation => {
-    const set = esitVadeAyari(req, settings()), items = req.items ?? [];
+    const set = esitVadeAyari(req, kararFaizAyari(req, settings())), items = req.items ?? [];
     const all: EvalRow[] = (req.quotes ?? []).map((q) => ({ q, c: quoteCalc(req, q, set), sup: S.suppliers[q.supplierId], fill: 0, scorePV: 0, s: zero(), parts: zero(), score: 0, late: null, suspended: false }));
     // 3574-1 R2: siparişte eklenen firma (teklifsiz) karşılaştırmaya girmez; all içinde kalır, karar tutarı ondan hesaplanır.
     const elig = all.filter((x) => x.q.compliant !== false && x.c.covered > 0 && x.q.source !== "siparis");

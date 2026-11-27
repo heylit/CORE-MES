@@ -4,7 +4,7 @@ import { CRIT, FLOW, OPEN, COMMITTED, PRIO, QUALITY, stLabel } from "./constants
 import { SIMGELER } from "../../../ortak/tasarim/simgeler.ts";
 import { S, V, memo, nameOf, settings, type Page } from "./store.ts";
 import { onaylayabilecekler } from "./onaylayan.ts";
-import { kararAyrintisiHTML, onaylayanOzeti } from "./karar-ayrintisi.ts";
+import { kararAyrintisiHTML, kilitMetni, kurFarkiHTML, onaylayanOzeti } from "./karar-ayrintisi.ts";
 import {
   awardTotals, budgetUse, evaluate, lateBy, matOf, matStats, payText, priceHistory, quoteCalc, requiredApprover,
   savingsOf, spendLines, supName, supplierStats, validity, vsLast, fiyatUyarisi, type EvalRow, type Evaluation, type PriceEntry,
@@ -741,12 +741,15 @@ function matrixHTML(r: PurchaseRequest, ev: Evaluation): string {
       cols.map(x => { const l = x.c.lines[it.id]; if (!l) return '<span class="faint">teklif yok</span>'; const d = vsLast(r, it, l.unit * x.c.unitTRY); return `${money(l.unit, x.q.currency)}${kademeRozeti(x.q, it)}${alternatifRozeti(x.q, it)}<span class="sub">${money(l.line, x.q.currency)}${d ? " " + deltaHTML(d.pct) : ""}</span>${l.ust ? `<span class="sub">${esc(numIn(l.ust.min))} ${esc(it.unit)} alınırsa ${money(l.ust.line, x.q.currency)}</span>` : ""}`; }), vals, "min");
   });
   h += sec("Ticari şartlar");
+  // 3799: nakliye ve masrafın altında TL karşılığı (talebin kuruyla; onayda sabit kur). Ara toplam iskontodan önce olduğu için TL almaz.
+  const tl = (x: EvalRow, n: number) => `${money(n, x.q.currency)}${x.q.currency === "TRY" ? "" : `<span class="sub">${money(n * x.c.rate)}</span>`}`;
+  const kilit = kilitMetni(r);
   h += row("Ara toplam", cols.map(x => money(x.c.sub, x.q.currency)));
   h += row("İskonto", cols.map(x => x.c.disc ? "%" + nfx.format(x.c.disc * 100) : "–"));
-  h += row("Nakliye ve diğer masraflar", cols.map(x => x.q.deliveryIncluded && !x.c.other ? "dahil" : money(x.c.ship + x.c.other, x.q.currency)));
+  h += row("Nakliye ve diğer masraflar", cols.map(x => x.q.deliveryIncluded && !x.c.other ? "dahil" : tl(x, x.c.ship + x.c.other)));
   h += row("Toplam (teklif para birimi)", cols.map(x => money(x.c.total, x.q.currency)));
-  h += row(OPEN.includes(r.status) ? "Kur (güncel)" : "Kur (sipariş günü)", cols.map(x => x.q.currency === "TRY" ? "–" : `${nfx.format(x.c.rate)}${isNum(x.q.fxRate) && Math.abs(x.q.fxRate - x.c.rate) > 1e-6 ? `<span class="sub">teklif günü ${nfx.format(x.q.fxRate)}</span>` : ""}`));
-  h += row("Toplam TL", cols.map(x => money(x.c.totalTRY)), cols.map(x => x.c.covered === items.length ? x.c.totalTRY : null), "min", "key");
+  h += row(kilit !== null ? "Kur (onaya gönderimde sabit)" : OPEN.includes(r.status) ? "Kur (güncel)" : "Kur (sipariş günü)", cols.map(x => x.q.currency === "TRY" ? "–" : `${nfx.format(x.c.rate)}${kilit !== null && isNum(r.award?.fx?.[x.q.currency]) ? `<span class="sub">${esc(kilit)}</span>` : ""}${isNum(x.q.fxRate) && Math.abs(x.q.fxRate - x.c.rate) > 1e-6 ? `<span class="sub">teklif günü ${nfx.format(x.q.fxRate)}</span>` : ""}`));
+  h += row("Toplam TL", cols.map(x => `${money(x.c.totalTRY)}${kurFarkiHTML(r, x)}`), cols.map(x => x.c.covered === items.length ? x.c.totalTRY : null), "min", "key");
   h += row("Ödeme şekli", cols.map(x => payText(x.q)), cols.map(x => (parseNum(x.q.payDays) || 0) * (1 - clamp((parseNum(x.q.advancePct) || 0) / 100, 0, 1))), "max", "wrap");
   h += row("Vade avantajı", cols.map(x => x.c.faizYok ? "faiz girilmedi" : x.c.vadeGain > 0.5 ? money(x.c.vadeGain) : "–"));
   h += row("Net bugünkü maliyet", cols.map(x => money(x.c.pvTRY)), cols.map(x => x.c.covered === items.length ? x.c.pvTRY : null), "min", "key");

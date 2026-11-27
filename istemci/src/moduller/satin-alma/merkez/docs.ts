@@ -4,7 +4,7 @@
 import type { PurchaseRequest } from "./tipler.ts";
 import { OPEN, PRIO } from "./constants.ts";
 import { S, nameOf, settings } from "./store.ts";
-import { approvalState, awardOrders, awardTotals, evaluate, orderDue, payText, requiredApprover, siparisEtiketi, supName, type OrderInfo } from "./calc.ts";
+import { approvalState, awardOrders, awardTotals, evaluate, kurKilitli, orderDue, payText, requiredApprover, siparisEtiketi, supName, type OrderInfo } from "./calc.ts";
 import { odemeAyrintisi } from "./karar-ayrintisi.ts";
 import { teklifMetniSatirlari } from "./kalem-bagi.ts";
 import { talepRehberi } from "./onayli-ekran.ts";
@@ -23,7 +23,7 @@ function odemeHucreleri(r: PurchaseRequest, o: OrderInfo | undefined, tt: Return
   if (!o || !x) return { tutar: "–", odeme: "" };
   const tl = o.items.reduce((t, it) => t + (x.c.lines[it.id]?.line ?? 0) * x.c.unitTRY, 0) + (x.c.ship + x.c.other) * x.c.rate;
   const pay = x.c.totalTRY > 0 ? tl / x.c.totalTRY : 0, d = odemeAyrintisi(r, x);
-  const kur = x.q.currency === "TRY" ? "" : `kur ${nfx.format(d.kur)} (${d.kurKaynagi === "guncel" ? "güncel" : d.kurKaynagi === "sabit" ? "sipariş günü" : "teklif günü"})`;
+  const kur = x.q.currency === "TRY" ? "" : `kur ${nfx.format(d.kur)} (${d.kurKaynagi === "guncel" ? "güncel" : d.kurKaynagi === "kilit" ? "onaya gönderimde sabit" : d.kurKaynagi === "sabit" ? "sipariş günü" : "teklif günü"})`;
   const avans = d.avans ? `avans ${money(d.avans.tl * pay, "TRY", 0)}, ${fmtDate(d.avans.gun)}` : "";
   const kalan = d.kalan ? `vadeli ${money(d.kalan.tl * pay, "TRY", 0)}, ${d.kalan.gun ? fmtDate(d.kalan.gun) : "teslim günü bilinmiyor"}` : "";
   const faiz = d.aylikFaiz === null ? "" : `aylık faiz %${nfx.format(d.aylikFaiz)}`;
@@ -84,7 +84,7 @@ export function approvalFormHTML(r: PurchaseRequest, kalanKalemSayisi = 0): stri
       ${ev.all.filter((x) => !ev.elig.includes(x)).map((x) => `<tr><td>${esc(supName(x.q))} <small>(değerlendirme dışı)</small></td><td class="r">${money(x.c.totalTRY, "TRY", 0)}</td><td colspan="5"></td></tr>`).join("")}
     </tbody></table>` : ""}
     <h3>Gerekçe</h3><p class="doc-box">${esc(gerekce)}${agirlik ? `<br><small>Değerlendirme ağırlığı: ${esc(agirlik)} (maliyet ${ev!.w.cost}, termin ${ev!.w.lead}, tedarikçi ${ev!.w.supplier}, garanti ${ev!.w.warranty})</small>` : ""}</p>
-    <p class="doc-note">* Tedarikçinin bütün kalemleri tek başına aldığındaki net maliyet; bu kararın tutarı "Bu karar" sütunundadır. Tutarlar KDV hariç.${faizsiz ? " Faiz Finans'ta girilmediği için vade etkisi hesaba katılmadı." : ""}${dovizli ? ` Döviz teklifler ${OPEN.includes(r.status) ? "güncel kurla" : a?.fx ? "sipariş günü sabitlenen kurla" : "teklif günündeki kurla"} TL'ye çevrilmiştir.` : ""} Ödeme günleri tahminidir (vadeli kısım ${a?.vadeBaslangici === "siparis" ? "siparişten" : "beklenen teslimden"} sayılır).</p>
+    <p class="doc-note">* Tedarikçinin bütün kalemleri tek başına aldığındaki net maliyet; bu kararın tutarı "Bu karar" sütunundadır. Tutarlar KDV hariç.${faizsiz ? " Faiz Finans'ta girilmediği için vade etkisi hesaba katılmadı." : ""}${dovizli ? ` Döviz teklifler ${kurKilitli(r) ? "onaya gönderimde sabitlenen kurla" : OPEN.includes(r.status) ? "güncel kurla" : a?.fx ? "sipariş günü sabitlenen kurla" : "teklif günündeki kurla"} TL'ye çevrilmiştir.` : ""} Ödeme günleri tahminidir (vadeli kısım ${a?.vadeBaslangici === "siparis" ? "siparişten" : "beklenen teslimden"} sayılır).</p>
     <div class="doc-onay"><h3>Onay</h3>
     <p class="doc-note">Gereken onay seviyesi: <b>${esc(ap?.role || "–")}</b>${tt ? ` (${money(tt.totalTRY, "TRY", 0)})` : ""}${(a?.approvals || []).length ? "<br>" + (a?.approvals || []).map((x) => `${fmtTs(x.at)}: ${x.decision === "approved" ? "Onaylandı" : "Reddedildi"}, ${esc(x.name || nameOf(x.by))}${x.note ? " (" + esc(x.note) + ")" : ""}`).join("<br>") : ""}</p>
     <div class="sigs">${sign("Talep eden", r.requester || "")}${sign("Satın alma", a?.by || "")}${sign("Onaylayan", onaylayanAdi(r) || (ap ? `Bekleniyor: ${ap.role}` : ""))}</div></div>

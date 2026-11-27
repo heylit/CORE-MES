@@ -9,7 +9,7 @@ import type { PurchaseRequest, RequestItem } from "./tipler.ts";
 import { COMMITTED, FLOW, OPEN, PRIO, stLabel } from "./constants.ts";
 import { S, settings } from "./store.ts";
 import { onaylayabilecekler } from "./onaylayan.ts";
-import { approvalState, awardOrders, awardTotals, budgetUse, evaluate, lateBy, orderDue, panoSayilari, payText, requiredApprover, supName, teslimBasarimi } from "./calc.ts";
+import { approvalState, awardOrders, awardTotals, budgetUse, evaluate, kurKilitli, lateBy, orderDue, panoSayilari, payText, requiredApprover, supName, teslimBasarimi } from "./calc.ts";
 import { addDays, dayDiff, esc, fmtDate, fmtTs, money, nf0, numIn, parseNum, pct, todayStr } from "./util.ts";
 import { empty, faizUyarisi, headerFacts, prioDot, reqChip, tabItems, tabLog, verdictReasons } from "./views.ts";
 import { onayDagilimiHTML } from "./karar-matrisi.ts";
@@ -309,7 +309,7 @@ export function viewApproval(r: PurchaseRequest): string {
         ${teklifKartlariHTML(r, ev, secilen, tt.pvTRY)}
         ${disarida.length ? `<p class="small muted">Değerlendirme dışı: ${disarida.map(x => esc(supName(x.q)) + (x.q.compliant === false ? " (teknik uygun değil)" : " (fiyat girilmemiş)")).join(", ")}</p>` : ""}
         ${faizUyarisi(ev.elig.filter(x => x.c.faizYok).map(x => x.q.currency))}
-        <p class="small muted">${simge("target")} satırın en iyi değeri. Tutarlar KDV hariç. Net bugünkü maliyet vade etkisi dahil, ${r.status === "approval" ? "güncel" : "sipariş günü"} kurla TL.${r.award.mode === "split" ? " Bölünmüş kararda kartlar tekliflerin tamamıdır; siparişlere düşen tutar Onay formundadır." : ""}</p>
+        <p class="small muted">${simge("target")} satırın en iyi değeri. Tutarlar KDV hariç. Net bugünkü maliyet vade etkisi dahil, ${r.status === "approval" ? (kurKilitli(r) ? "onaya gönderimde sabitlenen" : "güncel") : "sipariş günü"} kurla TL.${r.award.mode === "split" ? " Bölünmüş kararda kartlar tekliflerin tamamıdır; siparişlere düşen tutar Onay formundadır." : ""}</p>
       </div></section>
       <details class="adv"><summary>Kalemler ve hareket geçmişi</summary>${tabItems(r, true)}${tabLog(r)}</details>
     </div>
