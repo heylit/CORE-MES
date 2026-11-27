@@ -114,6 +114,8 @@ export function HucrePaneli({ kalem, yazabilir, katli, statuYaz, mesgul, kapat, 
   const ozet = hazirlikOzeti(adim);
   const icerik = (
     <>
+      {/* Başlığın hemen altında: geç yüklenen "Bu OP'ye özel" bölümü aşağıda büyür, bağlantı yerinden kaymaz. */}
+      <Link className="tc-dugme tc-dugme-ikincil tc-dugme-normal tc-am-emri-ac" to={`/adim-durumu?emir=${String(emir.emirId)}`}>Emri aç</Link>
       <p className="tc-emir-not">{emir.urun.ad}{emir.teslim === null ? '' : ` · termin ${tarihMetni(emir.teslim)}`}</p>
       <div className="tc-am-panel-durum">
         <Rozet ton={STATU[g].ton}><Simge ad={STATU[g].simge} boyut="k" />{katli ? statuKisaAdi(g, STATU[g].ad) : STATU[g].ad}</Rozet>
@@ -144,7 +146,6 @@ export function HucrePaneli({ kalem, yazabilir, katli, statuYaz, mesgul, kapat, 
         {adim.maddeler.length === 0 ? <p className="tc-emir-not">Bu adımın hazırlık maddesi yok.</p> : <ul className="tc-am-maddeler">{adim.maddeler.map(maddeSatiri)}</ul>}
       </section>
       <OpOzelBolumu emirId={emir.emirId} isEmriId={adim.isEmriId} duzenler={duzenler} maddeler={adim.maddeler} yenile={yenile} />
-      <Link className="tc-dugme tc-dugme-ikincil tc-dugme-normal" to={`/adim-durumu?emir=${String(emir.emirId)}`}>Emri aç</Link>
     </>
   );
   if (katli) {
