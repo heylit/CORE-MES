@@ -102,6 +102,37 @@ test.describe('sayaç tüpleri ve teslim düğmeleri', () => {
     });
   });
 
+  // Geniş düzende sıra kartının satırları (etiket, parça adı, emir no, ayrıntı) %130 yazıda yarıdan kesilmez; kısa pencerede de.
+  for (const yukseklik of [900, 800, 700]) {
+    test(`1280x${String(yukseklik)} %130 yazıda sıradaki iş kartı satırları kesilmez`, async ({ page, ac }, bilgi) => {
+      test.skip(bilgi.project.name !== 'g1280', 'geniş düzen');
+      await page.setViewportSize({ width: 1280, height: yukseklik });
+      await page.addInitScript(() => document.addEventListener('DOMContentLoaded', () => {
+        const st = document.createElement('style');
+        st.textContent = ':root { --yazi-xs: 15.6px; --yazi-s: 18.2px; --yazi-m: 20.8px; --yazi-l: 23.4px; --yazi-xl: 31.2px; }';
+        document.head.appendChild(st);
+      }));
+      await kur(page, true);
+      await ac('/uretim-terminali');
+      const sira = page.locator('.tc-ay1-genis .tc-ay1-sira');
+      await expect(sira.locator('.tc-ay1-sk-parca').first()).toContainText('ORN gövde', { timeout: 15_000 });
+      await expect(async () => {
+        const satirlar = await sira.locator('.tc-ay1-sk').first().evaluate((k) => {
+          const c = k.getBoundingClientRect();
+          return [...k.querySelectorAll(':scope .tc-ay1-sk-ic > *, :scope .tc-ay1-sk-ayrinti > div > *')].filter((e) => e.clientHeight > 0).map((e) => {
+            const r = e.getBoundingClientRect();
+            return { ad: e.className || e.tagName, fark: e.scrollHeight - e.clientHeight, ust: c.top - r.top, alt: r.bottom - c.bottom };
+          });
+        });
+        expect(satirlar.length).toBeGreaterThanOrEqual(4);
+        for (const s of satirlar) {
+          expect(s.fark, `${s.ad} satırı kesiliyor`).toBeLessThanOrEqual(1);
+          expect(Math.max(s.ust, s.alt), `${s.ad} kartın dışına taşıyor`).toBeLessThanOrEqual(1);
+        }
+      }).toPass({ timeout: 10_000 });
+    });
+  }
+
   test('%130 yazıda tüp adları ve düğmeler okunur, ekrandan taşmaz', async ({ page, ac }, bilgi) => {
     test.skip(bilgi.project.name !== 'g360', 'telefon düzeni');
     await kur(page, true);
