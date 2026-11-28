@@ -135,3 +135,6 @@
 .tc-dy-grafik-tablo td { text-align: end; }
 .tc-dy-gosterge { display: flex; flex-wrap: wrap; gap: var(--b-4); margin: 0 0 var(--b-2); padding: 0; list-style: none; font-size: var(--yazi-s); }
 .tc-dy-gosterge li { display: inline-flex; align-items: center; gap: var(--b-1); }
+
+/* 3827: emir bağlantısı satır boyunca dokunulabilir. */
+.tc-dy-emir-baglantisi { display: inline-flex; align-items: center; min-height: var(--dokunma); text-decoration: underline; }

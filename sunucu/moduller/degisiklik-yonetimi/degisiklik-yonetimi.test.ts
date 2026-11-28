@@ -601,7 +601,7 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     try {
       const nc = (await tamam<KonfigurasyonCevabi>(acan, 'GET', `${K}/konfigurasyon/${flans}`)).baseline?.[0];
       assert.deepEqual(nc?.ncProgramlari, ['OP10 ORN_OP10.H s3']);
-      assert.equal(nc?.ogeler.find((o) => o.tur === 'nc-programi')?.etiket, 'ORN_OP10.H s3');
+      assert.equal(nc?.ogeler.find((o) => o.tur === 'nc-programi')?.etiket, 'ORN_OP10.H (güncel s3)');
     } finally {
       ncProgramCozucusuKaydet(null);
     }

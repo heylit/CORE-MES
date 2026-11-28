@@ -744,7 +744,8 @@ export async function konfigurasyon(db: Db, malzemeId: number): Promise<Konfigur
   const rotaYururlugu = new Map(kunyeler.map((k) => [k.id, k.yururlukteId]));
   const cizimKodu = new Map((cizim?.revizyonlar ?? []).map((r) => [r.revizyonId, r.revKodu]));
   const yayindakiCizim = cizim?.revizyonlar.find((r) => r.durum === 'yayinda') ?? null;
-  const ncEtiketi = new Map((nc ?? []).map((p) => [p.id, `${p.ad} s${p.surum}`]));
+  // NC programı aynı satırda sürümlenir (proses): etiket onaylanan sürümü değil bugünkünü söyler; sürüm emre sabitlenince (dilim 2) değişir.
+  const ncEtiketi = new Map((nc ?? []).map((p) => [p.id, `${p.ad} (güncel s${p.surum})`]));
   const etiket = (tur: OgeTuru, id: number): string | null =>
     tur === 'rota' ? rotaHarfi.get(id) ?? null
       : tur === 'cizim' ? cizimKodu.get(id) ?? null

@@ -128,6 +128,27 @@ describe('Konfigürasyon', () => {
     const gecmis = screen.getByRole('table', { name: 'Revizyon geçmişi' });
     expect(within(gecmis).getAllByText('Yürürlükte')).toHaveLength(1);
     expect(within(gecmis).getByText('ECO-0031')).toBeTruthy();
+    // Yürürlükte rozeti son yayının (ilk satır) satırında; emrin çizim revizyonu emre sabitlenen koddur.
+    const gecmisSatirlari = within(gecmis).getAllByRole('row').slice(1);
+    expect(within(gecmisSatirlari[0] as HTMLElement).getByText('Yürürlükte')).toBeTruthy();
+    expect(within(gecmisSatirlari[1] as HTMLElement).getByText('Eski')).toBeTruthy();
+    const ue41 = within(emirler).getByRole('link', { name: 'UE-41' }).closest('tr') as HTMLElement;
+    expect(within(ue41).getByText('C')).toBeTruthy();
+  });
+
+  it('3827: emir listesi ilk beşi gösterir, Tümünü göster hepsini açar', async () => {
+    const emirler = Array.from({ length: 7 }, (_, i) => ({
+      id: 50 + i, emirNo: `UE-${50 + i}`, durum: 'planli' as const, adet: 1, rotaRevizyonu: null, rotaYururlukte: null, cizimRevizyonu: null,
+    }));
+    sunucuKur({
+      '/degisiklik-yonetimi/son-urunler': () => json(200, urunler),
+      '/degisiklik-yonetimi/konfigurasyon/5': () => json(200, konfig({ emirler })),
+    });
+    cizdir('/degisiklik-yonetimi/konfigurasyon/5');
+    const tablo = await screen.findByRole('table', { name: 'Bu parçanın emirleri' });
+    expect(within(tablo).getAllByRole('link')).toHaveLength(5);
+    fireEvent.click(screen.getByRole('button', { name: 'Tümünü göster (7)' }));
+    expect(within(screen.getByRole('table', { name: 'Bu parçanın emirleri' })).getAllByRole('link')).toHaveLength(7);
   });
 
   it('şeritteki seriye tıklayınca İzlenebilirlik o seriyle açılır', async () => {
