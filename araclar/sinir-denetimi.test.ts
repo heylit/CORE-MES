@@ -632,6 +632,29 @@ test('kural j: sunucu dışarıya yalnız istisna ADR\'lerinin dosyasından iste
   assert.deepEqual(kurallar('sunucu/cekirdek/arayuz.ts', "import { createServer as httpsSunucusu } from 'node:https';"), []);
 });
 
+test('kural k: danışma kilidi çekirdek dışında yalnız kilit yardımcısıyla alınır', () => {
+  const cagrilar = [
+    "await db.sorgu(\"SELECT pg_advisory_xact_lock(hashtext('stok'))\");",
+    "await db.sorgu('SELECT pg_try_advisory_xact_lock($1)', [anahtar]);",
+    "const r = await db.tek(`SELECT pg_advisory_lock(${ANAHTAR})`);",
+    "await db.sorgu('SELECT pg_advisory_unlock_all()');",
+    "  `SELECT pg_advisory_xact_lock_shared(1)`,",
+  ];
+  for (const satir of cagrilar) {
+    for (const dosya of ['sunucu/moduller/stok/sorgular.ts', 'sunucu/moduller/stok/servis.test.ts', 'sunucu/moduller/arkon/yansima.test.ts', 'paylasilan/zaman.ts']) {
+      assert.deepEqual(kurallar(dosya, satir), ['k'], `${dosya}: ${satir}`);
+    }
+    for (const dosya of ['sunucu/cekirdek/kilit.ts', 'sunucu/cekirdek/goc.ts', 'sunucu/cekirdek/kilit.test.ts', 'istemci/src/ortak/api.ts', 'araclar/teslim-denetle.ts']) {
+      assert.deepEqual(kurallar(dosya, satir), [], `${dosya}: ${satir}`);
+    }
+  }
+  for (const satir of [
+    "await islemKilidiAl(db, 'stok_ayirma_istegi');",
+    "// pg_advisory_xact_lock burada yok",
+    "`SELECT count(*) FROM pg_locks WHERE locktype = 'advisory'`,",
+  ]) assert.deepEqual(kurallar('sunucu/moduller/stok/sorgular.ts', satir), [], satir);
+});
+
 test('kural i (ADR 0031): push servisi adı uygulama kodunda yalnız push.ts\'de', () => {
   for (const satir of [
     "const a = 'https://fcm.googleapis.com/fcm/send/x';",

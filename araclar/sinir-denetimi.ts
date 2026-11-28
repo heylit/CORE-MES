@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 export interface Ihlal {
   dosya: string;
   satir: number;
-  kural: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j';
+  kural: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k';
   mesaj: string;
 }
 
@@ -55,6 +55,11 @@ const DIS_ISTEK_J =
 const AG_ISTEMCI_ITHALI = /^(?:node:)?(?:https|tls|http2|dgram)$|^(?:undici|ws)$/;
 const HTTPS_SUNUCUSU = 'sunucu/cekirdek/arayuz.ts';
 const AG_ISTEMCI_ADI = /\{[^}]*\b(?:request|get|connect|createConnection)\b[^}]*\}\s*from\s*['"](?:node:)?(?:https?|net|tls)['"]/;
+
+// Danışma kilidi bütün veritabanına aittir; anahtarı şemalı kuran tek yer çekirdeğin kilit yardımcısıdır. Doğrudan çağrı
+// şemasız anahtar kurabilir ve paralel test şemalarını birbirine bekletir. Testler de kilidi yardımcıyla tutar.
+const DANISMA_KILIDI = /\bpg_(?:try_)?advisory_/;
+const CEKIRDEK = 'sunucu/cekirdek';
 
 const TAKMA_ADLAR: ReadonlyArray<readonly [string, string]> = [
   ['#paylasilan/', 'paylasilan/'],
@@ -167,6 +172,7 @@ export function ihlalleriBul(dosya: string, icerik: string): Ihlal[] {
   const pushAdiDenetlenir = pushDisi && TARANAN_KLASORLER.some((klasor) => altinda(dosya, klasor));
   const disIstekJ = !testKenariMi(dosya) && (altinda(dosya, 'sunucu') || altinda(dosya, 'paylasilan')) && !dosya.startsWith(BILDIRIM_SUNUCU) &&
     !DIS_ISTEK_IZINLI.some((izinli) => (izinli.endsWith('/') ? dosya.startsWith(izinli) : dosya === izinli));
+  const kilitDenetlenir = (altinda(dosya, 'sunucu') || altinda(dosya, 'paylasilan')) && !altinda(dosya, CEKIRDEK);
 
   icerik.split(/\r?\n/).forEach((satir, sira) => {
     const satirNo = sira + 1;
@@ -198,6 +204,10 @@ export function ihlalleriBul(dosya: string, icerik: string): Ihlal[] {
     if (disIstekJ && (DIS_ISTEK_J.test(satir) || AG_ISTEMCI_ADI.test(satir) ||
       (dosya !== HTTPS_SUNUCUSU && ITHAL_DESENLERI.some((desen) => [...satir.matchAll(desen)].some((e) => AG_ISTEMCI_ITHALI.test(e[1] ?? '')))))) {
       ihlaller.push({ dosya, satir: satirNo, kural: 'j', mesaj: 'dış istek yalnız istisna ADR\'lerinin dosyasında olur (CLAUDE.md kırmızı çizgiler)' });
+    }
+
+    if (kilitDenetlenir && DANISMA_KILIDI.test(satir)) {
+      ihlaller.push({ dosya, satir: satirNo, kural: 'k', mesaj: 'danışma kilidi yalnız #cekirdek/kilit.ts yardımcısıyla alınır (anahtar şemalı olmalı)' });
     }
 
     if (sqlDenetlenir && SQL_CAGRISI.test(satir)) {

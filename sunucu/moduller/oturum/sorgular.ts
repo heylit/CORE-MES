@@ -1,5 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
+import { ozetliKilitAl, ozetliKilitDene } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { CihazProfili } from '#paylasilan/kullanici.ts';
 import { denemeKilitAnahtari } from './kurallar.ts';
@@ -114,14 +115,8 @@ export async function denemeEkle(db: Db, kullaniciAdi: string, sonuc: DenemeSonu
 // tutar, tek cihaz havuzu doldururdu. Kilit transaction bitince kendiliğinden bırakılır.
 // Advisory kilit veritabanı genelindedir; anahtara şema katılır ki aynı veritabanındaki başka şemanın
 // (paralel test koşusu) aynı cihazı bu şemanın girişini reddettirmesin.
-export async function denemeKilidiAl(db: Db, ip: string): Promise<boolean> {
-  const satir = await db.tek<{ alindi: boolean }>(
-    `SELECT pg_try_advisory_xact_lock(
-              ('x' || left(encode(sha256(convert_to(coalesce(current_schema(), '') || ':' || $1::text, 'UTF8')), 'hex'), 16))::bit(64)::bigint
-            ) AS alindi`,
-    [denemeKilitAnahtari(ip)],
-  );
-  return satir?.alindi === true;
+export function denemeKilidiAl(db: Db, ip: string): Promise<boolean> {
+  return ozetliKilitDene(db, denemeKilitAnahtari(ip));
 }
 
 export interface HataliSeri {
@@ -412,7 +407,7 @@ export async function oturumKimlikleKapat(db: Db, oturumId: number, haricOzet: s
 // Süresi dolmuş ya da belirteci alınmış istekler silinir (zamanlanmış iş yok); sonra bekleyen istek sayıları okunur.
 // Sayma ile ekleme arasında eşzamanlı istek sınırı aşmasın diye açışlar transaction kilidiyle sıraya girer (az ve kısa iştir).
 export async function saatIstekleriniTemizleSay(db: Db, ip: string): Promise<{ genel: number; cihaz: number }> {
-  await db.sorgu("SELECT pg_advisory_xact_lock(('x' || left(encode(sha256(convert_to(coalesce(current_schema(), '') || ':oturum_saat_istegi', 'UTF8')), 'hex'), 16))::bit(64)::bigint)");
+  await ozetliKilitAl(db, 'oturum_saat_istegi');
   await db.sorgu('DELETE FROM oturum_saat_istegi WHERE son <= now() OR alindi IS NOT NULL');
   const satir = await db.tek<{ genel: number; cihaz: number }>(
     'SELECT count(*)::int AS genel, (count(*) FILTER (WHERE ip = $1))::int AS cihaz FROM oturum_saat_istegi',
