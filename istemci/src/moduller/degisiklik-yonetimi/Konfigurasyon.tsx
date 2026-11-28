@@ -231,14 +231,12 @@ export function Konfigurasyon() {
                       </>
                     )}
                 </Kart>
-                <div className="tc-dy-uc-iki">
-                  <Kart baslik="Bu parçanın emirleri" simge="list" baslikEki={<span className="tc-dy-soluk">Son 20 emir ve emre sabitlenen revizyonlar</span>}>
-                    <ParcaEmirleri emirler={sorgu.data.emirler} />
-                  </Kart>
-                  <Kart baslik="Açık değişiklikler" simge="edit">
-                    <AcikDegisiklikler liste={sorgu.data.acikDegisiklikler} />
-                  </Kart>
-                </div>
+                <Kart baslik="Bu parçanın emirleri" simge="list" baslikEki={<span className="tc-dy-soluk">Son 20 emir ve emre sabitlenen revizyonlar</span>}>
+                  <ParcaEmirleri emirler={sorgu.data.emirler} />
+                </Kart>
+                <Kart baslik="Açık değişiklikler" simge="edit">
+                  <AcikDegisiklikler liste={sorgu.data.acikDegisiklikler} />
+                </Kart>
                 <Kart baslik="Revizyon geçmişi" simge="clock">
                   <Tablo
                     etiket="Revizyon geçmişi" kip="kayit" sutunlar={gecmisSutunlari} satirlar={sorgu.data.revizyonGecmisi.map((g, i) => ({ ...g, yururlukte: i === 0 }))}

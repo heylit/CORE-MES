@@ -16,11 +16,10 @@
 .tc-dy-urunler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
 .tc-dy-gizli { position: absolute; width: var(--cizgi-ince); height: var(--cizgi-ince); overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-.tc-dy-iki-bir, .tc-dy-uc-iki, .tc-dy-bir-bir, .tc-dy-liste-ayrinti { display: grid; gap: var(--b-4); grid-template-columns: minmax(0, 1fr); }
+.tc-dy-iki-bir, .tc-dy-bir-bir, .tc-dy-liste-ayrinti { display: grid; gap: var(--b-4); grid-template-columns: minmax(0, 1fr); }
 .tc-dy-ayrinti { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
 @media (min-width: 1024px) {
   .tc-dy-iki-bir { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
-  .tc-dy-uc-iki { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
   .tc-dy-bir-bir { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .tc-dy-liste-ayrinti { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); align-items: start; }
 }
