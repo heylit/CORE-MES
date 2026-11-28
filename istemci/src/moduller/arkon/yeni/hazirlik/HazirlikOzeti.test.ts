@@ -40,5 +40,10 @@ describe('3816 hazırlık özeti', () => {
     ]);
     expect(o).toMatchObject({ durum: 'durur', sorunlu: 2, ilk: 1 });
     expect(emirHucresi([])).toMatchObject({ durum: 'yok', sorunlu: 0, ilk: null });
+    // Durduran eksik uyarıdan ağırdır: sıraları değişirse emir satırı "Uyarı" der.
+    const uyari = hucreOzeti([satir('takim-omru', 'eksik', true)], sutun('takim'), true);
+    const durur = hucreOzeti([satir('cnc', 'eksik', false)], nc, true);
+    expect(emirHucresi([uyari, durur]).durum).toBe('durur');
+    expect(emirHucresi([durur, uyari]).durum).toBe('durur');
   });
 });
