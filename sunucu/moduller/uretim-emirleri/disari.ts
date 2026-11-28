@@ -20,7 +20,7 @@ import type { KapanisCozucusu } from './kapanis.ts';
 import './is-olayi-bildirimi.ts';
 import {
   adimGirdileriGetir, adimUretimSatiriGetir, emirAdimZinciriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
-  tasinanGirdiGetir, dugumleriGetir, emirBul, emirleriGetir, emirDurumlariGetir, ustEmirlerBul, isEmirleriGetir, malzemelerinAcikEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininAcikIsleriGetir, kisininHurdalariGetir,
+  tasinanGirdiGetir, dugumleriGetir, emirBul, emirleriGetir, emirDurumlariGetir, ustEmirlerBul, isEmirleriGetir, malzemelerinAcikEmirleriGetir, malzemeninSonEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininAcikIsleriGetir, kisininHurdalariGetir,
   bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineIsAraliklariGetir, makineKullanimAraliklariGetir, makinelerdekiIslerGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
 } from './sorgular.ts';
 import type {
@@ -209,6 +209,11 @@ export async function emirMalzemeleri(db: Db, idler: readonly number[]): Promise
   if (tekil.length === 0) return new Map();
   return new Map((await ustEmirlerBul(db, tekil)).map((r) => [r.id, { malzemeNo: r.malzemeNo, ustEmirId: r.ustEmirId }]));
 }
+
+// Değişiklik yönetimi konfigürasyonu (3827): parçanın son kök emirleri ve emre sabitlenen revizyonlar; yetki denetlemez, çağıran korur.
+export type { KonfigurasyonEmriSatiri } from './sorgular.ts';
+export const malzemeninSonEmirleri = (db: Db, malzemeNo: number, sinir: number): ReturnType<typeof malzemeninSonEmirleriGetir> =>
+  malzemeninSonEmirleriGetir(db, malzemeNo, sinir);
 
 // Değişiklik yönetimi (1644): malzemelerin taslak, planlı ve başlamış emirleri; yetki denetlemez, çağıran korur.
 export type { EtkilenenEmirSatiri as EtkilenenEmir } from './sorgular.ts';

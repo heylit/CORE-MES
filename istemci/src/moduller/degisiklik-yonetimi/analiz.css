@@ -8,6 +8,11 @@
 }
 .tc-dy-not[data-ton="uyari"] { border-color: var(--hold); }
 .tc-dy-satir { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
+/* Sarılan rozet dizisi: hücre en geniş rozet kadar daralır, tablo kabına sığar. */
+.tc-dy-rozetler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); min-width: 0; max-inline-size: 14rem; }
+.tc-dy-rozetler .tc-rozet { white-space: normal; overflow-wrap: anywhere; }
+/* Tablet genişliğinde öğe adı kısalır (tamamı ipucunda), revizyon, durum ve NC kaba sığar. */
+@media (max-width: 1023px) { .tc-dy-baseline .tc-tablo-kap[data-kaydir] .tc-tablo-kes { max-inline-size: 12rem; } }
 .tc-dy-urunler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
 .tc-dy-gizli { position: absolute; width: var(--cizgi-ince); height: var(--cizgi-ince); overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
@@ -135,3 +140,6 @@
 .tc-dy-grafik-tablo td { text-align: end; }
 .tc-dy-gosterge { display: flex; flex-wrap: wrap; gap: var(--b-4); margin: 0 0 var(--b-2); padding: 0; list-style: none; font-size: var(--yazi-s); }
 .tc-dy-gosterge li { display: inline-flex; align-items: center; gap: var(--b-1); }
+
+/* 3827: emir bağlantısı satır boyunca dokunulabilir. */
+.tc-dy-emir-baglantisi { display: inline-flex; align-items: center; min-height: var(--dokunma); text-decoration: underline; }

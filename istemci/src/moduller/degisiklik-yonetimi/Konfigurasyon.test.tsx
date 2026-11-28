@@ -14,7 +14,7 @@ const urunler: SonUrunlerCevabi = {
   ],
 };
 const konfig = (o: Partial<KonfigurasyonCevabi> = {}): KonfigurasyonCevabi => ({
-  sonUrun: { malzemeId: 5, kod: 'DENEME-1', ad: 'Deneme montaj' },
+  sonUrun: { malzemeId: 5, kod: 'DENEME-1', ad: 'Deneme montaj' }, revizyonGecmisi: [], emirler: [],
   seriler: [
     { seriNo: 'SN-0001', revizyon: 'A', mod: 1, durum: 'sahada', uyum: 'uyumlu', emirNo: 'UE-1', sapmaReferansi: null, karantinada: false },
     { seriNo: 'SN-0002', revizyon: 'A', mod: 1, durum: 'stokta', uyum: 'uyumsuz', emirNo: 'UE-1', sapmaReferansi: null, karantinada: true },
@@ -105,6 +105,50 @@ describe('Konfigürasyon', () => {
     expect(screen.getByRole('link', { name: /ECO-0003/ }).getAttribute('href')).toBe('/degisiklik-yonetimi/degisiklikler/emirler/3');
     // Class I talep yayınlanmadığı için şeridin üstünde uyarı olarak durur.
     expect(screen.getByText(/Yayınlandığında geçerlilik sınırı şeritte görünür/)).toBeTruthy();
+  });
+
+  it('3827: parçanın emirleri emre sabitlenen revizyonla, eski rota uyarısıyla; revizyon geçmişinde ilk satır yürürlükte', async () => {
+    sunucuKur({
+      '/degisiklik-yonetimi/son-urunler': () => json(200, urunler),
+      '/degisiklik-yonetimi/konfigurasyon/5': () => json(200, konfig({
+        emirler: [
+          { id: 41, emirNo: 'UE-41', durum: 'basladi', adet: 25, rotaRevizyonu: 'B', rotaYururlukte: true, cizimRevizyonu: 'C' },
+          { id: 40, emirNo: 'UE-40', durum: 'bitti', adet: 60, rotaRevizyonu: 'A', rotaYururlukte: false, cizimRevizyonu: null },
+        ],
+        revizyonGecmisi: [
+          { sira: 2, parcaRevizyonu: 'C', degisiklikNo: 'ECO-0042', yururluk: '2026-11-14T08:00:00.000Z' },
+          { sira: 1, parcaRevizyonu: 'B', degisiklikNo: 'ECO-0031', yururluk: '2026-10-02T08:00:00.000Z' },
+        ],
+      })),
+    });
+    cizdir('/degisiklik-yonetimi/konfigurasyon/5');
+    const emirler = await screen.findByRole('table', { name: 'Bu parçanın emirleri' });
+    expect(within(emirler).getByRole('link', { name: 'UE-41' }).getAttribute('href')).toBe('/uretim-emirleri/41');
+    expect(within(emirler).getAllByText('Eski rota')).toHaveLength(1);
+    const gecmis = screen.getByRole('table', { name: 'Revizyon geçmişi' });
+    expect(within(gecmis).getAllByText('Yürürlükte')).toHaveLength(1);
+    expect(within(gecmis).getByText('ECO-0031')).toBeTruthy();
+    // Yürürlükte rozeti son yayının (ilk satır) satırında; emrin çizim revizyonu emre sabitlenen koddur.
+    const gecmisSatirlari = within(gecmis).getAllByRole('row').slice(1);
+    expect(within(gecmisSatirlari[0] as HTMLElement).getByText('Yürürlükte')).toBeTruthy();
+    expect(within(gecmisSatirlari[1] as HTMLElement).getByText('Eski')).toBeTruthy();
+    const ue41 = within(emirler).getByRole('link', { name: 'UE-41' }).closest('tr') as HTMLElement;
+    expect(within(ue41).getByText('C')).toBeTruthy();
+  });
+
+  it('3827: emir listesi ilk beşi gösterir, Tümünü göster hepsini açar', async () => {
+    const emirler = Array.from({ length: 7 }, (_, i) => ({
+      id: 50 + i, emirNo: `UE-${50 + i}`, durum: 'planli' as const, adet: 1, rotaRevizyonu: null, rotaYururlukte: null, cizimRevizyonu: null,
+    }));
+    sunucuKur({
+      '/degisiklik-yonetimi/son-urunler': () => json(200, urunler),
+      '/degisiklik-yonetimi/konfigurasyon/5': () => json(200, konfig({ emirler })),
+    });
+    cizdir('/degisiklik-yonetimi/konfigurasyon/5');
+    const tablo = await screen.findByRole('table', { name: 'Bu parçanın emirleri' });
+    expect(within(tablo).getAllByRole('link')).toHaveLength(5);
+    fireEvent.click(screen.getByRole('button', { name: 'Tümünü göster (7)' }));
+    expect(within(screen.getByRole('table', { name: 'Bu parçanın emirleri' })).getAllByRole('link')).toHaveLength(7);
   });
 
   it('şeritteki seriye tıklayınca İzlenebilirlik o seriyle açılır', async () => {

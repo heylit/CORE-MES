@@ -292,9 +292,19 @@ export const sonUrunlerCevabi = z.object({ sonUrunler: z.array(malzemeOzeti.exte
 export const baselineSatiri = z.object({
   malzeme: malzemeOzeti, cizimRevizyonu: z.string().nullable(), rotaRevizyonu: z.string().nullable(),
   ncProgramlari: z.array(z.string()).nullable(), tasarimOtoritesi: z.enum(TASARIM_OTORITELERI).nullable(), durum: z.enum(PARCA_HALLERI).nullable(),
-  parcaRevizyonu: z.string().nullable(), prosesSurumu: z.number().int().positive(),
+  parcaRevizyonu: z.string().nullable(), prosesSurumu: z.number().int().positive().nullable(),
   ogeler: z.array(z.object({ tur: ogeTuru, revizyonId: KIMLIK, etiket: z.string().nullable() })),
-  degisiklikNo: z.string(), yururluk: zamanSemasi,
+  // Değişiklik kaydı olmayan parçada satır sahibi modüllerin yürürlükteki kayıtlarından kurulur (3827): numara, an ve proses sürümü null.
+  degisiklikNo: z.string().nullable(), yururluk: zamanSemasi.nullable(),
+});
+// Parçanın bu modülde yazılmış bütün konfigürasyonları (3827), son yayın üstte.
+export const konfigurasyonGecmisSatiri = z.object({
+  sira: z.number().int().positive(), parcaRevizyonu: z.string().nullable(), degisiklikNo: z.string(), yururluk: zamanSemasi,
+});
+// Parçanın son üretim emirleri ve emre sabitlenen revizyonlar (3827). Rota uyumu: emrin rotası yürürlükteki revizyon mu; rotasız emirde null.
+export const konfigurasyonEmri = z.object({
+  id: KIMLIK, emirNo: z.string(), durum: z.enum(['taslak', 'planli', 'basladi', 'bitti', 'iptal']), adet: z.number().int().positive(),
+  rotaRevizyonu: z.string().nullable(), rotaYururlukte: z.boolean().nullable(), cizimRevizyonu: z.string().nullable(),
 });
 export const acikDegisiklik = z.discriminatedUnion('tur', [
   z.object({ tur: z.literal('talep'), id: KIMLIK, no: z.string(), baslik: z.string(), sinif: sinif.nullable(), durum: talepDurumu }),
@@ -329,6 +339,8 @@ export const konfigurasyonCevabi = z.object({
   gecerlilikler: z.array(z.object({ emirId: KIMLIK, emirNo: z.string(), ilkSeri: z.number().int().positive(), durum: emirDurumu })),
   // Rota, üretim emirleri ya da markalama bağlı değilse null.
   aileIpligi: aileIpligi.nullable(),
+  revizyonGecmisi: z.array(konfigurasyonGecmisSatiri),
+  emirler: z.array(konfigurasyonEmri),
 });
 export const izlenebilirlikSorgusu = z.object({ sonUrunMalzemeId: z.coerce.number<number>().pipe(KIMLIK), seriNo: metin(60, 'Seri numarasını yazın.') });
 export const iplikDugumu = z.object({
@@ -422,6 +434,8 @@ export type AileDugumu = z.output<typeof aileDugumu>;
 export type AileBagi = z.output<typeof aileBagi>;
 export type AileIpligi = z.output<typeof aileIpligi>;
 export type KonfigurasyonCevabi = z.output<typeof konfigurasyonCevabi>;
+export type KonfigurasyonGecmisSatiri = z.output<typeof konfigurasyonGecmisSatiri>;
+export type KonfigurasyonEmri = z.output<typeof konfigurasyonEmri>;
 export type SerilerSorgusu = z.output<typeof serilerSorgusu>;
 export type SeriListeSatiri = z.output<typeof seriListeSatiri>;
 export type SeriListeCevabi = z.output<typeof seriListeCevabi>;

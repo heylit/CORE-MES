@@ -16,7 +16,7 @@ const seriler: SeriListeCevabi = {
   toplam: 2, sayfa: 1, sayfaBoyu: 50,
 };
 const konfig = (o: Partial<KonfigurasyonCevabi> = {}): KonfigurasyonCevabi => ({
-  sonUrun: urun, seriler: [], gecerlilikler: [], baseline: null, acikDegisiklikler: [], aileIpligi: null,
+  sonUrun: urun, seriler: [], gecerlilikler: [], baseline: null, acikDegisiklikler: [], aileIpligi: null, revizyonGecmisi: [], emirler: [],
   revizyonStogu: [{ malzeme: { malzemeId: 7, kod: 'DENEME-3', ad: null }, revizyon: 'A', miktar: '1200.500', yer: 'Raf 1', durum: 'eski_yedek' }],
   ...o,
 });

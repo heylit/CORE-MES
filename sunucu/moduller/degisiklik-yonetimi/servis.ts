@@ -13,10 +13,11 @@ import type {
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
-import { revizyonKunyeleri as rotaRevizyonKunyeleri } from '../rota/disari.ts';
+import { malzemelerinParcaCizimleri } from '../belge-merkezi/disari.ts';
+import { revizyonKunyeleri as rotaRevizyonKunyeleri, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
 import { siparisSatirlari } from '../satin-alma/disari.ts';
 import { malzemePartiBakiyeleri, partiGirisZamanlari } from '../stok/disari.ts';
-import { emirNolari as uretimEmriNolari, malzemelerinAcikEmirleri } from '../uretim-emirleri/disari.ts';
+import { emirNolari as uretimEmriNolari, malzemelerinAcikEmirleri, malzemeninSonEmirleri } from '../uretim-emirleri/disari.ts';
 import type { EtkilenenEmir as UretimdekiEmir } from '../uretim-emirleri/disari.ts';
 import {
   MRB_KODU_LISTESI, PARAMETRE_ILETISI, benimGorevimMi, eskiRevizyonuBul, ogeEksigi, yeniKonfigurasyon, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, gorevSuresi,
@@ -715,23 +716,70 @@ async function sonUrunOzeti(db: Db, malzemeId: number): Promise<MalzemeOzeti> {
   return { malzemeId, kod: o.kod, ad: o.ad };
 }
 
+const KONFIGURASYON_EMIR_SINIRI = 20;
+
+// Proses bu modülün üst katındadır (ADR 0006): NC programları kablolama.ts'nin kaydettiği çözücüden okunur; kayıt yoksa null (bağlı değil).
+export interface NcProgramKunyesi { id: number; opNo: number; ad: string; surum: number }
+export type NcProgramCozucusu = (db: Db, malzemeId: number) => Promise<NcProgramKunyesi[]>;
+let ncProgramCozucusu: NcProgramCozucusu | null = null;
+// Öncekini döner: sahte çözücü kuran test gerçek bağı geri koyar.
+export function ncProgramCozucusuKaydet(c: NcProgramCozucusu | null): NcProgramCozucusu | null {
+  const onceki = ncProgramCozucusu;
+  ncProgramCozucusu = c;
+  return onceki;
+}
+
+// Konfigürasyon kaydı bu modülündür (1642); etiketler sahibi modüllerden okunur (3827): çizim Belge Merkezi'nden, rota rotadan, NC programı
+// prosesten (çözücüyle). Değişiklik kaydı olmayan parçada da sahibi modüllerin yürürlükteki kayıtlarıyla tek satır kurulur. Kontrol planı, markalama,
+// tasarım otoritesi ve parça hali bağlı değil (null).
 export async function konfigurasyon(db: Db, malzemeId: number): Promise<KonfigurasyonCevabi> {
   const sonUrun = await sonUrunOzeti(db, malzemeId);
   const acik = await s.malzemeninAcikDegisiklikleri(db, malzemeId);
   const c = await s.sonKonfigurasyon(db, malzemeId);
-  // Konfigürasyon bu modülün kaydıdır (1642): yoksa boş liste. Revizyon etiketleri, NC adları ve parça hali sahibi modüllerden gelir (bağlı değil).
+  const cizim = (await malzemelerinParcaCizimleri(db, [malzemeId])).get(malzemeId) ?? null;
+  const yururlukteRota = (await yururluktekiRevizyonIdleri(db, [malzemeId])).get(malzemeId) ?? null;
+  const nc = ncProgramCozucusu === null ? null : await ncProgramCozucusu(db, malzemeId);
+  const emirler = await malzemeninSonEmirleri(db, malzemeId, KONFIGURASYON_EMIR_SINIRI);
+  const rotaIdleri = new Set<number>();
+  if (yururlukteRota !== null) rotaIdleri.add(yururlukteRota);
+  for (const e of emirler) if (e.kaynakRotaRevizyonId !== null) rotaIdleri.add(e.kaynakRotaRevizyonId);
+  for (const o of c?.ogeler ?? []) if (o.tur === 'rota') rotaIdleri.add(o.revizyonId);
+  const kunyeler = (await rotaRevizyonKunyeleri(db, [...rotaIdleri])).revizyonlar;
+  const rotaHarfi = new Map(kunyeler.map((k) => [k.id, k.harf]));
+  const rotaYururlugu = new Map(kunyeler.map((k) => [k.id, k.yururlukteId]));
+  const cizimKodu = new Map((cizim?.revizyonlar ?? []).map((r) => [r.revizyonId, r.revKodu]));
+  const yayindakiCizim = cizim?.revizyonlar.find((r) => r.durum === 'yayinda') ?? null;
+  // NC programı aynı satırda sürümlenir (proses): etiket onaylanan sürümü değil bugünkünü söyler; sürüm emre sabitlenince (dilim 2) değişir.
+  const ncEtiketi = new Map((nc ?? []).map((p) => [p.id, `${p.ad} (güncel s${p.surum})`]));
+  const etiket = (tur: OgeTuru, id: number): string | null =>
+    tur === 'rota' ? rotaHarfi.get(id) ?? null
+      : tur === 'cizim' ? cizimKodu.get(id) ?? null
+        : tur === 'nc-programi' ? ncEtiketi.get(id) ?? null : null;
+  const ortak = {
+    malzeme: sonUrun,
+    cizimRevizyonu: yayindakiCizim?.revKodu ?? null,
+    rotaRevizyonu: yururlukteRota === null ? null : rotaHarfi.get(yururlukteRota) ?? null,
+    ncProgramlari: nc === null ? null : nc.map((p) => `OP${p.opNo} ${p.ad} s${p.surum}`),
+    tasarimOtoritesi: null, durum: null,
+  };
+  const baseline = c !== null
+    ? [{ ...ortak, parcaRevizyonu: c.parcaRevizyonu, prosesSurumu: c.prosesSurumu, ogeler: c.ogeler.map((o) => ({ ...o, etiket: etiket(o.tur, o.revizyonId) })), degisiklikNo: c.emirNo, yururluk: c.zaman }]
+    : yayindakiCizim === null && yururlukteRota === null && (nc ?? []).length === 0 ? []
+      : [{ ...ortak, parcaRevizyonu: null, prosesSurumu: null, ogeler: [], degisiklikNo: null, yururluk: null }];
   return {
     sonUrun,
-    baseline: c === null ? [] : [{
-      malzeme: sonUrun, cizimRevizyonu: null, rotaRevizyonu: null, ncProgramlari: null, tasarimOtoritesi: null, durum: null,
-      parcaRevizyonu: c.parcaRevizyonu, prosesSurumu: c.prosesSurumu, ogeler: c.ogeler.map((o) => ({ ...o, etiket: null })),
-      degisiklikNo: c.emirNo, yururluk: c.zaman,
-    }],
+    baseline,
     acikDegisiklikler: acik.map((a) => a as AcikDegisiklik),
     seriler: null,
     revizyonStogu: null,
     gecerlilikler: await s.seriGecerlilikleri(db, malzemeId),
     aileIpligi: null,
+    revizyonGecmisi: await s.konfigurasyonGecmisi(db, malzemeId),
+    emirler: emirler.map((e) => ({
+      id: e.id, emirNo: e.emirNo, durum: e.durum, adet: e.adet, cizimRevizyonu: e.parcaRevizyonKodu,
+      rotaRevizyonu: e.kaynakRotaRevizyonId === null ? null : rotaHarfi.get(e.kaynakRotaRevizyonId) ?? null,
+      rotaYururlukte: e.kaynakRotaRevizyonId === null ? null : rotaYururlugu.get(e.kaynakRotaRevizyonId) === e.kaynakRotaRevizyonId,
+    })),
   };
 }
 

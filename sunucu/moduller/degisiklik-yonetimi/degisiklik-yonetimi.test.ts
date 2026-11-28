@@ -20,7 +20,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { ornekMalzemeNo } from '../malzemeler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { yayinla } from './servis.ts';
+import { ncProgramCozucusuKaydet, yayinla } from './servis.ts';
 import type { EtkiCozucusu } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -591,9 +591,94 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     const olaylar = await tamam<OlayListeCevabi>(acan, 'GET', `${K}/olaylar?ara=${b.no}`);
     assert.ok(olaylar.satirlar.some((o) => o.tur === 'revizyon_yayinlandi' && o.alanlar.ogeler === 'rota:900003>900002' && o.alanlar.parcaRevizyonu === 'C'));
 
+    // 3827: revizyon geçmişi bütün yayınları son yayından başlayarak verir; NC künyeleri prosesin çözücüsünden, öğe etiketi kimlikle eşleşir.
+    const tam = await tamam<KonfigurasyonCevabi>(acan, 'GET', `${K}/konfigurasyon/${flans}`);
+    assert.equal(tam.revizyonGecmisi[0]?.degisiklikNo, b.no);
+    assert.equal(tam.revizyonGecmisi[0]?.parcaRevizyonu, 'C');
+    assert.ok(tam.revizyonGecmisi.length >= 3 && tam.revizyonGecmisi.every((g, i, l) => i === 0 || (l[i - 1]?.sira ?? 0) > g.sira));
+    assert.ok(Array.isArray(tam.emirler));
+    const gercekCozucu = ncProgramCozucusuKaydet(() => Promise.resolve([{ id: 910001, opNo: 10, ad: 'ORN_OP10.H', surum: 3 }]));
+    try {
+      const nc = (await tamam<KonfigurasyonCevabi>(acan, 'GET', `${K}/konfigurasyon/${flans}`)).baseline?.[0];
+      assert.deepEqual(nc?.ncProgramlari, ['OP10 ORN_OP10.H s3']);
+      assert.equal(nc?.ogeler.find((o) => o.tur === 'nc-programi')?.etiket, 'ORN_OP10.H (güncel s3)');
+    } finally {
+      ncProgramCozucusuKaydet(gercekCozucu);
+    }
+
     // Konfigürasyon yalnız eklenir.
     await assert.rejects(vt().sorgu('UPDATE degisiklik_yonetimi_konfigurasyon SET proses_surumu = 9 WHERE malzeme_id = $1', [flans]), /yalnız|eklenir|izin/i);
     await assert.rejects(vt().sorgu('DELETE FROM degisiklik_yonetimi_konfigurasyon_ogesi WHERE revizyon_id = 900002'), /yalnız|eklenir|izin/i);
+  });
+
+  test('3827: konfigürasyon sahibi modüllerden; değişikliksiz parçada numarasız satır; son kök emirler ve eski rota; eski NC programı yok', async () => {
+    if (!ortam) throw new Error('Test veritabanı açılamadı.');
+    const { sahip } = ortam;
+    await sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('DYK-', 0) ON CONFLICT (onek) DO NOTHING");
+    const parca = (await sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ('dyk-1', 'mamul', 'DYK-', 1, 'aktif', $1, $2, $2) RETURNING no`, [JSON.stringify({ id: 'dyk-1', com: { ad: 'Deneme konfigürasyon' } }), acanId]))!.no;
+    const oku = () => tamam<KonfigurasyonCevabi>(acan, 'GET', `${K}/konfigurasyon/${parca}`);
+
+    // Hiçbir sahibi modülde kayıt yok: baseline boş, emir yok.
+    const bos = await oku();
+    assert.deepEqual([bos.baseline, bos.emirler, bos.revizyonGecmisi], [[], [], []]);
+
+    // Belge Merkezi: yayında çizim (antet R02). Rota: A iptal, B yürürlükte. Proses: biri eski iki NC programı.
+    const belge = (await sahip.tek<{ id: number }>("INSERT INTO belge_merkezi_belge (ad, tur, olusturan_id) VALUES ('ORN-RES-3827', 'teknik-resim', $1) RETURNING id", [acanId]))!.id;
+    await sahip.sorgu("INSERT INTO belge_merkezi_bag (belge_id, hedef_modul, hedef_id, ekleyen_id) VALUES ($1, 'malzemeler', $2, $3)", [belge, parca, acanId]);
+    const ozet = randomUUID().replaceAll('-', '').padEnd(64, '0');
+    await sahip.sorgu('INSERT INTO dosya (ozet, boyut, tur, ilk_yukleyen_id) VALUES ($1, 1, $2, $3)', [ozet, 'pdf', acanId]);
+    const cizim = (await sahip.tek<{ id: number }>(
+      `INSERT INTO belge_merkezi_revizyon (belge_id, sira, ozet, dosya_turu, "not", antet_rev, yukleyen_id) VALUES ($1, 1, $2, 'pdf', NULL, 'R02', $3) RETURNING id`,
+      [belge, ozet, acanId]))!.id;
+    await sahip.sorgu('INSERT INTO belge_merkezi_onizleme (revizyon_id, kare, ozet, kisi_id) VALUES ($1, 0, $2, $3)', [cizim, ozet, acanId]);
+    await sahip.sorgu("UPDATE belge_merkezi_revizyon SET durum = 'yayinda', yayinlayan_id = $2, yayinlandi = now() WHERE id = $1", [cizim, acanId]);
+    const rotaA = (await sahip.tek<{ id: number }>(
+      "INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme) VALUES ($1, 'mamul', 'A', 'iptal', $2, $2, now()) RETURNING id",
+      [parca, acanId]))!.id;
+    const rotaB = (await sahip.tek<{ id: number }>(
+      `INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, dort_gozsuz_onay, onaylayan_kisi_id, onaylama, yururluge_alan_kisi_id, yururluge_alma)
+       VALUES ($1, 'mamul', 'B', 'yururlukte', $2, true, $2, now(), $2, now()) RETURNING id`, [parca, acanId]))!.id;
+    for (const op of [10, 20]) await sahip.sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, $2, $3)', [parca, op, rotaB]);
+    const nc = async (opNo: number, ad: string, durum: string): Promise<number> => (await sahip.tek<{ id: number }>(
+      'INSERT INTO proses_nc_programi (malzeme_id, op_no, ad, durum, surum, olusturan_kisi_id, guncelleyen_kisi_id) VALUES ($1, $2, $3, $4, 2, $5, $5) RETURNING id',
+      [parca, opNo, ad, durum, acanId]))!.id;
+    const ncGuncel = await nc(10, 'ORN_DYK10.H', 'onayli');
+    await nc(20, 'ORN_DYK20_ESKI.H', 'eski');
+
+    // Emirler: A rotalı eski kök, B rotalı yeni kök ve onun alt emri; yalnız kökler, en yeni üstte.
+    const emir = async (rota: number, rev: string, ust: number | null): Promise<number> => (await sahip.tek<{ id: number }>(
+      `INSERT INTO uretim_emri (parca_no, parca_ad, adet, acan_id, malzeme_no, kaynak_rota_revizyonu_id, parca_revizyon_kodu, parca_cizim_revizyon_id, parca_cizim_belge_id, ust_emir_id, bolunme_sira)
+       VALUES ('P-DYK', 'Deneme', 3, $1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`, [acanId, parca, rota, rev, cizim, belge, ust, ust === null ? null : 1]))!.id;
+    const eskiEmir = await emir(rotaA, '01', null);
+    const yeniEmir = await emir(rotaB, '02', null);
+    const altEmir = await emir(rotaB, '02', yeniEmir);
+
+    const k = await oku();
+    const satir = k.baseline?.[0];
+    assert.equal(k.baseline?.length, 1);
+    assert.deepEqual([satir?.degisiklikNo, satir?.yururluk, satir?.parcaRevizyonu, satir?.rotaRevizyonu], [null, null, null, 'B']);
+    assert.ok(satir?.cizimRevizyonu?.includes('02'), String(satir?.cizimRevizyonu));
+    assert.deepEqual(satir?.ncProgramlari, ['OP10 ORN_DYK10.H s2'], 'eski program gerçek çözücüde süzülür');
+    assert.deepEqual(k.emirler.map((e) => [e.id, e.rotaRevizyonu, e.rotaYururlukte, e.cizimRevizyonu]), [[yeniEmir, 'B', true, '02'], [eskiEmir, 'A', false, '01']]);
+    assert.ok(!k.emirler.some((e) => e.id === altEmir), 'alt emir listelenmez');
+
+    // Değişiklik kaydı yayınlanınca öğe etiketleri kimlikle sahibi modülden: rota harfi, çizim kodu, NC adı ve güncel sürüm.
+    const acik = await emreKadar('D2', [parca]);
+    let e = await tamam<EmirCevabi>(acan, 'POST', `${K}/emirler/${acik.id}/taslak-ac`, { surum: acik.surum });
+    e = await tamam<EmirCevabi>(acan, 'POST', `${K}/emirler/${e.id}/kalem-kaydet`, {
+      kalemId: e.kalemler[0]?.id, yeniCizimRevizyonuId: null, yeniRotaRevizyonuId: null, eskiYeniyeUyar: 'evet', yeniEskiyeUyar: 'evet', ozet: 'Konfigürasyon etiketi',
+      surum: e.surum, ogeler: [{ tur: 'cizim', eskiRevizyonId: null, yeniRevizyonId: cizim }, { tur: 'rota', eskiRevizyonId: null, yeniRevizyonId: rotaB }, { tur: 'nc-programi', eskiRevizyonId: null, yeniRevizyonId: ncGuncel }],
+    });
+    const y = await tamam<EmirCevabi>(acan, 'POST', `${K}/emirler/${e.id}/yayina-gonder`, { surum: e.surum });
+    await tamam<EmirCevabi>(onaylayan, 'POST', `${K}/emirler/${e.id}/yayinla`, { gecerlilik: { tur: 'tum' }, surum: y.surum });
+    const s2 = (await oku()).baseline?.[0];
+    assert.equal(s2?.degisiklikNo, e.no);
+    const etiketler = new Map(s2?.ogeler.map((o) => [o.tur, o.etiket]));
+    assert.equal(etiketler.get('rota'), 'B');
+    assert.equal(etiketler.get('cizim'), satir?.cizimRevizyonu);
+    assert.equal(etiketler.get('nc-programi'), 'ORN_DYK10.H (güncel s2)');
   });
 
   test('1644, 1647: etki kaynağı bağlı; açık emirler ve stok karar satırı olur, bitmiş ve iptal emir olmaz; boş başlangıç onaylıya düşer', async () => {

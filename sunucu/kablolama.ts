@@ -8,7 +8,8 @@ import { ayniDosyaKaynagiKaydet as cizimAyniDosyaKaynagiKaydet, cizimdekiYerler,
 import * as atolye from './moduller/atolye/disari.ts';
 import * as cncKurulum from './moduller/cnc-kurulum/disari.ts';
 import { gkkOzetiCozucusuKaydet } from './moduller/etiket-merkezi/disari.ts';
-import { malzemeKartiIzleri as degisiklikKartIzleri, yururluktekiParcaRevizyonlari } from './moduller/degisiklik-yonetimi/disari.ts';
+import { malzemeKartiIzleri as degisiklikKartIzleri, ncProgramCozucusuKaydet as degisiklikNcProgramCozucusu, yururluktekiParcaRevizyonlari } from './moduller/degisiklik-yonetimi/disari.ts';
+import { parcaninNcProgramKunyeleri } from './moduller/proses/disari.ts';
 import { firmaPasifEngeli as finansFirmaPasifEngeli, malzemeKartiIzleri as finansKartIzleri } from './moduller/finans/disari.ts';
 import { aktifIstasyonlar, istasyondakiKisiler, malzemeKartiIzleri as istasyonKartIzleri } from './moduller/istasyonlar/disari.ts';
 import { istasyonAcildiDinle, istasyonSilinecekDinle } from './moduller/istasyonlar/disari.ts';
@@ -506,6 +507,7 @@ export function sunucununBaglari(): Bag[] {
     bag('statü listesi -> stok', stok.statuListesiCozucusu, receteRota.receteRotaStatuleri),
     bag('parça revizyonu -> stok partisi', stok.parcaRevizyonuCozucusu, yururluktekiParcaRevizyonlari),
     bag('parça revizyonu -> sipariş satırı', siparisParcaRevizyonuCozucusu, yururluktekiParcaRevizyonlari),
+    bag('proses NC programları -> değişiklik konfigürasyonu', degisiklikNcProgramCozucusu, parcaninNcProgramKunyeleri),
     bag('rota revizyonları -> malzemeler', rotaRevizyonlariCozucusu, durumRevizyonlari),
     bag('rota yüzey adımları -> geometri yüzey işaretleri', yuzeyAdimlariCozucusu, yuzeyIslemiAdimlari),
     bag('rota talaşlı adım süreleri -> geometri süre kartı', talasliAdimCozucusu, talasliAdimSureleri),
