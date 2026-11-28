@@ -143,6 +143,22 @@ describe('3111 Hazırlık takip tablosu', () => {
     expect(within(t).queryByRole('button', { name: /geri çek/ })).toBeNull();
   }, 40000);
 
+  it('3820: Kişi ve İlk parça sütunu paketten; gizli sütunda sorun varsa Sütunlar söyler; sütun açılınca hücre görünür, seçim saklanır', async () => {
+    kur(YONETICI, 'P', undefined, undefined, { due: '2026-12-01', tmi: { emirId: 7, isEmriId: 1, opNo: 10, ilkParcaGerekli: true, plan: { canli: true, sira: 1, eslesiyor: true, kaynak: { tur: 'kisi', id: 4, ad: 'ORN Kişi' } }, planSaati: { baslangic: '2026-12-01T20:00:00', bitis: '2026-12-02T03:00:00' } } } as unknown as Partial<Pkg>);
+    const t = await tablo();
+    const satir = t.querySelector('[data-paket="tmi-ie-P1"]')!;
+    expect(within(satir as HTMLElement).getByText('ORN Kişi')).toBeTruthy();
+    expect(within(satir as HTMLElement).getByText('Karar bekliyor')).toBeTruthy();
+    expect(within(t).queryByRole('columnheader', { name: /Plan başlangıcı/ })).toBeNull();
+    const ozet = screen.getByText(/^Sütunlar/).closest('summary')!;
+    await waitFor(() => { expect(ozet.textContent).toMatch(/gizli sütunda sorun/); }, { timeout: 10000 });
+    fireEvent.click(ozet);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Plan başlangıcı/ }));
+    expect(within(t).getByRole('columnheader', { name: /Plan başlangıcı/ })).toBeTruthy();
+    expect(within(satir as HTMLElement).getByText('Termin sonrası bitiyor')).toBeTruthy();
+    expect(JSON.parse(window.localStorage.getItem('tmi.hazirlik.gizli-sutunlar') ?? '[]')).not.toContain('planBas');
+  }, 40000);
+
   // Depo dosya içinde paylaşılır: ikinci emri açan bu test en sonda durur (öncekiler tek emir görür).
   it('3816: birden çok emirde operasyonlar kapalı gelir; emir satırı açar, "Bütün operasyonları aç" hepsini açar', async () => {
     kur(YONETICI, 'C', undefined, undefined, { no: 'ORN-UE-C8', tmi: { emirId: 8, isEmriId: 1, opNo: 10 } } as Partial<Pkg>);

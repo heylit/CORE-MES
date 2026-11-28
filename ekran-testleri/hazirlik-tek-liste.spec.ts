@@ -46,7 +46,16 @@ test.describe('3606-2 Hazırlık tek liste', () => {
     const ilk = liste.locator('tr', { has: page.getByRole('button', { name: /^Op 10 · Torna\s*ORN-TORNA-1/ }) });
     await expect(ilk.getByRole('button', { name: /Çizim rev: Çizim revizyonu eksik/ })).toBeVisible();
     await expect(ilk.getByRole('button', { name: /Girdi stoğu: Malzeme \(girdi stoğu\) uyarılı/ })).toBeVisible();
+    // 3820: Takım sütunu varsayılanda gizli; gizli sütundaki sorun Sütunlar düğmesinde söylenir, açılınca hücre görünür.
+    const sutunlar = page.locator('summary', { hasText: /^Sütunlar/ });
+    await expect(sutunlar).toContainText('gizli sütunda sorun');
+    await expect(ilk.getByRole('button', { name: /Takım: Takım hazırla uyarılı/ })).toHaveCount(0);
+    await sutunlar.click();
+    await page.getByRole('checkbox', { name: /Takım\s*Takım$/ }).check();
+    await sutunlar.click();
     await expect(ilk.getByRole('button', { name: /Takım: Takım hazırla uyarılı/ })).toBeVisible();
+    // Test1 3816 S1: emir satırı operasyonların en kötüsünü yazar (Op 10 Eksik, emir de Eksik).
+    await expect(liste.getByRole('button', { name: /^ORN-UE-050 Girdi stoğu: Malzeme \(girdi stoğu\) uyarılı/ })).toBeVisible();
     await resim('tek-liste-acik');
     // Paketsiz adım emrin bağlamı olarak kalır.
     await expect(liste.getByText('Op 30 · Taşlama')).toBeVisible();

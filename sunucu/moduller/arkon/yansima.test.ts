@@ -2337,7 +2337,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.deepEqual(await planOku(ie1!), { canli: true, sira: 1, eslesiyor: false, kaynak: { tur: 'makine', id: makineler.get(ie2!) }, zorunlu: true });
     await reddedilir();
     await canliyaYerlestir(ie2!, { kisi: yoneticiId });
-    assert.deepEqual(await planOku(ie2!), { canli: true, sira: 1, eslesiyor: true, kaynak: { tur: 'kisi', id: yoneticiId }, zorunlu: true }, 'kişi kaynağında istasyon eşleşmesi yeter');
+    assert.deepEqual(await planOku(ie2!), { canli: true, sira: 1, eslesiyor: true, kaynak: { tur: 'kisi', id: yoneticiId, ad: 'Deneme Yönetici' }, zorunlu: true }, 'kişi kaynağında istasyon eşleşmesi yeter; 3820: ad Hazırlık tablosu için');
     await canliyaYerlestir(ie1!, { makine: makineler.get(ie1!)! });
     assert.deepEqual(await planOku(ie1!), { canli: true, sira: 1, eslesiyor: true, kaynak: { tur: 'makine', id: makineler.get(ie1!) }, zorunlu: true });
     for (const satir of [ieOlay(ie1!, 'running', { machine: r.ilk }), ieOlay(ie1!, 'paused', { machine: r.ilk })]) {

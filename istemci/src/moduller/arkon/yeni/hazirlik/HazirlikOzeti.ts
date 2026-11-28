@@ -61,3 +61,63 @@ export function emirHucresi(oplar: readonly HucreOzeti[]): EmirHucresi {
   const e = en as HucreOzeti | null;
   return { durum: e ? e.durum : 'yok', madde: e ? e.madde : null, sorunlu, ilk };
 }
+
+// 3820: tablonun bütün sütunları (Durum hep görünür, sağda sabit). Gizlenebilir; varsayılanda gizli olanlar Arayüz ön bakışının listesidir.
+// Madde sütunları hazırlık özetinden, öteki sütunlar paketin sunucunun yazdığı alanlarından okunur (tmi.plan, tmi.planSaati, tmi.ilkParca).
+export type SutunAnahtari =
+  | 'rota' | 'cizim' | 'makine' | 'kisi' | 'planBas' | 'malzeme' | 'fason' | 'nc' | 'takim' | 'aparat' | 'olcu' | 'ilkParca' | 'kontrolPlani'
+  | 'talimat' | 'paket' | 'uretim';
+export interface SutunSecenegi { anahtar: SutunAnahtari; baslik: string; grup: SutunGrubu; varsayilan: boolean }
+export const SUTUNLAR: readonly SutunSecenegi[] = [
+  { anahtar: 'rota', baslik: 'Rota', grup: 'Rota', varsayilan: true },
+  { anahtar: 'cizim', baslik: 'Çizim rev', grup: 'Rota', varsayilan: true },
+  { anahtar: 'makine', baslik: 'Makine', grup: 'Plan', varsayilan: true },
+  { anahtar: 'kisi', baslik: 'Kişi', grup: 'Plan', varsayilan: true },
+  { anahtar: 'planBas', baslik: 'Plan başlangıcı', grup: 'Plan', varsayilan: false },
+  { anahtar: 'malzeme', baslik: 'Girdi stoğu', grup: 'Malzeme', varsayilan: true },
+  { anahtar: 'fason', baslik: 'Fason', grup: 'Malzeme', varsayilan: false },
+  { anahtar: 'nc', baslik: 'NC', grup: 'Takım', varsayilan: true },
+  { anahtar: 'takim', baslik: 'Takım', grup: 'Takım', varsayilan: false },
+  { anahtar: 'aparat', baslik: 'Aparat', grup: 'Takım', varsayilan: false },
+  { anahtar: 'olcu', baslik: 'Ölçü aleti', grup: 'Kalite', varsayilan: false },
+  { anahtar: 'ilkParca', baslik: 'İlk parça', grup: 'Kalite', varsayilan: true },
+  { anahtar: 'kontrolPlani', baslik: 'Kontrol planı', grup: 'Kalite', varsayilan: true },
+  { anahtar: 'talimat', baslik: 'Talimat', grup: 'Terminal', varsayilan: true },
+  { anahtar: 'paket', baslik: 'Paket', grup: 'Terminal', varsayilan: true },
+  { anahtar: 'uretim', baslik: 'Üretim', grup: 'Terminal', varsayilan: true },
+];
+const SUTUN_ANAHTARLARI = new Set<string>(SUTUNLAR.map((s) => s.anahtar));
+export const varsayilanGizli = (): ReadonlySet<SutunAnahtari> => new Set(SUTUNLAR.filter((s) => !s.varsayilan).map((s) => s.anahtar));
+// Saklanan seçim okunamazsa ya da bozuksa varsayılan; bilinmeyen anahtar atılır.
+export function gizliOku(ham: string | null): ReadonlySet<SutunAnahtari> {
+  if (ham === null) return varsayilanGizli();
+  try {
+    const l: unknown = JSON.parse(ham);
+    return Array.isArray(l) ? new Set(l.filter((x): x is SutunAnahtari => typeof x === 'string' && SUTUN_ANAHTARLARI.has(x))) : varsayilanGizli();
+  } catch { return varsayilanGizli(); }
+}
+
+// Plan bilgisi: kişi kaynağında kişinin adı, canlı plandaki başlangıç ve bitiş. Termin riski: plan bitişi terminin günü bittikten sonra.
+interface PlanAlanlari { due?: string; tmi?: { plan?: { canli?: boolean; kaynak?: { tur?: string; ad?: string } | null } | null; planSaati?: { baslangic?: unknown; bitis?: unknown } | null } | null }
+export interface PlanBilgisi { kisi: string | null; kisiPlani: boolean; baslangic: number | null; bitis: number | null; terminRiski: boolean }
+export function planBilgisi(p: PlanAlanlari): PlanBilgisi {
+  const plan = p.tmi?.plan;
+  const kisiPlani = plan?.kaynak?.tur === 'kisi';
+  const kisi = kisiPlani && typeof plan?.kaynak?.ad === 'string' && plan.kaynak.ad ? plan.kaynak.ad : null;
+  const s = p.tmi?.planSaati;
+  const zaman = (v: unknown) => { const t = typeof v === 'string' ? Date.parse(v) : NaN; return Number.isFinite(t) ? t : null; };
+  const baslangic = zaman(s?.baslangic), bitis = zaman(s?.bitis);
+  const termin = /^\d{4}-\d{2}-\d{2}$/.test(p.due ?? '') ? new Date(`${p.due!}T23:59:59`).getTime() : null;
+  return { kisi, kisiPlani, baslangic, bitis, terminRiski: bitis !== null && termin !== null && bitis > termin };
+}
+
+// İlk parça: kararı Kalite Merkezi'nin (tmi.ilkParca); karar yoksa ve istasyon istiyorsa "Bekliyor". Ret üretimi durdurmaz (559 2), uyarıdır.
+export type IlkParcaDurumu = 'onay' | 'ret' | 'bekliyor' | null;
+export function ilkParcaDurumu(p: { tmi?: unknown }, karar: 'onay' | 'ret' | null): IlkParcaDurumu {
+  if (karar) return karar;
+  const t = p.tmi && typeof p.tmi === 'object' ? (p.tmi as { ilkParcaGerekli?: unknown }) : null;
+  return t?.ilkParcaGerekli === true ? 'bekliyor' : null;
+}
+const ILK_PARCA_AGIRLIK: Readonly<Record<Exclude<IlkParcaDurumu, null>, number>> = { ret: 3, bekliyor: 2, onay: 1 };
+export const enKotuIlkParca = (l: readonly IlkParcaDurumu[]): IlkParcaDurumu =>
+  l.reduce<IlkParcaDurumu>((a, b) => (b !== null && (a === null || ILK_PARCA_AGIRLIK[b] > ILK_PARCA_AGIRLIK[a]) ? b : a), null);
