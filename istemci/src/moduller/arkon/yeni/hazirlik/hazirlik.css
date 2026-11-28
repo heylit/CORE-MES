@@ -715,7 +715,11 @@ button.tc-ay2-esitleme { cursor: pointer; }
 @container (max-width: 560px) {
   .tc-ay2-takip-kaydir { overflow: visible; }
   .tc-ay2-takip-kaydir > .tc-ay2-takip-tablo { min-inline-size: 0; }
-  .tc-ay2-takip-sabit, .tc-ay2-takip-durum { position: static; box-shadow: none; background: transparent; }
+  .tc-ay2-takip-tablo .tc-ay2-takip-sabit, .tc-ay2-takip-tablo .tc-ay2-takip-durum,
+  .tc-ay2-takip-tablo .tc-ay2-takip-emir > .tc-ay2-takip-sabit, .tc-ay2-takip-tablo .tc-ay2-takip-emir > .tc-ay2-takip-durum,
+  .tc-ay2-takip-tablo .tc-ay2-takip-satir:is(:hover, [aria-selected="true"]) > :is(.tc-ay2-takip-sabit, .tc-ay2-takip-durum) {
+    position: static; box-shadow: none; background: transparent; inline-size: auto; min-inline-size: 0;
+  }
   .tc-ay2-takip-tablo td[data-hal="tamam"], .tc-ay2-takip-tablo td[data-hal="gerekmez"], .tc-ay2-takip-tablo td[data-hal="yok"] { display: none; }
   .tc-ay2-takip-emir {
     display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--b-1) var(--b-2); align-items: center;
@@ -732,3 +736,9 @@ button.tc-ay2-esitleme { cursor: pointer; }
   .tc-ay2-takip-hepsi { min-block-size: var(--dokunma); }
 }
 .tc-ay2-takip-emir .tc-ay2-takip-uretim small { white-space: nowrap; }
+/* Tablet: ortada okunacak yer kalsın; yalnız seçim ve emir sabit, emir sütunu dar, Durum tabloyla kayar. */
+@container (min-width: 561px) and (max-width: 1023px) {
+  .tc-ay2-takip-tablo .tc-ay2-takip-ad { inline-size: calc(var(--b-6) * 6); min-inline-size: calc(var(--b-6) * 6); }
+  .tc-ay2-takip-tablo .tc-ay2-takip-durum,
+  .tc-ay2-takip-tablo .tc-ay2-takip-emir > .tc-ay2-takip-durum { position: static; box-shadow: none; }
+}
