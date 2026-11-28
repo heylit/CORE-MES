@@ -140,15 +140,17 @@ describe('3467 Teklif al ekranı', () => {
     takvim.value = bugunden(7); degistir(takvim);
     expect(gun.value).toBe('7');
 
-    // Form: logo basılır; Geri seçimi ve son tarihi korur.
+    // Form: logo basılır; Geri seçimi ve son tarihi korur. Seçilen tarih bugünden uzak tutulur: sabit gün, başka talebin
+    // varsayılanı (bugün + 3) ile aynı güne düşüp karşılaştırmayı anlamsız kılıyordu.
+    const secilen = bugunden(40);
     const tarih = kok.querySelector<HTMLInputElement>('#rfq-due')!;
-    tarih.value = '2026-12-01'; degistir(tarih);
+    tarih.value = secilen; degistir(tarih);
     kok.querySelector<HTMLButtonElement>('#main [data-act="rfq-form"]')!.click();
     await vi.waitFor(() => expect(document.querySelector('#ifo-kagit img.doc-logo')?.getAttribute('src')).toBe(LOGO));
     document.querySelector<HTMLButtonElement>('[data-act="rfq-form-back"]')!.click();
     await vi.waitFor(() => expect(document.querySelector('#ifo-kagit')).toBeNull());
     expect(kutu(42).checked).toBe(true);
-    expect(kok.querySelector<HTMLInputElement>('#rfq-due')!.value).toBe('2026-12-01');
+    expect(kok.querySelector<HTMLInputElement>('#rfq-due')!.value).toBe(secilen);
     expect(alici()).toBe('e-posta adresi kayıtlı değil');
 
     // Başka talep: önceki talebin seçimi taşınmaz; cevabı beklenen tedarikçi seçilemez.
@@ -157,7 +159,7 @@ describe('3467 Teklif al ekranı', () => {
     await vi.waitFor(() => expect(bolum()).toBe('rfq'));
     expect(kutu(42).checked).toBe(false);
     expect(kutu(41).disabled).toBe(true);
-    expect(kok.querySelector<HTMLInputElement>('#rfq-due')!.value).not.toBe('2026-12-01');
+    expect(kok.querySelector<HTMLInputElement>('#rfq-due')!.value).not.toBe(secilen);
     expect(kok.querySelector('.sa-ekran-adim-ozet')?.textContent).toBe('Teklif al: 1 tedarikçiden istendi');
     // Teklifler adımında bekleyen notu.
     sekme(kok, 'quotes')!.click();
