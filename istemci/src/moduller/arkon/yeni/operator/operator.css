@@ -1471,7 +1471,8 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
 .tc-ay1-uyari-seridi[data-bos] { visibility: hidden; pointer-events: none; }
 .tc-ay1-sira[data-bos] .tc-ay1-sira-bos { margin: 0; }
 /* Geniş: sıra şeridi, kimlik, durum ve Şimdi yuvası ayrılmış boydadır; sağ sütunda yalnız bölme kayar, sütun ve sayfa kaymaz. */
-.tc-ay1-genis .tc-ay1-sira { block-size: calc(var(--dokunma) * 3.75); overflow: hidden; }
+/* Boy işe göre değişmez, yazı boyu ayarıyla büyür: %130 yazıda sabit boy kart satırlarını (parça adı, emir no) yarıdan kesiyordu. */
+.tc-ay1-genis .tc-ay1-sira { block-size: max(calc(var(--dokunma) * 3.75), calc(var(--yazi-m) * 9.25)); overflow: hidden; }
 .tc-ay1-genis .tc-ay1-kimlik { min-block-size: calc(var(--dokunma) * 1.5); }
 .tc-ay1-genis .tc-ay1-ds { min-block-size: calc(var(--dokunma) + var(--b-1)); }
 .tc-ay1-genis .tc-ay1-simdi { min-block-size: calc(var(--dokunma) * 1.25); }
@@ -1522,12 +1523,12 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
 .tc-ay1-dar .tc-ay1-uretim:has(> .tc-ay1-yuvalar) > .tc-ay1-sayac { min-block-size: calc(var(--dokunma) * 3.5); }
 /* Kısa pencere (dizüstü, kiosk): sabit bölgeler orta sütundan boy almasın; sütun kaydırmasız kalır. */
 @media (max-height: 820px) {
-  .tc-ay1-genis .tc-ay1-sira { block-size: calc(var(--dokunma) * 2.5); }
+  .tc-ay1-genis .tc-ay1-sira { block-size: max(calc(var(--dokunma) * 2.5), calc(var(--yazi-m) * 6.75)); }
   .tc-ay1-genis .tc-ay1-kimlik { min-block-size: var(--dokunma); }
   .tc-ay1-genis .tc-ay1-simdi { min-block-size: var(--dokunma); }
 }
 @media (max-height: 700px) {
-  .tc-ay1-genis .tc-ay1-sira { block-size: calc(var(--dokunma) * 2); }
+  .tc-ay1-genis .tc-ay1-sira { block-size: max(calc(var(--dokunma) * 2), calc(var(--yazi-m) * 5)); }
 }
 
 /* ── 3592: ortak hiza ──
