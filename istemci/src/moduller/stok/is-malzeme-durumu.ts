@@ -62,6 +62,15 @@ export function durumMetni(d: Omit<IsMalzemeDurumu, 'yetme'>): { metin: string; 
   return { metin: 'Girdi tamam', ton: 'tamam' };
 }
 
+// İstasyonun işlerinin girdileri; çip, tüpler ve panel aynı önbelleği okur.
+export const useIsMalzemeleri = (istasyonId: number | null, uretimEmriId: number | null) => useQuery({
+  queryKey: isMalzemeleriAnahtari(istasyonId ?? 0),
+  queryFn: () => api.get<IsMalzemeleriCevabi>(`/stok/teslim-kutusu/is-malzemeleri?istasyonId=${istasyonId}`),
+  enabled: istasyonId !== null && uretimEmriId !== null,
+  refetchInterval: 60_000,
+  retry: false,
+});
+
 // İstasyon kodla gelir (terminal istasyonu koduyla bilir); kişinin kapsamındaki istasyonlardan kimliğe çevrilir. Kapsamda değilse null.
 export function useIsMalzemeDurumu(istasyonKodu: string | null, uretimEmriId: number | null): { durum: IsMalzemeDurumu | null; istasyonId: number | null } {
   const yetkili = (useOturum().data?.islemler ?? []).includes('stok.istek');
@@ -73,13 +82,7 @@ export function useIsMalzemeDurumu(istasyonKodu: string | null, uretimEmriId: nu
     retry: false,
   });
   const istasyonId = kutu.data?.istasyonlar.find((i) => i.kod === istasyonKodu)?.id ?? null;
-  const liste = useQuery({
-    queryKey: isMalzemeleriAnahtari(istasyonId ?? 0),
-    queryFn: () => api.get<IsMalzemeleriCevabi>(`/stok/teslim-kutusu/is-malzemeleri?istasyonId=${istasyonId}`),
-    enabled: istasyonId !== null && uretimEmriId !== null,
-    refetchInterval: 60_000,
-    retry: false,
-  });
+  const liste = useIsMalzemeleri(istasyonId, uretimEmriId);
   if (istasyonId === null || uretimEmriId === null || !kutu.data || !liste.data) return { durum: null, istasyonId };
   return { durum: isMalzemeDurumu(liste.data, kutu.data.gelenler, istasyonId, uretimEmriId), istasyonId };
 }

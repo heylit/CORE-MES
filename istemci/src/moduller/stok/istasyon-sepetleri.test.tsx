@@ -6,6 +6,7 @@ import type { IstasyonSepetiSatiri, IstasyonSepetleriCevabi, Teslim } from '#pay
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { json, sunucuKur } from './test-ortak.tsx';
 import { CikanSepet, IstasyonSepetleri, useIstasyonSepetiSayilari } from './disari.ts';
+import { sepetAdetleri } from './IstasyonSepetleri.tsx';
 
 // Terminalin iki sepeti (745): gelen önceki istasyonun parçasını ve yoldaki teslimi, çıkan burada duran parçayı sonraki istasyonla gösterir.
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -109,5 +110,31 @@ describe('çıkan sepet tek başına (1337 a)', () => {
     tek();
     expect(await screen.findByText('Bu istasyonda bu emrin parçası yok.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Sonraki istasyona/ })).toBeNull();
+  });
+});
+
+// Terminal tüpleri adet gösterir: kg ya da metre satırı adete katılmaz, birimi bilinmeyen girdi de katılmaz.
+describe('sepet adetleri (3742-2)', () => {
+  const girdi = (malzemeId: number, birim: string | null) => ({
+    malzemeId, kod: null, ad: null, birim, birAdet: '1.000', gereken: '1.000', istasyonda: '0.000', eksik: false, yerler: [], istek: null, tasinan: false,
+  });
+  const is = (malzemeler: ReturnType<typeof girdi>[]) => [{ uretimEmriId: 30, emirNo: 'UE-ORN-1', opNo: 20, adimAd: 'Freze', calisiyor: true, kalanAdet: 5, malzemeler }];
+  const CUBUK = { ...SATIR, malzemeId: 902, kod: 'ORN-CUBUK', miktar: '2.500' };
+  const KARISIK: IstasyonSepetleriCevabi = {
+    ...CEVAP,
+    gelen: { bekleyen: [...CEVAP.gelen.bekleyen, { ...CUBUK, kaynak: { id: 1, kod: 'T1', ad: 'Torna 1' } }], yolda: [YOLDA, { ...YOLDA, id: 42, malzemeId: 902, miktar: '1.200' }] },
+    cikan: [SATIR, CUBUK],
+  };
+
+  it('birimi adet olan girdi sayılır, metre satırı sayılmaz', () => {
+    expect(sepetAdetleri(KARISIK, is([girdi(901, 'adet'), girdi(902, 'm')]), 30, null)).toEqual({ gelenAdet: 4, cikanAdet: 2 });
+  });
+  it('girdi olmayan satır yalnız emrin ürünüyse sayılır; yoldaki teslimin kodu sepet satırından bilinir', () => {
+    expect(sepetAdetleri(KARISIK, [], 30, 'YM-1')).toEqual({ gelenAdet: 4, cikanAdet: 2 });
+    expect(sepetAdetleri(KARISIK, [], 30, 'BASKA')).toEqual({ gelenAdet: 0, cikanAdet: 0 });
+  });
+  it('birimi bilinmeyen girdi ve başka emrin girdisi toplamaya girmez', () => {
+    expect(sepetAdetleri(KARISIK, is([girdi(901, null)]), 30, 'YM-1')).toEqual({ gelenAdet: 0, cikanAdet: 0 });
+    expect(sepetAdetleri(KARISIK, is([girdi(901, 'kg')]).map((x) => ({ ...x, uretimEmriId: 31 })), 30, 'YM-1')).toEqual({ gelenAdet: 4, cikanAdet: 2 });
   });
 });
