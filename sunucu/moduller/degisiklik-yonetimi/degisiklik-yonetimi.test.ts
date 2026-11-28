@@ -20,7 +20,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { ornekMalzemeNo } from '../malzemeler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { yayinla } from './servis.ts';
+import { ncProgramCozucusuKaydet, yayinla } from './servis.ts';
 import type { EtkiCozucusu } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -590,6 +590,21 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     assert.ok(k3?.ogeler.some((o) => o.tur === 'rota' && o.revizyonId === 900002) && k3.ogeler.some((o) => o.tur === 'nc-programi' && o.revizyonId === 910001));
     const olaylar = await tamam<OlayListeCevabi>(acan, 'GET', `${K}/olaylar?ara=${b.no}`);
     assert.ok(olaylar.satirlar.some((o) => o.tur === 'revizyon_yayinlandi' && o.alanlar.ogeler === 'rota:900003>900002' && o.alanlar.parcaRevizyonu === 'C'));
+
+    // 3827: revizyon geçmişi bütün yayınları son yayından başlayarak verir; NC künyeleri prosesin çözücüsünden, öğe etiketi kimlikle eşleşir.
+    const tam = await tamam<KonfigurasyonCevabi>(acan, 'GET', `${K}/konfigurasyon/${flans}`);
+    assert.equal(tam.revizyonGecmisi[0]?.degisiklikNo, b.no);
+    assert.equal(tam.revizyonGecmisi[0]?.parcaRevizyonu, 'C');
+    assert.ok(tam.revizyonGecmisi.length >= 3 && tam.revizyonGecmisi.every((g, i, l) => i === 0 || (l[i - 1]?.sira ?? 0) > g.sira));
+    assert.ok(Array.isArray(tam.emirler));
+    ncProgramCozucusuKaydet(() => Promise.resolve([{ id: 910001, opNo: 10, ad: 'ORN_OP10.H', surum: 3 }]));
+    try {
+      const nc = (await tamam<KonfigurasyonCevabi>(acan, 'GET', `${K}/konfigurasyon/${flans}`)).baseline?.[0];
+      assert.deepEqual(nc?.ncProgramlari, ['OP10 ORN_OP10.H s3']);
+      assert.equal(nc?.ogeler.find((o) => o.tur === 'nc-programi')?.etiket, 'ORN_OP10.H s3');
+    } finally {
+      ncProgramCozucusuKaydet(null);
+    }
 
     // Konfigürasyon yalnız eklenir.
     await assert.rejects(vt().sorgu('UPDATE degisiklik_yonetimi_konfigurasyon SET proses_surumu = 9 WHERE malzeme_id = $1', [flans]), /yalnız|eklenir|izin/i);

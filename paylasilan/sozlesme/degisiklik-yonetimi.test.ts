@@ -107,7 +107,7 @@ test('liste sorgusu: kapsam varsayılanı açık, boş arama düşer, bilinmeyen
 
 test('konfigürasyon ve rapor: bağlı olmayan bölümler null, açık değişiklik türüne göre sınıf zorunluluğu değişir', () => {
   const urun = { malzemeId: 2, kod: null, ad: null };
-  const temel = { sonUrun: urun, baseline: null, seriler: null, revizyonStogu: null, gecerlilikler: [], aileIpligi: null };
+  const temel = { sonUrun: urun, baseline: null, seriler: null, revizyonStogu: null, gecerlilikler: [], aileIpligi: null, revizyonGecmisi: [], emirler: [] };
   const iplik = {
     dugumler: [{ anahtar: 'rev:1', katman: 'tasarim', etiket: 'P', ayrinti: 'x', hal: 'yururlukte', hedef: { tur: 'seri', seriNo: '34' } }],
     baglar: [{ kaynak: 'rev:1', hedef: 'emir:2', kesikli: true }],
@@ -120,6 +120,16 @@ test('konfigürasyon ve rapor: bağlı olmayan bölümler null, açık değişik
   ] }), true);
   assert.equal(gecer(konfigurasyonCevabi, { ...temel, acikDegisiklikler: [{ tur: 'emir', id: 2, no: 'E-1', baslik: 'y', sinif: null, durum: 'karar' }] }), false);
   assert.equal(gecer(konfigurasyonCevabi, { ...temel, acikDegisiklikler: [], revizyonStogu: [{ malzeme: urun, revizyon: null, miktar: '4', yer: null, durum: 'kayip' }] }), false);
+  // 3827: emirde rota uyumu rotasız emirde null; bilinmeyen emir durumu geçmez. Değişiklik kaydı olmayan baseline satırı numarasızdır.
+  const emir = { id: 3, emirNo: 'UE-3', durum: 'planli', adet: 5, rotaRevizyonu: null, rotaYururlukte: null, cizimRevizyonu: null };
+  assert.equal(gecer(konfigurasyonCevabi, { ...temel, acikDegisiklikler: [], emirler: [emir] }), true);
+  assert.equal(gecer(konfigurasyonCevabi, { ...temel, acikDegisiklikler: [], emirler: [{ ...emir, durum: 'kapandi' }] }), false);
+  const satir = {
+    malzeme: urun, cizimRevizyonu: 'C', rotaRevizyonu: 'A', ncProgramlari: null, tasarimOtoritesi: null, durum: null,
+    parcaRevizyonu: null, prosesSurumu: null, ogeler: [], degisiklikNo: null, yururluk: null,
+  };
+  assert.equal(gecer(konfigurasyonCevabi, { ...temel, acikDegisiklikler: [], baseline: [satir] }), true);
+  assert.equal(gecer(konfigurasyonCevabi, { ...temel, acikDegisiklikler: [], revizyonGecmisi: [{ sira: 1, parcaRevizyonu: null, degisiklikNo: null, yururluk: '2026-11-14T08:00:00.000Z' }] }), false);
   assert.equal(gecer(sonUrunlerCevabi, { sonUrunler: [{ ...urun, seriIzlenir: null }] }), true);
   const rapor = {
     cevrim: [], kararDagilimi: [{ emirNo: 'E-1', otomatik: 1, onayli: 2, mrb: 0 }], rotaOlgunlugu: [],

@@ -12,3 +12,5 @@ export async function yururluktekiParcaRevizyonlari(db: Db, malzemeIdleri: reado
   return sonuc;
 }
 export { malzemeKartiIzleri } from './sorgular.ts';
+// 3827: konfigürasyon sayfasının NC program künyeleri; proses üst katta olduğundan bağı kablolama.ts kurar.
+export { ncProgramCozucusuKaydet, type NcProgramCozucusu, type NcProgramKunyesi } from './servis.ts';

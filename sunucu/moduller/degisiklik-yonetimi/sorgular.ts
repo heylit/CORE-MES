@@ -304,6 +304,16 @@ export function sonKonfigurasyon(db: Db, malzemeId: number): Promise<Konfigurasy
   );
 }
 
+export function konfigurasyonGecmisi(db: Db, malzemeId: number): Promise<{ sira: number; parcaRevizyonu: string | null; degisiklikNo: string; yururluk: string }[]> {
+  return db.sorgu(
+    `SELECT c.sira, c.parca_revizyonu AS "parcaRevizyonu", e.no AS "degisiklikNo", ${zamanMetni('c.zaman')} AS yururluk
+       FROM degisiklik_yonetimi_konfigurasyon c JOIN degisiklik_yonetimi_emir e ON e.id = c.emir_id
+      WHERE c.malzeme_id = $1
+      ORDER BY c.sira DESC`,
+    [malzemeId],
+  );
+}
+
 // Sıra çağıranın okuduğu son sıranın bir fazlasıdır; aynı anda iki yayın aynı sırayı yazarsa tekil kısıt ikincisini durdurur.
 export async function konfigurasyonEkle(
   db: Db, g: { malzemeId: number; sira: number; parcaRevizyonu: string | null; prosesSurumu: number; emirId: number; kisiId: number;

@@ -14,7 +14,7 @@ const urunler: SonUrunlerCevabi = {
   ],
 };
 const konfig = (o: Partial<KonfigurasyonCevabi> = {}): KonfigurasyonCevabi => ({
-  sonUrun: { malzemeId: 5, kod: 'DENEME-1', ad: 'Deneme montaj' },
+  sonUrun: { malzemeId: 5, kod: 'DENEME-1', ad: 'Deneme montaj' }, revizyonGecmisi: [], emirler: [],
   seriler: [
     { seriNo: 'SN-0001', revizyon: 'A', mod: 1, durum: 'sahada', uyum: 'uyumlu', emirNo: 'UE-1', sapmaReferansi: null, karantinada: false },
     { seriNo: 'SN-0002', revizyon: 'A', mod: 1, durum: 'stokta', uyum: 'uyumsuz', emirNo: 'UE-1', sapmaReferansi: null, karantinada: true },
@@ -105,6 +105,29 @@ describe('Konfigürasyon', () => {
     expect(screen.getByRole('link', { name: /ECO-0003/ }).getAttribute('href')).toBe('/degisiklik-yonetimi/degisiklikler/emirler/3');
     // Class I talep yayınlanmadığı için şeridin üstünde uyarı olarak durur.
     expect(screen.getByText(/Yayınlandığında geçerlilik sınırı şeritte görünür/)).toBeTruthy();
+  });
+
+  it('3827: parçanın emirleri emre sabitlenen revizyonla, eski rota uyarısıyla; revizyon geçmişinde ilk satır yürürlükte', async () => {
+    sunucuKur({
+      '/degisiklik-yonetimi/son-urunler': () => json(200, urunler),
+      '/degisiklik-yonetimi/konfigurasyon/5': () => json(200, konfig({
+        emirler: [
+          { id: 41, emirNo: 'UE-41', durum: 'basladi', adet: 25, rotaRevizyonu: 'B', rotaYururlukte: true, cizimRevizyonu: 'C' },
+          { id: 40, emirNo: 'UE-40', durum: 'bitti', adet: 60, rotaRevizyonu: 'A', rotaYururlukte: false, cizimRevizyonu: null },
+        ],
+        revizyonGecmisi: [
+          { sira: 2, parcaRevizyonu: 'C', degisiklikNo: 'ECO-0042', yururluk: '2026-11-14T08:00:00.000Z' },
+          { sira: 1, parcaRevizyonu: 'B', degisiklikNo: 'ECO-0031', yururluk: '2026-10-02T08:00:00.000Z' },
+        ],
+      })),
+    });
+    cizdir('/degisiklik-yonetimi/konfigurasyon/5');
+    const emirler = await screen.findByRole('table', { name: 'Bu parçanın emirleri' });
+    expect(within(emirler).getByRole('link', { name: 'UE-41' }).getAttribute('href')).toBe('/uretim-emirleri/41');
+    expect(within(emirler).getAllByText('Eski rota')).toHaveLength(1);
+    const gecmis = screen.getByRole('table', { name: 'Revizyon geçmişi' });
+    expect(within(gecmis).getAllByText('Yürürlükte')).toHaveLength(1);
+    expect(within(gecmis).getByText('ECO-0031')).toBeTruthy();
   });
 
   it('şeritteki seriye tıklayınca İzlenebilirlik o seriyle açılır', async () => {

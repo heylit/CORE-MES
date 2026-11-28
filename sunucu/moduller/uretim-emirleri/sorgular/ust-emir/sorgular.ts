@@ -421,6 +421,21 @@ export function malzemelerinAcikEmirleriGetir(db: Db, malzemeNolari: readonly nu
   );
 }
 
+// Değişiklik yönetimi konfigürasyonu (3827): parçanın son emirleri ve emre sabitlenen rota ve çizim revizyonu; en yeni üstte.
+export interface KonfigurasyonEmriSatiri {
+  id: number; emirNo: string; durum: 'taslak' | 'planli' | 'basladi' | 'bitti' | 'iptal'; adet: number; kaynakRotaRevizyonId: number | null; parcaRevizyonKodu: string | null;
+}
+export function malzemeninSonEmirleriGetir(db: Db, malzemeNo: number, sinir: number): Promise<KonfigurasyonEmriSatiri[]> {
+  return db.sorgu(
+    `SELECT e.id, e.emir_no AS "emirNo", e.durum, e.adet, e.kaynak_rota_revizyonu_id AS "kaynakRotaRevizyonId", e.parca_revizyon_kodu AS "parcaRevizyonKodu"
+       FROM uretim_emri e
+      WHERE e.malzeme_no = $1 AND e.ust_emir_id IS NULL
+      ORDER BY e.id DESC
+      LIMIT $2`,
+    [malzemeNo, sinir],
+  );
+}
+
 // Planlama kaynağının emir dilimi (2216-1 a): açık emirler, son `gun` günde kapananlar ve çağıranın verdiği kimlikler. Kapanış anı biten
 // emirde bitiş, iptalde iptal anıdır. Bütün kapalı tarihçe her okumada gitmesin diye süzgeç sorgudadır.
 export function dilimUstEmirleri(db: Db, gun: number, dahil: readonly number[]): Promise<UstEmirSatiri[]> {

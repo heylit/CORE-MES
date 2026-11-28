@@ -2,8 +2,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { EMIR_DURUM_ADLARI, SINIF_ADLARI, TALEP_DURUM_ADLARI } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
 import type {
-  AcikDegisiklik, BaselineSatiri, KonfigurasyonCevabi, SonUrunlerCevabi,
+  AcikDegisiklik, BaselineSatiri, KonfigurasyonCevabi, KonfigurasyonEmri, KonfigurasyonGecmisSatiri, SonUrunlerCevabi,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
+import { EMIR_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
 import { DurumKutusu, Dugme, Kart, Rozet, SayfaBasligi, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useKurumAdi } from '../../ortak/veri/kurum.ts';
@@ -70,6 +71,7 @@ export function SonUrunDurumu({ sorgu }: { sorgu: ReturnType<typeof useSonUrunle
 }
 
 const tire = (m: string | null): string => m ?? '—';
+const anGunu = (zaman: string): string => new Date(zaman).toLocaleDateString('tr-TR');
 
 // Tasarım otoritesi müşteri değilse firmanın kendisidir: adı Sistem Ayarları > Firma adı'ndan (1942 a), girilmemişse "Firma".
 const baselineSutunlari = (firma: string): readonly Sutun<BaselineSatiri>[] => [
@@ -91,6 +93,33 @@ const baselineSutunlari = (firma: string): readonly Sutun<BaselineSatiri>[] => [
     anahtar: 'durum', baslik: 'Durum',
     hucre: (b) => (b.durum === null ? '—' : b.durum === 'aktif' ? <Rozet ton="tamam">Aktif</Rozet> : <Rozet ton="pasif">Yalnız yedek</Rozet>),
     csv: (b) => (b.durum === null ? null : b.durum === 'aktif' ? 'Aktif' : 'Yalnız yedek'),
+  },
+];
+
+// Liste son yayından başlar: ilk satır yürürlükteki revizyondur.
+type GecmisSatiri = KonfigurasyonGecmisSatiri & { yururlukte: boolean };
+const gecmisSutunlari: readonly Sutun<GecmisSatiri>[] = [
+  { anahtar: 'rev', baslik: 'Parça rev', mono: true, kirilmaz: true, hucre: (g) => tire(g.parcaRevizyonu) },
+  { anahtar: 'no', baslik: 'Getiren değişiklik', mono: true, hucre: (g) => g.degisiklikNo },
+  { anahtar: 'yururluk', baslik: 'Yürürlük', kirilmaz: true, hucre: (g) => anGunu(g.yururluk), csv: (g) => g.yururluk },
+  {
+    anahtar: 'durum', baslik: 'Durum',
+    hucre: (g) => (g.yururlukte ? <Rozet ton="tamam">Yürürlükte</Rozet> : <Rozet ton="pasif">Eski</Rozet>),
+    csv: (g) => (g.yururlukte ? 'Yürürlükte' : 'Eski'),
+  },
+];
+
+// Rota uyumu: emir açıldığı rotanın yürürlükteki revizyonuyla mı; çizim revizyonu emre seçilirken kopyalanan koddur (3755).
+const emirSutunlari: readonly Sutun<KonfigurasyonEmri>[] = [
+  { anahtar: 'emir', baslik: 'Emir', mono: true, hucre: (e) => <Link to={`/uretim-emirleri/${e.id}`} className="mono">{e.emirNo}</Link>, csv: (e) => e.emirNo },
+  { anahtar: 'durum', baslik: 'Durum', hucre: (e) => <Rozet ton={EMIR_DURUMU[e.durum].ton}>{EMIR_DURUMU[e.durum].etiket}</Rozet>, csv: (e) => EMIR_DURUMU[e.durum].etiket },
+  { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', hucre: (e) => e.adet },
+  { anahtar: 'cizim', baslik: 'Çizim rev', mono: true, kirilmaz: true, hucre: (e) => tire(e.cizimRevizyonu) },
+  {
+    anahtar: 'rota', baslik: 'Rota rev', kirilmaz: true,
+    hucre: (e) => (e.rotaRevizyonu === null ? '—'
+      : <span className="tc-dy-satir"><span className="mono">{e.rotaRevizyonu}</span>{e.rotaYururlukte === false && <Rozet ton="uyari">Eski rota</Rozet>}</span>),
+    csv: (e) => (e.rotaRevizyonu === null ? null : `${e.rotaRevizyonu}${e.rotaYururlukte === false ? ' (eski)' : ''}`),
   },
 ];
 
@@ -178,6 +207,20 @@ export function Konfigurasyon() {
                   </Kart>
                   <Kart baslik="Açık değişiklikler" simge="edit">
                     <AcikDegisiklikler liste={sorgu.data.acikDegisiklikler} />
+                  </Kart>
+                </div>
+                <div className="tc-dy-iki-bir">
+                  <Kart baslik="Bu parçanın emirleri" simge="list" baslikEki={<span className="tc-dy-soluk">Son 20 emir ve emre sabitlenen revizyonlar</span>}>
+                    <Tablo
+                      etiket="Bu parçanın emirleri" sutunlar={emirSutunlari} satirlar={sorgu.data.emirler}
+                      satirAnahtari={(e) => e.id} bosMesaj="Bu parçanın üretim emri yok."
+                    />
+                  </Kart>
+                  <Kart baslik="Revizyon geçmişi" simge="clock">
+                    <Tablo
+                      etiket="Revizyon geçmişi" sutunlar={gecmisSutunlari} satirlar={sorgu.data.revizyonGecmisi.map((g, i) => ({ ...g, yururlukte: i === 0 }))}
+                      satirAnahtari={(g) => g.sira} bosMesaj="Bu parça henüz bir değişiklikle revize edilmedi."
+                    />
                   </Kart>
                 </div>
               </>
