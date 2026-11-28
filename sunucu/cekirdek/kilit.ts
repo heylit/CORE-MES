@@ -22,3 +22,21 @@ export async function islemKilidiDene(db: Db, ad: string, kimlik?: number): Prom
     : await db.tek<{ alindi: boolean }>(`SELECT pg_try_advisory_xact_lock(${ANAHTAR}, $2::int4) AS alindi`, [ad, kimlik]);
   return r?.alindi === true;
 }
+
+// Adı dışarıdan seçilebilen kilit içindir (giriş denemesinde cihaz adresi): 32 bitlik hashtext'te başka bir adın aynı
+// anahtara düştüğü aranıp bulunabilir, o adla gelen istek bu kilidi tutup bu çağrıyı reddettirebilirdi. 64 bitlik
+// kriptografik özette bulunamaz. Anahtar uzayı islemKilidi'ninkinden ayrıdır: aynı ad iki yardımcıda aynı kilit değildir.
+export function semaliOzetKilitAnahtariSql(adParametresi: string): string {
+  return `('x' || left(encode(sha256(convert_to(coalesce(current_schema(), '') || ':' || ${adParametresi}, 'UTF8')), 'hex'), 16))::bit(64)::bigint`;
+}
+
+const OZET_ANAHTARI = semaliOzetKilitAnahtariSql('$1::text');
+
+export async function ozetliKilitAl(db: Db, ad: string): Promise<void> {
+  await db.sorgu(`SELECT pg_advisory_xact_lock(${OZET_ANAHTARI})`, [ad]);
+}
+
+export async function ozetliKilitDene(db: Db, ad: string): Promise<boolean> {
+  const r = await db.tek<{ alindi: boolean }>(`SELECT pg_try_advisory_xact_lock(${OZET_ANAHTARI}) AS alindi`, [ad]);
+  return r?.alindi === true;
+}

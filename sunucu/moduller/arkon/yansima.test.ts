@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '#cekirdek/db.ts';
-import { semaliKilitAnahtariSql } from '#cekirdek/kilit.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
@@ -1081,7 +1081,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const emir = await calisanEmir();
     const s = sayim(emir, 'good', 3);
     await vt().tx(async (db) => {
-      await db.sorgu("SELECT pg_advisory_xact_lock(hashtext(coalesce(current_schema(), '') || ':arkon-yansima-emir-' || $1::text))", [emir]);
+      await islemKilidiAl(db, `arkon-yansima-emir-${emir}`);
       const c = await ekle(operator, 'counts', s);
       assert.equal(c.durum, 200, JSON.stringify(c.govde));
       assert.equal(await kayitSayisi(String(s['cid'])), 1);
@@ -1098,7 +1098,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const emirler = [await calisanEmir(), await calisanEmir(), await calisanEmir()];
     const satirlar = emirler.map((e) => sayim(e, 'good', 1));
     await vt().tx(async (db) => {
-      for (const e of emirler) await db.sorgu("SELECT pg_advisory_xact_lock(hashtext(coalesce(current_schema(), '') || ':arkon-yansima-emir-' || $1::text))", [e]);
+      for (const e of emirler) await islemKilidiAl(db, `arkon-yansima-emir-${e}`);
       const t0 = Date.now();
       const c = await istek<{ eklenen: number }>(operator, 'POST', '/arkon/kayitlar/counts/ekle', { satirlar, kaynak: 'y1' });
       const sure = Date.now() - t0;
@@ -1524,7 +1524,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     let tutuldu: () => void = () => undefined;
     const kilitTutuldu = new Promise<void>((coz) => { tutuldu = coz; });
     const kilitli = sahip.tx(async (db) => {
-      await db.sorgu(`SELECT pg_advisory_xact_lock(${semaliKilitAnahtariSql('$1::text')})`, [`arkon-yansima-emir-${emir}`]);
+      await islemKilidiAl(db, `arkon-yansima-emir-${emir}`);
       const kopya = await db.tek<{ id: number; kisi_id: number }>(
         `INSERT INTO arkon_kayit (tur, cid, zaman, makine, is_merkezi, emir_no, paket_id, madde_id, govde, kisi_id, istasyon_id, is_merkezi_id, varis)
          SELECT tur, $2, zaman, makine, is_merkezi, emir_no, paket_id, madde_id, govde, kisi_id, istasyon_id, is_merkezi_id, now() FROM arkon_kayit WHERE cid = $1
@@ -1725,7 +1725,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const { emir, c } = await bekleyenKur(172, 'yineleyici_2');
     await denemeyeHazirla();
     await vt().tx(async (db) => {
-      await db.sorgu("SELECT pg_advisory_xact_lock(hashtext(coalesce(current_schema(), '') || ':arkon-yansima-emir-' || $1::text))", [emir]);
+      await islemKilidiAl(db, `arkon-yansima-emir-${emir}`);
       assert.equal(await turKos(), 'tamam');
       assert.equal((await yansima(c))?.sonuc, 'bekliyor');
     });

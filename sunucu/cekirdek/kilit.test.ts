@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import type { Db } from './db.ts';
-import { islemKilidiAl, islemKilidiDene, semaliKilitAnahtariSql } from './kilit.ts';
+import { islemKilidiAl, islemKilidiDene, ozetliKilitAl, ozetliKilitDene, semaliKilitAnahtariSql } from './kilit.ts';
 import { testSemasiAc } from './test-vt.ts';
 import type { TestVeritabani } from './test-vt.ts';
 
@@ -57,6 +57,19 @@ describe('işlem kilidi şema kapsamlıdır', () => {
       assert.equal(await dene(ortam, 'baska', 7), true);
       assert.equal(await dene(ortam, 'deneme'), true);
     });
+  });
+
+  test('özetli kilit de şema kapsamlıdır; anahtar uzayı işlem kilidinden ayrıdır', async () => {
+    if (!a || !b) throw new Error('kurulum yok');
+    const [ka, kb] = [a, b];
+    const ozetliDene = (ortam: TestVeritabani, ad: string): Promise<boolean> => ortam.vt.tx((db) => ozetliKilitDene(db, ad));
+    await tutarken(ka, (db) => ozetliKilitAl(db, 'deneme'), async () => {
+      assert.equal(await ozetliDene(ka, 'deneme'), false);
+      assert.equal(await ozetliDene(kb, 'deneme'), true);
+      assert.equal(await ozetliDene(ka, 'baska'), true);
+      assert.equal(await dene(ka, 'deneme'), true);
+    });
+    assert.equal(await ozetliDene(ka, 'deneme'), true);
   });
 
   test('anahtar ifadesi pg_locks satırıyla eşleşir (testlerin bekleyen kilidi bulması için)', async () => {
