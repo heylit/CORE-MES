@@ -76,24 +76,24 @@ const anGunu = (zaman: string): string => new Date(zaman).toLocaleDateString('tr
 
 // Tasarım otoritesi müşteri değilse firmanın kendisidir: adı Sistem Ayarları > Firma adı'ndan (1942 a), girilmemişse "Firma".
 const baselineSutunlari = (firma: string): readonly Sutun<BaselineSatiri>[] => [
-  { anahtar: 'oge', baslik: 'Konfigürasyon öğesi', hucre: (b) => malzemeEtiketi(b.malzeme) },
+  { anahtar: 'oge', baslik: 'Konfigürasyon öğesi', kes: true, hucre: (b) => malzemeEtiketi(b.malzeme), csv: (b) => malzemeEtiketi(b.malzeme) },
   { anahtar: 'rev', baslik: 'Rev', mono: true, kirilmaz: true, kartta: true, hucre: (b) => tire(b.cizimRevizyonu) },
   { anahtar: 'rota', baslik: 'Rota', mono: true, kirilmaz: true, kartta: true, hucre: (b) => tire(b.rotaRevizyonu) },
   {
-    anahtar: 'nc', baslik: 'NC programları (güncel sürüm)', kartta: true, kartTamSatir: true,
+    anahtar: 'durum', baslik: 'Durum',
+    hucre: (b) => (b.durum === null ? '—' : b.durum === 'aktif' ? <Rozet ton="tamam">Aktif</Rozet> : <Rozet ton="pasif">Yalnız yedek</Rozet>),
+    csv: (b) => (b.durum === null ? null : b.durum === 'aktif' ? 'Aktif' : 'Yalnız yedek'),
+  },
+  {
+    anahtar: 'nc', baslik: 'NC (güncel sürüm)', kartta: true, kartTamSatir: true,
     hucre: (b) => (b.ncProgramlari === null || b.ncProgramlari.length === 0 ? '—'
-      : <span className="tc-dy-satir">{b.ncProgramlari.map((n) => <Rozet key={n} ton="pasif" gorunum="cizgi">{n}</Rozet>)}</span>),
+      : <span className="tc-dy-rozetler">{b.ncProgramlari.map((n) => <Rozet key={n} ton="pasif" gorunum="cizgi">{n}</Rozet>)}</span>),
     csv: (b) => (b.ncProgramlari ?? []).join(', '),
   },
   {
     anahtar: 'otorite', baslik: 'Tasarım otoritesi',
     hucre: (b) => (b.tasarimOtoritesi === null ? '—' : b.tasarimOtoritesi === 'musteri' ? <Rozet>Müşteri</Rozet> : firma),
     csv: (b) => (b.tasarimOtoritesi === null ? null : b.tasarimOtoritesi === 'musteri' ? 'Müşteri' : firma),
-  },
-  {
-    anahtar: 'durum', baslik: 'Durum',
-    hucre: (b) => (b.durum === null ? '—' : b.durum === 'aktif' ? <Rozet ton="tamam">Aktif</Rozet> : <Rozet ton="pasif">Yalnız yedek</Rozet>),
-    csv: (b) => (b.durum === null ? null : b.durum === 'aktif' ? 'Aktif' : 'Yalnız yedek'),
   },
 ];
 
@@ -117,9 +117,9 @@ const emirSutunlari: readonly Sutun<KonfigurasyonEmri>[] = [
   { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', kartta: true, hucre: (e) => e.adet },
   { anahtar: 'cizim', baslik: 'Çizim rev', mono: true, kirilmaz: true, kartta: true, hucre: (e) => tire(e.cizimRevizyonu) },
   {
-    anahtar: 'rota', baslik: 'Rota rev', kirilmaz: true, kartta: true,
+    anahtar: 'rota', baslik: 'Rota rev', kartta: true,
     hucre: (e) => (e.rotaRevizyonu === null ? '—'
-      : <span className="tc-dy-satir"><span className="mono">{e.rotaRevizyonu}</span>{e.rotaYururlukte === false && <Rozet ton="uyari">Eski rota</Rozet>}</span>),
+      : <span className="tc-dy-rozetler"><span className="mono">{e.rotaRevizyonu}</span>{e.rotaYururlukte === false && <Rozet ton="uyari">Eski rota</Rozet>}</span>),
     csv: (e) => (e.rotaRevizyonu === null ? null : `${e.rotaRevizyonu}${e.rotaYururlukte === false ? ' (eski)' : ''}`),
   },
 ];
@@ -222,14 +222,16 @@ export function Konfigurasyon() {
                         {sorgu.data.baseline.some((b) => b.degisiklikNo !== null) && (
                           <p className="tc-dy-soluk">Parça revizyonu son değişiklik kaydından; çizim, rota ve NC programları bugün yürürlükte olanlardır.</p>
                         )}
-                        <Tablo
-                          etiket="Yürürlükteki baseline" kip="kayit" sutunlar={baselineSutunlari(kurumAdi ?? 'Firma')} satirlar={sorgu.data.baseline}
-                          satirAnahtari={(b) => b.malzeme.malzemeId} bosMesaj="Yayımlı konfigürasyon öğesi yok."
-                        />
+                        <div className="tc-dy-baseline">
+                          <Tablo
+                            etiket="Yürürlükteki baseline" kip="kayit" sutunlar={baselineSutunlari(kurumAdi ?? 'Firma')} satirlar={sorgu.data.baseline}
+                            satirAnahtari={(b) => b.malzeme.malzemeId} bosMesaj="Yayımlı konfigürasyon öğesi yok."
+                          />
+                        </div>
                       </>
                     )}
                 </Kart>
-                <div className="tc-dy-iki-bir">
+                <div className="tc-dy-uc-iki">
                   <Kart baslik="Bu parçanın emirleri" simge="list" baslikEki={<span className="tc-dy-soluk">Son 20 emir ve emre sabitlenen revizyonlar</span>}>
                     <ParcaEmirleri emirler={sorgu.data.emirler} />
                   </Kart>
