@@ -151,7 +151,7 @@ describe('3111 Hazırlık takip tablosu', () => {
     expect(within(satir as HTMLElement).getByText('Karar bekliyor')).toBeTruthy();
     expect(within(t).queryByRole('columnheader', { name: /Plan başlangıcı/ })).toBeNull();
     const ozet = screen.getByText(/^Sütunlar/).closest('summary')!;
-    await waitFor(() => { expect(ozet.textContent).toMatch(/gizli sütunda sorun/); }, { timeout: 10000 });
+    await waitFor(() => { expect(ozet.textContent).toMatch(/\d+ sütunda sorun/); }, { timeout: 10000 });
     fireEvent.click(ozet);
     fireEvent.click(screen.getByRole('checkbox', { name: /Plan başlangıcı/ }));
     expect(within(t).getByRole('columnheader', { name: /Plan başlangıcı/ })).toBeTruthy();

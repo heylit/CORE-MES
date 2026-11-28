@@ -48,11 +48,14 @@ test.describe('3606-2 Hazırlık tek liste', () => {
     await expect(ilk.getByRole('button', { name: /Girdi stoğu: Malzeme \(girdi stoğu\) uyarılı/ })).toBeVisible();
     // 3820: Takım sütunu varsayılanda gizli; gizli sütundaki sorun Sütunlar düğmesinde söylenir, açılınca hücre görünür.
     const sutunlar = page.locator('summary', { hasText: /^Sütunlar/ });
-    await expect(sutunlar).toContainText('gizli sütunda sorun');
+    await expect(sutunlar).toContainText(' sütunda sorun');
     await expect(ilk.getByRole('button', { name: /Takım: Takım hazırla uyarılı/ })).toHaveCount(0);
     await sutunlar.click();
-    await page.getByRole('checkbox', { name: /Takım\s*Takım$/ }).check();
-    await sutunlar.click();
+    await page.getByRole('checkbox', { name: /^\s*Takım$/ }).check();
+    // Arayüz 3820: Esc menüyü kapatır, odak düğmeye döner.
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('checkbox', { name: /^\s*Takım$/ })).toBeHidden();
+    await expect(sutunlar).toBeFocused();
     await expect(ilk.getByRole('button', { name: /Takım: Takım hazırla uyarılı/ })).toBeVisible();
     // Test1 3816 S1: emir satırı operasyonların en kötüsünü yazar (Op 10 Eksik, emir de Eksik).
     await expect(liste.getByRole('button', { name: /^ORN-UE-050 Girdi stoğu: Malzeme \(girdi stoğu\) uyarılı/ })).toBeVisible();
@@ -105,8 +108,20 @@ test.describe('3606-2 Hazırlık tek liste', () => {
     await page.getByRole('combobox', { name: 'Eksik madde' }).selectOption('');
     await sz.click();
     await ilk.getByRole('button', { name: /Çizim rev: Çizim revizyonu eksik/ }).click();
-    const duzen = page.getByRole('region', { name: 'İş paketi' });
+    // 1024 ve üstünde iş paketi modal çekmecedir (dialog); Tab çekmeceden çıkmaz (Arayüz 3820 #3). Dar ekranda bölge.
+    const cekmece = (page.viewportSize()?.width ?? 0) >= 1024;
+    const duzen = page.getByRole(cekmece ? 'dialog' : 'region', { name: 'İş paketi' });
     await expect(duzen.getByRole('heading', { name: /ORN-UE-050/ }).first()).toBeVisible();
+    if (cekmece) {
+      // Arayüz 3820 #4: çekmece genişliği görünüm genişliğinin %42si (sayfa ölçeğinden bağımsız).
+      const gen = await duzen.evaluate((d) => d.getBoundingClientRect().width / window.innerWidth);
+      expect(gen).toBeGreaterThan(0.4);
+      expect(gen).toBeLessThan(0.45);
+      for (let i = 0; i < 30; i += 1) {
+        await page.keyboard.press(i % 3 === 2 ? 'Shift+Tab' : 'Tab');
+        expect(await duzen.evaluate((d) => d.contains(document.activeElement))).toBe(true);
+      }
+    }
     await expect(duzen.getByRole('button', { name: /Terminale gönder/ }).first()).toHaveAttribute('aria-current', 'step');
     expect(await tasma(page)).toBeLessThanOrEqual(0);
     await resim('tek-liste-ayrinti');

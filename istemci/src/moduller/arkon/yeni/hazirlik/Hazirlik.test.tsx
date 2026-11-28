@@ -81,8 +81,18 @@ describe('A2 Hazırlık ekranı', () => {
     const satir = await waitFor(() => { const r = liste.querySelector<HTMLElement>('tr[data-paket]'); expect(r).not.toBeNull(); return r!; }, { timeout: 10000 });
     fireEvent.click(satir);
     await waitFor(() => { expect(liste.hasAttribute('inert')).toBe(true); }, { timeout: 10000 });
-    expect(screen.getByRole('button', { name: 'Tabloya dön' })).toBeTruthy();
-    fireEvent.keyDown(document.body, { key: 'Escape' });
+    const geri = screen.getByRole('button', { name: 'Tabloya dön' });
+    const cekmece = screen.getByRole('dialog', { name: 'İş paketi' });
+    expect(cekmece.getAttribute('aria-modal')).toBe('true');
+    // Test1 3820 B3: çekmecenin içindeki bir pencerede (onay, menü) Esc yalnız o pencereyi kapatır; çekmece açık kalır.
+    const ic = document.createElement('div');
+    ic.setAttribute('role', 'dialog');
+    cekmece.append(ic);
+    fireEvent.keyDown(ic, { key: 'Escape' });
+    expect(liste.hasAttribute('inert')).toBe(true);
+    ic.remove();
+    // Odak çekmecenin içindeyken de Esc kapatır (çekmecenin kendi rolü Esc'i yutmaz).
+    fireEvent.keyDown(geri, { key: 'Escape' });
     await waitFor(() => { expect(liste.hasAttribute('inert')).toBe(false); }, { timeout: 10000 });
   }, 40000);
 

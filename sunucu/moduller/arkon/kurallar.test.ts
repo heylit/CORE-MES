@@ -809,6 +809,12 @@ test('plan durumu: kaynak başına sıra, makinede aynı makine, kişide yalnız
   kisiAdlariniYaz(d.values(), new Map([[9, 'ORN Kişi']]));
   assert.deepEqual(d.get(4)?.kaynak, { tur: 'kisi', id: 9, ad: 'ORN Kişi' });
   assert.equal(Object.hasOwn(d.get(1)?.kaynak ?? {}, 'ad'), false);
+  // Test2 3820 B2, B3: makine ile aynı kimlikteki kişi; makineye ad yazılmaz. Adı bilinmeyen kişi boş adla değil, adsız kalır.
+  const k = planDurumlari([yer(1, 'makine', 9), yer(2, 'kisi', 9), yer(3, 'kisi', 8)], new Map());
+  kisiAdlariniYaz(k.values(), new Map([[9, 'ORN Kişi']]));
+  assert.deepEqual(k.get(1)?.kaynak, { tur: 'makine', id: 9 });
+  assert.deepEqual(k.get(2)?.kaynak, { tur: 'kisi', id: 9, ad: 'ORN Kişi' });
+  assert.deepEqual(k.get(3)?.kaynak, { tur: 'kisi', id: 8 });
 });
 
 // 147 a: taslakta sırası değişen canlı iş etiketlenir; onaydaki taslak açıktakinden önce gelir, canlıda olmayan iş etiketlenmez.

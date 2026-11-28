@@ -2209,6 +2209,21 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.equal(await isEmriDurumu(ie1!), 'calisiyor', 'iş emri öteki parça bitmeden bitmedi');
   });
 
+  // Test2 3820 B1: bölünmüş işin kişiye yerleşmiş parçasının paketinde de kişi adı (Hazırlık "Kişi" sütunu parça planından okur).
+  test('elle bölünmüş iş: kişiye yerleşmiş parçanın plan kaynağında kişi adı', async () => {
+    const r = await rotaliEmirKur();
+    const [ie1] = await isEmriIdleri(r.emirId);
+    const m1 = (await makinesi(ie1!)).id;
+    await ortam!.sahip.sorgu(
+      `WITH p AS (INSERT INTO plan_yerlesim_parcasi (is_emri_id, parca_no, adet, makine_id, kisi_id, baslangic, bitis) VALUES
+       ($1, 1, 12, $2, NULL, now() + interval '10 minutes', now() + interval '30 minutes'), ($1, 2, 8, NULL, $3, now() + interval '12 minutes', now() + interval '25 minutes'))
+       UPDATE plan_yerlesimi SET baslangic = now() + interval '10 minutes', bitis = now() + interval '30 minutes' WHERE is_emri_id = $1`,
+      [ie1, m1, yoneticiId]);
+    const liste = await paketler();
+    assert.deepEqual((tmiPlani(liste.get(`${ieKimligi(ie1!)}-p2`)?.govde) as { kaynak?: unknown } | undefined)?.kaynak, { tur: 'kisi', id: yoneticiId, ad: 'Deneme Yönetici' });
+    assert.deepEqual((tmiPlani(liste.get(`${ieKimligi(ie1!)}-p1`)?.govde) as { kaynak?: unknown } | undefined)?.kaynak, { tur: 'makine', id: m1 });
+  });
+
   const canliPlanAyari = async (acik: boolean): Promise<void> => {
     await ortam!.sahip.sorgu("DELETE FROM ayar WHERE anahtar = 'arkon.yalniz-canli-plan'");
     if (acik) await ortam!.sahip.sorgu("INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('arkon.yalniz-canli-plan', 'true', $1)", [yoneticiId]);

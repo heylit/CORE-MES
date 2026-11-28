@@ -21,7 +21,8 @@ test.describe('3702 Depo paketi rotadan', () => {
     await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: [{ kimlik: 'depo-1', surum: 1, govde: paket('depo-1') }] } }));
     await page.route('**/api/arkon/belgeler/pkgs/depo-1/yaz', (r) => { yazilanlar.push(r.request().postDataJSON()); return r.fulfill({ json: { sonuc: 'yazildi', surum: 2 } }); });
     await ac('/arkon/hazirlik');
-    const duzen = page.getByRole('region', { name: 'İş paketi' });
+    // 1024 ve üstünde iş paketi modal çekmecedir (3820).
+    const duzen = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'dialog' : 'region', { name: 'İş paketi' });
     // Hazırlık tek listedir: pakete dokunulunca düzenleyici açılır (her genişlikte).
     await page.getByRole('button', { name: /Op 30 · Depo/ }).first().click({ timeout: 20_000 });
     await duzen.getByRole('button', { name: /Toplama listesi/ }).click({ timeout: 20_000 });

@@ -79,7 +79,8 @@ test.describe('A2 Hazırlık', () => {
     await ac('/arkon/hazirlik');
     // Liste satırına basınca düzenleyici açılır (dar ekranda listenin yerine).
     await page.getByRole('table', { name: 'Hazırlık listesi' }).getByRole('button', { name: /^Op 10/ }).click();
-    const duzen = page.getByRole('region', { name: 'İş paketi' });
+    // 1024 ve üstünde iş paketi modal çekmecedir (3820).
+    const duzen = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'dialog' : 'region', { name: 'İş paketi' });
     await expect(duzen.getByRole('heading', { name: /IE-EKRAN-1/ })).toBeVisible();
     const adimlar = duzen.getByRole('list', { name: 'Hazırlık adımları' });
     for (const sekme of ['Bilgiler', 'Dokümanlar', 'Kontrol planı', 'Numune', 'Adımlar', 'Kurallar', 'Terminale gönder']) {

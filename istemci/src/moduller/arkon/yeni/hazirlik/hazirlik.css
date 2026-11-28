@@ -754,16 +754,18 @@ button.tc-ay2-esitleme { cursor: pointer; }
 .tc-ay2-takip-sutunlar > summary:focus-visible { outline: var(--cizgi-kalin) solid var(--sig); outline-offset: var(--b-1); }
 .tc-ay2-takip-sutunlar > fieldset {
   position: absolute; z-index: 3; inset-block-start: calc(100% + var(--b-1)); inset-inline-start: 0; margin: 0; display: grid; gap: var(--b-1);
-  min-inline-size: calc(var(--b-6) * 8); max-block-size: calc(var(--dokunma) * 9); overflow: auto; padding: var(--b-2);
+  inline-size: min(calc(var(--b-6) * 15), 90vw); grid-template-columns: repeat(auto-fill, minmax(calc(var(--b-6) * 7), 1fr));
+  max-block-size: min(70vh, calc(var(--dokunma) * 12)); overflow: auto; padding: var(--b-2);
   border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid);
 }
+.tc-ay2-takip-sutunlar fieldset > .tc-ay2-takip-hepsi { grid-column: 1 / -1; justify-self: start; }
 .tc-ay2-takip-sutunlar label { display: flex; align-items: center; gap: var(--b-2); min-block-size: var(--b-6); font-size: var(--yazi-s); cursor: pointer; }
 .tc-ay2-takip-sutunlar label small { color: var(--muted); font-size: var(--yazi-xs); }
 .tc-ay2-takip-kaydir-kap { position: relative; display: grid; gap: var(--b-1); min-inline-size: 0; }
-.tc-ay2-takip-sagda { margin: 0; display: flex; align-items: center; justify-content: flex-end; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; }
+.tc-ay2-takip-sagda { margin: 0; align-self: center; display: flex; align-items: center; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; }
 .tc-ay2-takip-emir-alt [data-risk] { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--hold); }
 .tc-ay2-takip-tablo td[data-hal] .tc-ay2-takip-hal + .tc-ay2-takip-hal { margin-inline-start: var(--b-1); }
-.tc-ay2-takip-tablo td[data-hal] > .tc-ay2-takip-tek .tc-simge { margin-inline-end: var(--b-1); }
+.tc-ay2-takip-tablo td[data-hal] > .tc-ay2-takip-tek { display: inline-flex; align-items: center; gap: var(--b-1); }
 @container (max-width: 560px) {
   .tc-ay2-takip-tablo td[data-hal="bilgi"] { display: flex; }
   .tc-ay2-takip-sagda { display: none; }
@@ -774,12 +776,13 @@ button.tc-ay2-esitleme { cursor: pointer; }
   .tc-ay2-takip-sutunlar > summary, .tc-ay2-takip-sutunlar label { min-block-size: var(--dokunma); }
 }
 
-/* 3820: geniş ekranda iş paketi sağdan çekmece; tablo tam genişlikte kalır (Arayüz 3816 ön bakışı 5, 8). */
+/* 3820: geniş ekranda iş paketi sağdan çekmece; tablo tam genişlikte kalır (Arayüz 3816 ön bakışı 5, 8). Sayfa ölçekli (zoom,
+   --tc-ay-olcek): genişlik ölçeğe bölünür, çekmece görünümün %42'si olur (Arayüz 3820 #4). */
 .tc-ay2-perde { display: none; }
 @media (min-width: 1024px) {
   .tc-ay2[data-duzen] .tc-ay2-govde { grid-template-columns: minmax(0, 1fr); }
   .tc-ay2[data-duzen] .tc-ay2-duzen {
-    position: fixed; z-index: 30; inset-block: 0; inset-inline-end: 0; inline-size: min(calc(var(--b-6) * 20), 92vw); overflow: auto;
+    position: fixed; z-index: 30; inset-block: 0; inset-inline-end: 0; inline-size: min(max(calc(42vw / var(--tc-ay-olcek, 1)), calc(var(--b-6) * 14)), calc(92vw / var(--tc-ay-olcek, 1))); overflow: auto;
     padding: var(--b-4); background: var(--panel-solid); border-inline-start: var(--cizgi-ince) solid var(--edge2);
     align-content: start;
   }

@@ -188,20 +188,34 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   }, [duzenAcik, secili?.id]);
   // 3820: geniş ekranda (1024 ve üstü) iş paketi tablonun üstüne sağdan çekmece olarak açılır; tablo tam genişlikte kalır. Çekmece açıkken
   // tablo erişilmez (inert), Esc ve perde kapatır; kapanınca odak tıklanan yere döner (yukarıdaki etki). Dar ekranda liste ile yer değiştirir.
+  // Çekmece modaldir: kabuk inert yapılamaz (sayfanın dışında), bu yüzden Tab çekmecenin içinde döner.
   const listeRef = useRef<HTMLElement | null>(null);
+  const cekmeceRef = useRef<HTMLElement | null>(null);
   const cekmeceMi = () => typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1024px)').matches;
   useEffect(() => {
     const l = listeRef.current;
+    const c = cekmeceRef.current;
     if (!l) return undefined;
-    if (duzenAcik && secili !== null && cekmeceMi()) l.setAttribute('inert', ''); else l.removeAttribute('inert');
+    const modal = duzenAcik && secili !== null && cekmeceMi();
+    if (modal) l.setAttribute('inert', ''); else l.removeAttribute('inert');
+    if (c && modal) { c.setAttribute('role', 'dialog'); c.setAttribute('aria-modal', 'true'); } else if (c) { c.removeAttribute('role'); c.removeAttribute('aria-modal'); }
     if (!duzenAcik) return undefined;
     const tus = (o: KeyboardEvent) => {
-      if (o.key !== 'Escape' || o.defaultPrevented || !cekmeceMi()) return;
-      if (o.target instanceof Element && o.target.closest('[role="dialog"], [role="menu"], dialog')) return;
-      duzenAcikYaz(false);
+      if (o.defaultPrevented || !cekmeceMi()) return;
+      const k = cekmeceRef.current;
+      const ic = o.target instanceof Element ? o.target.closest('[role="dialog"], [role="menu"], dialog') : null;
+      if (o.key === 'Escape') { if (ic && ic !== k) return; duzenAcikYaz(false); return; }
+      if (o.key !== 'Tab' || !k || (ic && ic !== k)) return;
+      const l2 = [...k.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])')]
+        .filter((e) => !e.hasAttribute('disabled') && e.getClientRects().length > 0);
+      if (!l2.length) return;
+      const ilk = l2[0]!, son = l2[l2.length - 1]!;
+      const odak = document.activeElement;
+      if (o.shiftKey && (odak === ilk || !k.contains(odak))) { o.preventDefault(); son.focus(); }
+      else if (!o.shiftKey && (odak === son || !k.contains(odak))) { o.preventDefault(); ilk.focus(); }
     };
     document.addEventListener('keydown', tus);
-    return () => { document.removeEventListener('keydown', tus); l.removeAttribute('inert'); };
+    return () => { document.removeEventListener('keydown', tus); l.removeAttribute('inert'); c?.removeAttribute('role'); c?.removeAttribute('aria-modal'); };
   }, [duzenAcik, secili]);
   const [takipSuz, takipSuzYaz] = useState<TakipSuzgeci>(() => takipSuzgeciOku(oturum.oku('prepTakip')));
   const takipSuzSec = (d: TakipSuzgeci) => { takipSuzYaz(d); oturum.yaz('prepTakip', d); };
@@ -784,7 +798,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
         </aside>
         {p && duzenAcik ? <button type="button" className="tc-ay2-perde" aria-hidden="true" tabIndex={-1} onClick={() => duzenAcikYaz(false)} /> : null}
         {p ? (
-          <section className="tc-ay2-duzen" aria-label="İş paketi">
+          <section className="tc-ay2-duzen" aria-label="İş paketi" ref={cekmeceRef}>
             <button type="button" className="tc-ay2-geri" onClick={() => duzenAcikYaz(false)}><Simge ad="back" />Tabloya dön</button>
             <div className="tc-ay2-emir">
               <div>

@@ -122,23 +122,38 @@ function IlkParcaHucresi({ durum }: { durum: IlkParcaDurumu }) {
 }
 
 // Sütun seçimi tarayıcıda kalır (kişiye özel görünüm, veri değil). Gizli sütunda sorun varsa düğme söyler; eksik gizlenip unutulmasın.
+// Açılır menü: Esc ve dışarı tıklama kapatır (Esc'te odak düğmeye döner).
 function SutunSecici({ gizli, gizliYaz, sorunluGizli }: { gizli: ReadonlySet<SutunAnahtari>; gizliYaz: (g: ReadonlySet<SutunAnahtari>) => void; sorunluGizli: readonly string[] }) {
   const degistir = (a: SutunAnahtari, goster: boolean) => { const y = new Set(gizli); if (goster) y.delete(a); else y.add(a); gizliYaz(y); };
+  const ref = useRef<HTMLDetailsElement>(null);
+  const [acik, acikYaz] = useState(false);
+  useEffect(() => {
+    if (!acik) return undefined;
+    const kapat = () => { if (ref.current) ref.current.open = false; };
+    const tik = (o: PointerEvent) => { if (o.target instanceof Node && !ref.current?.contains(o.target)) kapat(); };
+    const tus = (o: KeyboardEvent) => {
+      if (o.key !== 'Escape' || !(o.target instanceof Node) || !ref.current?.contains(o.target)) return;
+      o.preventDefault(); kapat(); ref.current?.querySelector('summary')?.focus();
+    };
+    document.addEventListener('pointerdown', tik);
+    document.addEventListener('keydown', tus);
+    return () => { document.removeEventListener('pointerdown', tik); document.removeEventListener('keydown', tus); };
+  }, [acik]);
   return (
-    <details className="tc-ay2-takip-sutunlar">
+    <details className="tc-ay2-takip-sutunlar" ref={ref} onToggle={(o) => acikYaz(o.currentTarget.open)}>
       <summary title={sorunluGizli.length ? `Gizli sütunda sorun var: ${sorunluGizli.join(', ')}` : undefined}>
         <Simge ad="list" boyut="k" />Sütunlar{gizli.size ? <small> · {gizli.size} gizli</small> : null}
-        {sorunluGizli.length ? <span className="tc-ay2-takip-hal" data-ton="hold"><Simge ad="alert" boyut="k" />{sorunluGizli.length} gizli sütunda sorun</span> : null}
+        {sorunluGizli.length ? <span className="tc-ay2-takip-hal" data-ton="hold"><Simge ad="alert" boyut="k" />{sorunluGizli.length} sütunda sorun</span> : null}
       </summary>
       <fieldset>
         <legend className="tc-gizli-etiket">Görünen sütunlar</legend>
+        <button type="button" className="tc-ay2-takip-hepsi" onClick={() => gizliYaz(gizliOku(null))}>Varsayılana dön</button>
         {SUTUNLAR.map((k) => (
           <label key={k.anahtar}>
             <input type="checkbox" checked={!gizli.has(k.anahtar)} onChange={(o) => degistir(k.anahtar, o.target.checked)} />
-            <span><small>{k.grup}</small> {k.baslik}</span>
+            <span>{k.baslik.startsWith(k.grup) ? null : <small>{k.grup}</small>} {k.baslik}</span>
           </label>
         ))}
-        <button type="button" className="tc-ay2-takip-hepsi" onClick={() => gizliYaz(gizliOku(null))}>Varsayılana dön</button>
       </fieldset>
     </details>
   );
@@ -257,6 +272,7 @@ export function TakipTablosu({
       {emirler.length === 0 ? <p className="tc-ay2-soluk tc-ay2-bos-satir">{paketler.length ? 'Bu durumda iş yok.' : 'Paket yok.'}</p> : null}
       <div className="tc-ay2-takip-ust">
         <SutunSecici gizli={gizli} gizliYaz={gizliKaydet} sorunluGizli={sorunluGizli} />
+        {sagda > 0 ? <p className="tc-ay2-takip-sagda" aria-hidden="true"><Simge ad="chev-right" boyut="k" />Sağda {sagda} sütun daha · yana kaydır</p> : null}
         {emirler.length > 1 ? (
           <button type="button" className="tc-ay2-takip-hepsi" aria-pressed={hepsiAcik} onClick={() => hepsiniAc(!hepsiAcik)}>
             <Simge ad={hepsiAcik ? 'up' : 'down'} boyut="k" />{hepsiAcik ? 'Operasyonları kapat' : 'Bütün operasyonları aç'}
@@ -518,7 +534,6 @@ export function TakipTablosu({
         })}
       </table>
       </div>
-      {sagda > 0 ? <p className="tc-ay2-takip-sagda" aria-hidden="true"><Simge ad="chev-right" boyut="k" />Sağda {sagda} sütun daha · yana kaydır</p> : null}
       </div>
     </div>
   );
