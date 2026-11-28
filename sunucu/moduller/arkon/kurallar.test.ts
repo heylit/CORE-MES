@@ -4,7 +4,7 @@ import {
   belgeBicimiHatasi, bitenIsBeklenen, onayEskidiMi, onayIcerigi, onayOzetiDamgala,
   arkonRoluBul, arkonRoluSec, ILETILER, durusNedenleriniCevir, hurdaNedenleriniCevir, icerikSurumu, kayitSutunlari, silmeCakisiyorMu, tesisKur, yazimCakisiyorMu, yazmaReddi, yerelPaketReddi, yeniSurum,
   guvensizCizimleriAyikla, hizSiniriAsildi, kayitZamani, yuklemeKotasiHatasi, yansimaSirasi, yansimaNedeni, SAYIM_ERTELEME, GECICI_BEKLEME,
-  girenMetni, depoArdiliVar, depoOnerisi, hazirlikEksigi, isEmrindenTaslakPaket, paketTuru, TMI_PAKET_ALANLARI, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
+  girenMetni, depoArdiliVar, depoOnerisi, hazirlikEksigi, isEmrindenTaslakPaket, paketTuru, TMI_PAKET_ALANLARI, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, kisiAdlariniYaz, kisiKaynaklari, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
   planYokDamgala, kendiSayimYenidenReddi, KENDI_SAYIM_YAS_SINIRI_MS, KENDI_YENIDEN_EMIRSIZ, KENDI_YENIDEN_ESKI, KENDI_YENIDEN_SONRADAN_SAYILDI, KENDI_YENIDEN_YALNIZ_RET, KENDI_YENIDEN_YALNIZ_SAYIM, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, YENIDEN_SONRAKI_YAZILDI, yenidenIlkParcaAcik, ilkParcaOlculeri, ilkParcaSayimiAsildi, kararBekleyenAdet, periyodikNumuneler, periyodikRetAcik, KARAR_BEKLIYOR_ALANI, REFAKAT_KARTI_ALANI, uyariBirlestir, kayitGovdesi, yenidenIlkParcaTabani, yenidenKarariDamgala, ikinciKontrolEksik, okuyabilirMi, kayitReddi, iletiBasi, iletiKacirildi, yetkiMatrisi, arkonVardiyalari, arkonTatilleri, arkonAletleri,
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
@@ -804,6 +804,17 @@ test('plan durumu: kaynak başına sıra, makinede aynı makine, kişide yalnız
   assert.deepEqual(d.get(4), { canli: true, sira: 1, eslesiyor: true, kaynak: { tur: 'kisi', id: 9 }, zorunlu: true });
   assert.equal(d.get(5), undefined);
   assert.equal(planDurumlari([yer(1, 'kisi', 9)], new Map([[1, null]])).get(1)?.eslesiyor, false);
+  // 3820: kişi kaynağına ad yazılır; makine kaynağı ve adı bilinmeyen kişi değişmez.
+  assert.deepEqual(kisiKaynaklari(d.values()), [9]);
+  kisiAdlariniYaz(d.values(), new Map([[9, 'ORN Kişi']]));
+  assert.deepEqual(d.get(4)?.kaynak, { tur: 'kisi', id: 9, ad: 'ORN Kişi' });
+  assert.equal(Object.hasOwn(d.get(1)?.kaynak ?? {}, 'ad'), false);
+  // Test2 3820 B2, B3: makine ile aynı kimlikteki kişi; makineye ad yazılmaz. Adı bilinmeyen kişi boş adla değil, adsız kalır.
+  const k = planDurumlari([yer(1, 'makine', 9), yer(2, 'kisi', 9), yer(3, 'kisi', 8)], new Map());
+  kisiAdlariniYaz(k.values(), new Map([[9, 'ORN Kişi']]));
+  assert.deepEqual(k.get(1)?.kaynak, { tur: 'makine', id: 9 });
+  assert.deepEqual(k.get(2)?.kaynak, { tur: 'kisi', id: 9, ad: 'ORN Kişi' });
+  assert.deepEqual(k.get(3)?.kaynak, { tur: 'kisi', id: 8 });
 });
 
 // 147 a: taslakta sırası değişen canlı iş etiketlenir; onaydaki taslak açıktakinden önce gelir, canlıda olmayan iş etiketlenmez.

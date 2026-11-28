@@ -4,7 +4,7 @@ import { bolunmusMu } from './parca';
    sırası ve kaynak iş emrininkiyle eşleşiyor mu; `zorunlu` "Operatöre yalnız canlı plandaki iş düşer" ayarıdır (kart #1257, varsayılan kapalı).
    Ayar açıkken operatör yalnız yayındaki ve canlı planda eşleşen işi görür (sunucu başlatmayı da yalnız onda kabul eder); kapalıyken plan durumu
    yalnız bilgidir. Rotasız CORE emri ve Arkon'un kendi paketi bugünkü gibidir: yayınlanınca düşer. */
-export interface PlanKaynagi { tur: 'makine' | 'kisi'; id: number }
+export interface PlanKaynagi { tur: 'makine' | 'kisi'; id: number; /** 3820: kişi kaynağında kişinin adı (sunucu yazar) */ ad?: string }
 // `zorunlu` yazılmamış (eski) plan durumu A4 kuralıyla okunur.
 // taslakta: canlıda yok, açık bir plan taslağında yerleşmiş; taslak canlıya alınınca iş canlıya geçer.
 // siraOnayi (147 a): canlı işin sırası bir plan taslağında değişmiş; ekrandaki ve operatördeki sıra, taslak onaylanıp canlıya alınana dek canlınınkidir.

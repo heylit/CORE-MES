@@ -72,6 +72,30 @@ describe('A2 Hazırlık ekranı', () => {
     expect(yayin?.readCfg).toMatchObject({ mesh: expect.any(String), ex: expect.any(Object) });
   }, 40000);
 
+  it('3820: geniş ekranda paket sağdan çekmecede açılır; tablo erişilmez (inert), Esc kapatır ve tablo geri gelir', async () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('min-width: 1024px'), media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, onchange: null, dispatchEvent: () => false }));
+    sunucuKur(YONETICI, sunucu());
+    arkonAc('/arkon/hazirlik');
+    await ekran();
+    const liste = screen.getByRole('complementary', { name: 'İş paketleri' });
+    const satir = await waitFor(() => { const r = liste.querySelector<HTMLElement>('tr[data-paket]'); expect(r).not.toBeNull(); return r!; }, { timeout: 10000 });
+    fireEvent.click(satir);
+    await waitFor(() => { expect(liste.hasAttribute('inert')).toBe(true); }, { timeout: 10000 });
+    const geri = screen.getByRole('button', { name: 'Tabloya dön' });
+    const cekmece = screen.getByRole('dialog', { name: 'İş paketi' });
+    expect(cekmece.getAttribute('aria-modal')).toBe('true');
+    // Test1 3820 B3: çekmecenin içindeki bir pencerede (onay, menü) Esc yalnız o pencereyi kapatır; çekmece açık kalır.
+    const ic = document.createElement('div');
+    ic.setAttribute('role', 'dialog');
+    cekmece.append(ic);
+    fireEvent.keyDown(ic, { key: 'Escape' });
+    expect(liste.hasAttribute('inert')).toBe(true);
+    ic.remove();
+    // Odak çekmecenin içindeyken de Esc kapatır (çekmecenin kendi rolü Esc'i yutmaz).
+    fireEvent.keyDown(geri, { key: 'Escape' });
+    await waitFor(() => { expect(liste.hasAttribute('inert')).toBe(false); }, { timeout: 10000 });
+  }, 40000);
+
   it('kontrol planı olmayan boya işinde uyarı penceresi talaşlı demez; türü söyler (3701)', async () => {
     const boya = { ...PAKET, id: 'tmi-ue-72', no: 'IE-DENEME-72', plan: [], opType: 'boya' };
     sunucuKur(YONETICI, { belgeler: { pkgs: [{ kimlik: boya.id, surum: 1, govde: boya }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });

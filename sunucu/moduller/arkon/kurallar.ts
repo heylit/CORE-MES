@@ -480,12 +480,23 @@ export function adimTuruAlanlari(tur: string | undefined, ekAciklama: string | n
 // Kişi kaynağında makine yoktur: paketin istasyonu iş emrininkidir, istasyon eşleşmesi yeter. Kaynak, Arkon Planlama'nın sıralama komutuna
 // (`planSirasiYaz`) gider: plan kuyruğu kaynak başınadır, bir istasyonda birden çok makine olabilir.
 interface PlanKaynagi { tur: string; id: number }
+// 3820: kişi kaynağında Hazırlık tablosu kişinin adını gösterir; ad yansımada kisiler modülünden eklenir (makinenin kodu paketin istasyonundadır).
+export type AdliKaynak = PlanKaynagi & { ad?: string };
 // taslakta: canlıda yok ama açık bir plan taslağında yerleşmiş (uyarı "canlıya alınmadı" der).
 // siraOnayi (147 a): canlı işin sırası bir taslakta değişmiş; sıra canlıya ancak taslak onaylanıp canlıya alınınca geçer, ekran bunu gösterir.
 export type SiraOnayi = 'taslakta' | 'onayda';
 export interface TmiPlanDurumu {
-  canli: boolean; sira: number | null; eslesiyor: boolean; kaynak: PlanKaynagi | null; zorunlu: boolean; taslakta?: true; siraOnayi?: SiraOnayi;
+  canli: boolean; sira: number | null; eslesiyor: boolean; kaynak: AdliKaynak | null; zorunlu: boolean; taslakta?: true; siraOnayi?: SiraOnayi;
 }
+// Kişi kaynaklı plan durumlarına kişinin adını yazar (yerinde); adı bulunamayan kişide alan yazılmaz.
+export function kisiAdlariniYaz(planlar: Iterable<TmiPlanDurumu>, adlar: ReadonlyMap<number, string>): void {
+  for (const d of planlar) {
+    const ad = d.kaynak?.tur === 'kisi' ? adlar.get(d.kaynak.id) : undefined;
+    if (ad !== undefined && d.kaynak) d.kaynak = { ...d.kaynak, ad };
+  }
+}
+export const kisiKaynaklari = (planlar: Iterable<TmiPlanDurumu>): number[] =>
+  [...planlar].flatMap((d) => (d.kaynak?.tur === 'kisi' ? [d.kaynak.id] : []));
 export const PLANSIZ: TmiPlanDurumu = { canli: false, sira: null, eslesiyor: false, kaynak: null, zorunlu: true };
 
 // Yerleşimler canlı plandaki başlangıç sırasıyla gelir (plan `canliSira`).
