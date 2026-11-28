@@ -722,7 +722,12 @@ const KONFIGURASYON_EMIR_SINIRI = 20;
 export interface NcProgramKunyesi { id: number; opNo: number; ad: string; surum: number }
 export type NcProgramCozucusu = (db: Db, malzemeId: number) => Promise<NcProgramKunyesi[]>;
 let ncProgramCozucusu: NcProgramCozucusu | null = null;
-export function ncProgramCozucusuKaydet(c: NcProgramCozucusu | null): void { ncProgramCozucusu = c; }
+// Öncekini döner: sahte çözücü kuran test gerçek bağı geri koyar.
+export function ncProgramCozucusuKaydet(c: NcProgramCozucusu | null): NcProgramCozucusu | null {
+  const onceki = ncProgramCozucusu;
+  ncProgramCozucusu = c;
+  return onceki;
+}
 
 // Konfigürasyon kaydı bu modülündür (1642); etiketler sahibi modüllerden okunur (3827): çizim Belge Merkezi'nden, rota rotadan, NC programı
 // prosesten (çözücüyle). Değişiklik kaydı olmayan parçada da sahibi modüllerin yürürlükteki kayıtlarıyla tek satır kurulur. Kontrol planı, markalama,
