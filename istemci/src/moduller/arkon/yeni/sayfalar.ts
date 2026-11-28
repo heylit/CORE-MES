@@ -52,7 +52,8 @@ export const SAYFALAR = {
   hazirlik: { ekran: parca(hazirlik, 'Hazirlik') },
   anomali: { ekran: parca(pano, 'Anomali') },
   kalite: { ekran: parca(kalite, 'Kalite') },
-  cizim: { ekran: parca(cizim, 'Cizim') },
+  // Menüde yoktur; Ayarlar'daki "PDF ve 3B okuma" kartından açılır, sekmesi Ayarlar'dır.
+  cizim: { ekran: parca(cizim, 'Cizim'), ust: 'ayarlar' },
   bakim: { ekran: parca(kalite, 'Bakim') },
   raporlar: { ekran: parca(kalite, 'Raporlar') },
   ayarlar: { ekran: parca(ayarlar, 'Ayarlar') },

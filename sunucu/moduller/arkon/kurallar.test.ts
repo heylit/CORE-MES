@@ -416,10 +416,10 @@ test('KD-004 kural: imleç budanan en büyük kimlikten gerideyse ileti kaçmı�
 });
 
 test('ikinci menü: her Arkon rolü yalnız sabit matriste açabildiği sayfaların maddesini görür; operatör ekranı menüde yok', () => {
-  // Operatör ekranı (page.op) menüde değildir: Üretim Terminali açar (kart #1073).
+  // Operatör ekranı (page.op) menüde değildir: Üretim Terminali açar (kart #1073). Çizim stüdyosu (page.draw) menüde değildir,
+  // Ayarlar'dan açılır; Kalite maddesi yalnız paket onayıdır, onu onay verebilen görür (3815).
   const SAYFA: Record<string, string> = {
-    pano: 'page.board', planlama: 'page.plan', hazirlik: 'page.prep', kalite: 'page.quality',
-    cizim: 'page.draw', bakim: 'page.maint', raporlar: 'page.report',
+    pano: 'page.board', planlama: 'page.plan', hazirlik: 'page.prep', kalite: 'pkg.approve', bakim: 'page.maint', raporlar: 'page.report',
   };
   const matris = yetkiMatrisi();
   const maddeler = ARKON_IKINCI_MENU.gruplar.flatMap((g): readonly IkinciMenuMaddesi[] => g.maddeler).filter((m) => m.anahtar in SAYFA);
@@ -428,7 +428,7 @@ test('ikinci menü: her Arkon rolü yalnız sabit matriste açabildiği sayfalar
     const rol = arkonRoluBul([islem]);
     if (rol === null) continue;
     const gorunen = maddeler.filter((m) => maddeGorunurMu(m, ['sayfa.arkon', islem])).map((m) => SAYFA[m.anahtar]).sort();
-    const acabildigi = rol === 'admin' ? Object.values(SAYFA).sort() : (matris[rol] ?? []).filter((k) => k.startsWith('page.') && k !== 'page.op').sort();
+    const acabildigi = rol === 'admin' ? Object.values(SAYFA).sort() : (matris[rol] ?? []).filter((k) => Object.values(SAYFA).includes(k)).sort();
     assert.deepEqual(gorunen, acabildigi, `${islem} (${rol})`);
   }
   assert.equal(ARKON_IKINCI_MENU.gruplar.flatMap((g): readonly IkinciMenuMaddesi[] => g.maddeler).some((m) => m.anahtar === 'operator'), false);

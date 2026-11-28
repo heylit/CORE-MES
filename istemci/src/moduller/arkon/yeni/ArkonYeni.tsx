@@ -21,7 +21,7 @@ import { ayarlariOku, ILK_AYARLAR, type ArkonAyarlari } from './cekirdek/ayarlar
 import { olcekHesapla, TASARIM_GENISLIGI, TASARIM_YUKSEKLIGI } from './cekirdek/olcek.ts';
 import type { Perm } from './cekirdek/tipler.ts';
 import { yerel } from './cekirdek/yerel.ts';
-import { IS_TURLERI } from './hazirlik/kurallar.ts';
+import { IS_TURLERI, onayBekliyor } from './hazirlik/kurallar.ts';
 import { ONIZLEME_SEKME_OLAYI } from './operator/onizleme-olay.ts';
 import { sayfaGorunur, yetkiVar } from './cekirdek/yetki.ts';
 import { ArkonBaglamiKaynagi, ArkonDarAlanKaynagi, useCakismaUyarisi, type ArkonBaglami, type TmiHedefi } from './veri/baglam.ts';
@@ -238,10 +238,11 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
   // Terminal dokunmatiktir: küçültülürse dokunma hedefi 44 pikselin altına iner; yalnız yüksekliği alana oturur. Dar düzeni de
   // pencere genişliğine bakar (705 b): 1024 tablette menü açıkken alan 900'ün altına düşse de geniş düzen kalır.
   const darAlan = useOlcek(kok, adres !== 'operator');
-  const numune = useNumuneSayisi(depo);
-  // Kalite maddesi bekleyen ve ölçülen numune sayısını taşır (eski sol menüdeki rozet, 283.25); sayı kabuğun şeridinde çizilir.
+  const onayGorur = adres !== 'operator' && maddeler.some((m) => m.anahtar === 'kalite' && maddeGorunurMu(m, islemler));
+  const onay = useOnaySayisi(depo, onayGorur);
+  // Kalite onayları maddesi kalite onayı bekleyen paket sayısını taşır; sayı kabuğun şeridinde çizilir. Numune sayısı Kalite Merkezi'ndedir.
   const sayacYaz = useCerceveSayacYazici(KOK);
-  useEffect(() => { sayacYaz({ kalite: numune > 0 ? numune : null }); }, [sayacYaz, numune]);
+  useEffect(() => { sayacYaz({ kalite: onay > 0 ? onay : null }); }, [sayacYaz, onay]);
   // Ctrl K'nin ve Malzeme Teslim'in "İş emrini aç"ı Üretim Terminali'ne `?emir=&kart=` ile gelir (çerçevedeki gibi): istek operatör
   // ekranının okuduğu pencereye bırakılır ve adresten silinir, yenilemede yeniden seçmez. Terminal kalıcı rotadır: başka sayfadayken
   // gizli kurulu kalır ve o sayfanın adresini görür; Adım Durumu da `?emir=` taşır. Gizliyken okursa o sayfanın seçimini silerdi.
@@ -373,22 +374,24 @@ function kutuluAta(kok: HTMLElement | null): HTMLElement | null {
 }
 
 // Kalitede bekleyen ya da ölçülen numune sayısı (baslat.ts nWait): numune ve sonuç iletisinde ve 20 sn'de bir yeniden sayılır.
-function useNumuneSayisi(depo: ArkonDeposu): number {
+// Yalnız onay maddesini gören, terminal dışındaki ekranda sayar; terminal her paket iletisinde bütün paketleri okumasın.
+function useOnaySayisi(depo: ArkonDeposu, acik: boolean): number {
   const [n, nYaz] = useState(0);
   useEffect(() => {
+    if (!acik) { nYaz(0); return undefined; }
     let iptal = false;
     let bekleyen: ReturnType<typeof setTimeout> | null = null;
     const say = async () => {
       try {
-        const rs = await depo.DB.all('requests') as { status?: string }[];
-        if (!iptal) nYaz(rs.filter((r) => r.status === 'waiting' || r.status === 'measuring').length);
+        const ps = await depo.DB.all('pkgs') as Parameters<typeof onayBekliyor>[0][];
+        if (!iptal) nYaz(ps.filter(onayBekliyor).length);
       } catch { /* okunamazsa son sayı kalır */ }
     };
     void say();
-    const birak = depo.Bus.on((m) => { if (/sample|result/.test(m.type)) { if (bekleyen) clearTimeout(bekleyen); bekleyen = setTimeout(() => { void say(); }, 300); } });
+    const birak = depo.Bus.on((m) => { if (/^pkg-approv/.test(m.type)) { if (bekleyen) clearTimeout(bekleyen); bekleyen = setTimeout(() => { void say(); }, 300); } });
     const t = setInterval(() => { void say(); }, 20000);
     return () => { iptal = true; birak(); clearInterval(t); if (bekleyen) clearTimeout(bekleyen); };
-  }, [depo]);
+  }, [depo, acik]);
   return n;
 }
 

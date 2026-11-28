@@ -130,9 +130,8 @@ function Alan({ etiket, genis, children }: { etiket: string; genis?: 2 | 3; chil
   return <label className="tc-ay2-form-alan" data-genis={genis}><span className="tc-ay2-ust-yazi">{etiket}</span>{children}</label>;
 }
 
-// Eski PrepTop kısayolları: Çizim stüdyosu ve operatör ekranı.
+// Eski PrepTop kısayolu: operatör ekranı. Çizim stüdyosu Ayarlar'dan açılır.
 const HAZIRLIK_KISAYOLLARI = [
-  { sayfa: 'cizim', simge: 'lab', metin: 'Çizim stüdyosu · PDF ve 3B okuma ayarları', yalnizSimge: true },
   { sayfa: 'operator', simge: 'gauge', metin: 'Operatör ekranı' },
 ] as const;
 

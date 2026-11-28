@@ -49,7 +49,7 @@ for (const [yol, madde] of [['/recete-rota', 'Üretim emirleri'], ['/recete-rota
 // Üretim Hazırlık, Üretim Terminali, Kuyruk, Malzemeler ve Kalite Merkezi de öyle (553 1 a, 2; 979 a). Eski `/eski` adreslerinin
 // yeni adrese gitmesi arkon, arkon-yeni ve uretim-terminali testlerinde sınanır (1392 a).
 const SERITLI = [
-  ['/arkon/pano', 'Üretim Hazırlık', 'Pano'], ['/arkon/kalite', 'Üretim Hazırlık', 'Kalite'],
+  ['/arkon/pano', 'Üretim Hazırlık', 'Pano'], ['/arkon/kalite', 'Üretim Hazırlık', 'Kalite onayları'],
   ['/uretim-terminali', 'Üretim Terminali', 'Operatör'],
   ['/kuyruk', 'Kuyruk', 'Plan Kuyruğu'],
   ['/malzemeler', 'Malzemeler ve Hizmetler', 'Katalog'], ['/malzemeler/ayarlar', 'Malzemeler ve Hizmetler', 'Malzeme ayarları'],

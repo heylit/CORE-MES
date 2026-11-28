@@ -41,7 +41,7 @@ test.describe('A0 iskelet', () => {
     await expect(page.getByRole('region', { name: 'Pano' })).toBeVisible();
     await serit.getByRole('link', { name: /^Kalite/ }).click();
     await expect(page).toHaveURL(/\/arkon\/kalite$/);
-    await expect(page.getByRole('region', { name: 'Kalite' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Kalite onayları' })).toBeVisible();
     await expect(page.locator('iframe')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     expect(disari).toEqual([]);
@@ -456,7 +456,7 @@ const belgeYazmalari = (l: readonly string[]) => l.filter((y) => /^POST \/api\/a
 
 for (const [parca, sayfalar] of [
   ['A3 Pano ve kuyruk', [['pano', 'Pano'], ['planlama', 'Plan Kuyruğu'], ['kuyruk', 'Kuyruk'], ['anomali', 'Üretim Anomalisi']]],
-  ['A4 Kalite, bakım, raporlar', [['kalite', 'Kalite'], ['bakim', 'Bakım'], ['raporlar', 'Raporlar']]],
+  ['A4 Kalite, bakım, raporlar', [['kalite', 'Kalite onayları'], ['bakim', 'Bakım'], ['raporlar', 'Raporlar']]],
 ] as const) {
   test.describe(parca, () => {
     for (const [anahtar, ad] of sayfalar) {
@@ -549,7 +549,7 @@ test.describe('541 Üretim Hazırlık ve Üretim Terminali eski adreste', () => 
   test('Hazırlık: /arkon/eski/kalite yeni Kalite\'ye gider, çerçeve yok, şeritte Kalite seçilidir', async ({ page, ag, ac }) => {
     await ac('/arkon/eski/kalite');
     await expect(page).toHaveURL(/\/arkon\/kalite$/);
-    await expect(page.getByRole('region', { name: 'Kalite' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Kalite onayları' })).toBeVisible();
     await expect(page.locator('iframe')).toHaveCount(0);
     const serit = page.getByRole('navigation', { name: 'Üretim Hazırlık menüsü' });
     await expect(serit.locator('[aria-current="page"]')).toHaveText(/^Kalite/);
@@ -572,7 +572,7 @@ test.describe('541 Üretim Hazırlık ve Üretim Terminali eski adreste', () => 
 });
 
 // Her rolde görünürlük (553 2): yeni ekranda açılan sayfalar, eski görünümle yapılan eşitlik ölçümünün listesidir; liste değişirse
-// görünürlük değişmiştir. Eski çerçeve kalktı (1418, karar 1392 a); yönetici, A1-A6'daki gibi her sayfayı açar. Açılmak,
+// görünürlük değişmiştir (3815: Kalite onayları yalnız onay verebilene). Eski çerçeve kalktı (1418, karar 1392 a); yönetici, A1-A6'daki gibi her sayfayı açar. Açılmak,
 // adresin değişmeden o sayfanın bölümünü açmasıdır. Üretim Terminali ve Kuyruk ayrı sayfadır: menü satırı yerine kendi adresi denenir.
 // Ölçü tek genişlikte alınır: görünürlük genişliğe bağlı değildir.
 const HAZIRLIK_SAYFALARI = ['pano', 'planlama', 'hazirlik', 'anomali', 'kalite', 'bakim', 'raporlar', 'cizim', 'ayarlar'] as const;
@@ -590,8 +590,8 @@ async function yeniAcilan(page: Page, adres: string): Promise<string | null> {
 
 const YENIDE_ACILAN: Readonly<Record<Hesap, readonly string[]>> = {
   'ornek.yonetici': [...HAZIRLIK_SAYFALARI, 'operator', 'kuyruk'],
-  'ornek.mudur': ['pano', 'planlama', 'anomali', 'kalite', 'bakim', 'raporlar', 'ayarlar', 'operator', 'kuyruk'],
-  'ornek.planlama': ['pano', 'planlama', 'hazirlik', 'anomali', 'kalite', 'raporlar', 'cizim', 'ayarlar', 'kuyruk'],
+  'ornek.mudur': ['pano', 'planlama', 'anomali', 'bakim', 'raporlar', 'ayarlar', 'operator', 'kuyruk'],
+  'ornek.planlama': ['pano', 'planlama', 'hazirlik', 'anomali', 'raporlar', 'cizim', 'ayarlar', 'kuyruk'],
   'ornek.operator1': ['operator', 'kuyruk'],
   'ornek.operator2': ['operator', 'kuyruk'],
   'ornek.kalite': ['pano', 'kalite', 'raporlar', 'ayarlar', 'operator'],

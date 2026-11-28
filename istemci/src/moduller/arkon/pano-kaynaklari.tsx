@@ -33,7 +33,7 @@ const Hazirlik = kaynakOzet((o) => ozetKalemi(o, 'hazirlikBekleyen', {
 }));
 const Kalite = kaynakOzet((o) => ozetKalemi(o, 'kaliteBekleyen', {
   baslik: (n) => `${n.toLocaleString('tr-TR')} numune ölçüm bekliyor`, ayrinti: 'Bekleyen ya da ölçülen numune', aciliyet: 'bekliyor',
-  yol: '/arkon/kalite', eylem: 'Ölç', neden: 'Onaylanmayan adımda tezgâh devam edemez.',
+  yol: '/kalite-merkezi', eylem: 'Ölç', neden: 'Onaylanmayan adımda tezgâh devam edemez.',
 }));
 const Bakim = kaynakOzet((o) => ozetKalemi(o, 'bakimAcik', {
   baslik: (n) => `${n.toLocaleString('tr-TR')} açık arıza`, ayrinti: 'Kapanmamış arıza kaydı', aciliyet: 'bekliyor',

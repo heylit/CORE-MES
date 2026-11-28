@@ -158,11 +158,11 @@ describe('A2 Hazırlık ekranı', () => {
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Operatör gözüyle önizleme' })).toBeNull(); });
   }, 40000);
 
-  it('sayfa başlığında kısayollar ve saat eski yerinde (Çizim, Operatör ekranı)', async () => {
+  it('sayfa başlığında Operatör ekranı kısayolu ve saat eski yerinde; Çizim stüdyosu Ayarlar\'dadır (3815)', async () => {
     sunucuKur(YONETICI, sunucu());
     arkonAc('/arkon/hazirlik');
     await ekran();
-    expect(screen.getByRole('button', { name: /Çizim stüdyosu/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Çizim stüdyosu/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Operatör ekranı' }));
     await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/uretim-terminali'); });
   }, 40000);
